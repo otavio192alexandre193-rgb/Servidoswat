@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700;800&display=swap');
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  --color-indigo-650: #4338ca;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-scaleIn {
+  animation: scaleIn 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Print Layout rules for clean PDF exports */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  /* Hide overall CRM UI components: sidebar, page header, tabs, modal overlay controls */
+  #root > *,
+  .fixed.inset-0.bg-black\/60,
+  button,
+  select,
+  nav,
+  aside,
+  header {
+    display: none !important;
+    visibility: hidden !important;
+  }
+  
+  /* Make sure our printable proposal container is visible, full width and starts at top-left */
+  #printable-proposal,
+  #printable-proposal * {
+    visibility: visible !important;
+    display: block !important;
+  }
+  #printable-proposal {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .grid {
+    display: grid !important;
+  }
+}
+

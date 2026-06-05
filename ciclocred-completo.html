@@ -1,0 +1,1358 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>cicloCRED CRM - Sistema Completo Unificado</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          scale: {
+            '102': '1.02',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom Scrollbar Styles for Extreme High-Contrast Neo-Brutalist Layout */
+    ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #18181b;
+      border-left: 2px solid #09090b;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #3f3f46;
+      border: 2px solid #18181b;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #6366f1;
+    }
+    .custom-shadow {
+      box-shadow: 4px 4px 0px 0px #09090b;
+    }
+    .custom-shadow-sm {
+      box-shadow: 2px 2px 0px 0px #09090b;
+    }
+    .neo-border {
+      border: 3px solid #09090b;
+    }
+    .neo-border-sm {
+      border: 2px solid #09090b;
+    }
+  </style>
+</head>
+<body class="bg-zinc-100 text-zinc-900 font-sans tracking-tight min-h-screen flex flex-col transition-colors duration-205">
+
+  <div id="app" class="flex h-screen overflow-hidden w-full">
+    <!-- RENDER LOGIN OUTSIDE IF NOT AUTHENTICATED -->
+    <div id="login-screen" class="hidden fixed inset-0 bg-zinc-950 flex items-center justify-center p-4 z-50">
+      <div class="bg-white text-zinc-900 w-full max-w-md rounded-2xl neo-border custom-shadow p-8 space-y-6">
+        <div class="text-center space-y-2">
+          <div class="inline-flex items-center justify-center p-3 bg-indigo-50 border-2 border-zinc-900 rounded-2xl mb-2">
+            <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+            </svg>
+          </div>
+          <h1 class="text-2xl font-black uppercase italic tracking-tighter">Portal CicloCRED CRM</h1>
+          <p class="text-xs text-zinc-500 font-medium">Insira suas credenciais corporativas credenciadas CRECI</p>
+        </div>
+
+        <form id="login-form" class="space-y-4">
+          <div class="space-y-1.5">
+            <label class="block text-[10px] font-black uppercase tracking-wider font-mono text-zinc-600">E-mail Operacional</label>
+            <input type="email" id="login-email" value="operador@ciclocred.com" required class="w-full p-3 text-xs bg-zinc-50 border-2 border-zinc-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono">
+          </div>
+          <div class="space-y-1.5">
+            <label class="block text-[10px] font-black uppercase tracking-wider font-mono text-zinc-600">Senha Segura</label>
+            <input type="password" id="login-password" value="ciclocred123" required class="w-full p-3 text-xs bg-zinc-50 border-2 border-zinc-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono">
+          </div>
+          <button type="submit" class="w-full py-3 bg-indigo-600 text-white font-black rounded-xl text-xs uppercase tracking-widest border-2 border-zinc-900 custom-shadow hover:bg-indigo-700 transition active:translate-y-[2px]">
+            Conectar ao Painel Seguro
+          </button>
+        </form>
+
+        <div class="p-4 bg-zinc-50 rounded-xl text-[10px] font-mono border border-zinc-200">
+          <span class="text-indigo-600 font-bold">Credenciais de Demonstração:</span><br>
+          E-mail: <code class="bg-zinc-200 px-1 rounded text-zinc-800">operador@ciclocred.com</code><br>
+          Senha: <code class="bg-zinc-200 px-1 rounded text-zinc-800">ciclocred123</code>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN SYSTEM LAYOUT SECTION -->
+    <div id="system-layout" class="hidden flex h-full w-full overflow-hidden">
+      
+      <!-- DESKTOP SIDEBAR -->
+      <aside class="w-68 bg-zinc-900 border-r-4 border-zinc-950 flex flex-col h-screen text-zinc-100 shrink-0 md:flex flex-col">
+        <!-- Brand Header -->
+        <div class="p-6 border-b-4 border-zinc-950 shrink-0">
+          <div class="flex items-center gap-2">
+            <svg class="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
+            </svg>
+            <span class="font-sans font-black tracking-tighter text-2xl uppercase italic text-white">
+              Ciclo<span class="text-indigo-400">Cred</span>
+            </span>
+          </div>
+          <p class="text-[9px] text-zinc-400 uppercase tracking-widest font-black mt-1 font-mono">
+            ▲ CONTROLADOR COMERCIAL
+          </p>
+        </div>
+
+        <!-- Sidebar Navigation Items -->
+        <nav class="flex-1 px-4 py-4 space-y-1.5 overflow-y-auto" id="sidebar-nav">
+          <!-- Populated dynamically via JS -->
+        </nav>
+
+        <!-- User Information Footer Card -->
+        <div class="p-4 border-t-4 border-zinc-950 bg-zinc-950 shrink-0" id="sidebar-footer">
+          <div class="flex items-center justify-between p-1 hover:bg-zinc-900 rounded-lg cursor-pointer transition select-none" onclick="toggleSignOutMenu()">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div id="u-avatar" class="w-8 h-8 rounded bg-indigo-500 border-2 border-zinc-900 flex items-center justify-center text-zinc-950 font-black text-xs shadow-sm font-mono shrink-0">
+                OP
+              </div>
+              <div class="min-w-0">
+                <h4 id="u-name" class="text-xs font-black text-white uppercase tracking-wider font-mono truncate">Operador CicloCred</h4>
+                <p id="u-email" class="text-[9px] text-zinc-400 font-bold font-mono truncate">operador@ciclocred.com</p>
+              </div>
+            </div>
+          </div>
+          <!-- Popout Logout Menu -->
+          <div id="popout-logout" class="hidden mt-2 p-1.5 bg-zinc-900 border-2 border-zinc-950 rounded-xl space-y-1">
+            <button onclick="triggerLogout()" class="w-full flex items-center gap-2 text-rose-400 hover:text-white hover:bg-rose-950/40 p-2 rounded-lg transition-all font-mono font-black uppercase text-[9px]">
+              <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9"/></svg>
+              <span>Desconectar Sessão</span>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- VIEWPORT CENTER COLUMN -->
+      <div class="flex-1 flex flex-col h-screen overflow-hidden min-w-0 bg-zinc-50 text-zinc-900">
+        
+        <!-- HEADER STATUS BELT -->
+        <header class="h-16 border-b-4 border-zinc-950 bg-white flex items-center justify-between px-6 shrink-0 shadow-sm z-10">
+          <div class="flex items-center gap-4">
+            <!-- Mobile Menu Toggle Button -->
+            <button class="md:hidden p-2 rounded-lg border-2 border-zinc-950 bg-zinc-100" onclick="toggleMobileMenu()">
+              <svg class="w-5 h-5 text-zinc-900" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+              </svg>
+            </button>
+            <div class="flex items-center gap-2">
+              <span class="inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse border border-zinc-950"></span>
+              <span class="text-[10px] font-black uppercase tracking-wider font-mono text-zinc-650">Acesso Local Seguro</span>
+            </div>
+          </div>
+
+          <!-- Real-Time Info Banner -->
+          <div class="flex items-center gap-6 text-xs text-zinc-500 font-semibold font-mono">
+            <div class="hidden sm:flex items-center gap-1.5 bg-zinc-100 px-3 py-1.5 border-2 border-zinc-950 rounded-lg shadow-sm">
+              <span class="text-indigo-600 font-bold">XP:</span>
+              <span id="header-xp-val" class="font-bold text-zinc-800">1.250</span>
+              <span class="text-zinc-400">/</span>
+              <span class="text-[9px] bg-indigo-500 text-zinc-950 px-1.5 font-sans font-black uppercase rounded">NÍVEL <span id="header-level-val">1</span></span>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <svg class="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span id="running-clock" class="text-zinc-800 font-black">00:00:00</span>
+            </div>
+          </div>
+        </header>
+
+        <!-- PORTABLE WORKSPACE FRAME -->
+        <main class="flex-1 overflow-y-auto p-6 space-y-6 bg-zinc-100" id="workspace-view">
+          
+          <!-- DYNAMIC TAB TITLES -->
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b-4 border-zinc-950 pb-5 shrink-0">
+            <div>
+              <h1 id="tab-title" class="text-2xl font-black uppercase italic tracking-tighter text-zinc-900">Dashboard</h1>
+              <p id="tab-desc" class="text-xs text-zinc-500 font-medium">Resumo operacional e KPIs da integradora ciclocred.</p>
+            </div>
+            <div id="tab-actions-area">
+              <!-- Inline Action Button Loaded Dynamically -->
+            </div>
+          </div>
+
+          <!-- TAB CONTENTS (RENDERED MANUALLY BY JS VIEW SWITCHERS) -->
+          <div id="tab-host" class="space-y-6">
+            <!-- Populated via Javascript switch renderers -->
+          </div>
+
+        </main>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- LEADS CREATION/MUTATION MODAL -->
+  <div id="lead-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div class="fixed inset-0 bg-zinc-950/70 backdrop-blur-xs" onclick="closeLeadModal()"></div>
+    <div class="relative w-full max-w-lg bg-white neo-border rounded-2xl p-6 custom-shadow text-zinc-900 flex flex-col max-h-[90vh]">
+      <div class="flex items-center justify-between border-b-2 border-zinc-250 pb-4 mb-4 shrink-0">
+        <h3 id="lead-modal-title" class="font-sans font-black uppercase tracking-tight text-md">CADASTRAR NOVO LEAD</h3>
+        <button onclick="closeLeadModal()" class="p-1 rounded-lg border-2 border-zinc-950 bg-zinc-100 hover:bg-zinc-200">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <form id="lead-form" class="space-y-4 overflow-y-auto pr-1 flex-1 text-xs">
+        <input type="hidden" id="form-lead-id">
+        <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-1.5">
+            <label class="block font-black uppercase font-mono tracking-wider">Nome Completo *</label>
+            <input type="text" id="form-lead-name" required class="w-full p-2.5 bg-zinc-50 border-2 border-zinc-900 rounded-lg focus:ring-1 focus:ring-indigo-500">
+          </div>
+          <div class="space-y-1.5">
+            <label class="block font-black uppercase font-mono tracking-wider">Contato WhatsApp *</label>
+            <input type="text" id="form-lead-phone" required class="w-full p-2.5 bg-zinc-50 border-2 border-zinc-900 rounded-lg focus:ring-1 focus:ring-indigo-500 font-mono" placeholder="(00) 00000-0000">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-1.5">
+            <label class="block font-black uppercase font-mono tracking-wider">Email Comercial</label>
+            <input type="email" id="form-lead-email" class="w-full p-2.5 bg-zinc-50 border-2 border-zinc-900 rounded-lg focus:ring-1 focus:ring-indigo-500 font-mono">
+          </div>
+          <div class="space-y-1.5">
+            <label class="block font-black uppercase font-mono tracking-wider">Status do Funil</label>
+            <select id="form-lead-status" class="w-full p-2.5 bg-zinc-50 border-2 border-zinc-900 rounded-lg focus:ring-1 focus:ring-indigo-500 text-xs font-bold font-mono">
+              <option value="novo">Novo</option>
+              <option value="em_contato">Em Contato</option>
+              <option value="proposta">Proposta</option>
+              <option value="fechado">Fechado</option>
+              <option value="perdido">Perdido</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-1.5">
+            <label class="block font-black uppercase font-mono tracking-wider">Origem do Cadastro</label>
+            <select id="form-lead-source" class="w-full p-2.5 bg-zinc-50 border-2 border-zinc-900 rounded-lg focus:ring-1 focus:ring-indigo-500 font-bold font-mono">
+              <option value="Portal Imobiliário">Portal Imobiliário</option>
+              <option value="Campanha de Anúncios">Campanha de Anúncios</option>
+              <option value="Indicação Corporativa">Indicação Corporativa</option>
+              <option value="WhatsApp Direto">WhatsApp Direto</option>
+              <option value="Inbound ciclocred">Inbound ciclocred</option>
+            </select>
+          </div>
+          <div class="space-y-1.5">
+            <label class="block font-black uppercase font-mono tracking-wider">Imóvel Pretendido</label>
+            <input type="text" id="form-lead-property" class="w-full p-2.5 bg-zinc-50 border-2 border-zinc-900 rounded-lg focus:ring-1 focus:ring-indigo-500" placeholder="Ex: Apt 2 Quartos - Residencial Parque">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-1.5">
+            <label class="block font-black uppercase font-mono tracking-wider">Renda Familiar Bruta (R$)</label>
+            <input type="number" id="form-lead-income" class="w-full p-2.5 bg-zinc-50 border-2 border-zinc-900 rounded-lg focus:ring-1 focus:ring-indigo-500 font-mono" placeholder="7500">
+          </div>
+          <div class="space-y-1.5">
+            <label class="block font-black uppercase font-mono tracking-wider">Valor Estimado Negociado (R$)</label>
+            <input type="number" id="form-lead-value" class="w-full p-2.5 bg-zinc-50 border-2 border-zinc-900 rounded-lg focus:ring-1 focus:ring-indigo-500 font-mono" placeholder="280000">
+          </div>
+        </div>
+        <div class="space-y-1.5">
+          <label class="block font-black uppercase font-mono tracking-wider">Anotações Internas do Negócio</label>
+          <textarea id="form-lead-notes" rows="3" class="w-full p-2.5 bg-zinc-50 border-2 border-zinc-900 rounded-lg focus:ring-1 focus:ring-indigo-500" placeholder="Informações adicionais essenciais para o acompanhamento..."></textarea>
+        </div>
+        <div class="pt-4 border-t-2 border-zinc-200 flex justify-end gap-3 shrink-0">
+          <button type="button" onclick="closeLeadModal()" class="px-4 py-2.5 bg-zinc-150 border-2 border-zinc-900 rounded-lg font-black text-xs hover:bg-zinc-250">CANCELAR</button>
+          <button type="submit" class="px-5 py-2.5 bg-indigo-600 border-2 border-zinc-900 text-white rounded-lg font-black text-xs hover:bg-indigo-700 custom-shadow-sm uppercase">SALVAR ALTERAÇÕES</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- SENSORY AUDIO ASSET EMULATOR -->
+  <audio id="audio-tick" src="https://assets.mixkit.co/active_storage/sfx/2568/2568-84.wav" preload="auto"></audio>
+  <audio id="audio-lock" src="https://assets.mixkit.co/active_storage/sfx/2019/2019-84.wav" preload="auto"></audio>
+
+  <!-- JAVASCRIPT SYSTEM ENGINE -->
+  <script>
+    // CORE SYSTEM MEMORY & LOCALSTORAGE MANAGEMENT
+    const STORAGE_PREFIX = 'ciclocred_offline_crm_';
+
+    const defaultLeads = [
+      { id: 'l1', name: 'Otávio Alexandre', phone: '(11) 98765-4321', email: 'otavio@ciclocred.com', status: 'proposta', source: 'Indicação Corporativa', property: 'Cobertura Duplex Bella Vista', income: 15000, value: 550000, notes: 'Interessado em financiamento Caixa pelo SBPE.', createdAt: '2026-05-15T10:00:00Z' },
+      { id: 'l2', name: 'Roberto Alencar', phone: '(21) 99888-1122', email: 'roberto.alencar@empresa.com.br', status: 'em_contato', source: 'WhatsApp Direto', property: 'Prédio Comercial Paulista', income: 25000, value: 1200000, notes: 'Deseja detalhes sobre portfólio de capital de giro corporativo para fomento.', createdAt: '2026-05-18T14:30:00Z' },
+      { id: 'l3', name: 'Felipe Santos Oliveira', phone: '(31) 97711-2233', email: 'felipe.santos@gmail.com', status: 'novo', source: 'Portal Imobiliário', property: 'Residencial Vida Nova MCMV', income: 4500, value: 195000, notes: 'Consultando subsídio do Programa Minha Casa Minha Vida (faixa 2).', createdAt: '2026-05-20T09:15:00Z' },
+      { id: 'l4', name: 'Juliana Mendes Rezende', phone: '(19) 98122-3344', email: 'juju.rezende@yahoo.com.br', status: 'fechado', source: 'Campanha de Anúncios', property: 'Apartamento Reserva das Águas', income: 8900, value: 310000, notes: 'Financiamento aprovado em tempo recorde! Parceria de sucesso.', createdAt: '2026-05-10T11:00:00Z' },
+      { id: 'l5', name: 'Clara Rodrigues Pires', phone: '(11) 98222-7788', email: 'clara.pires@icloud.com', status: 'perdido', source: 'Portal Imobiliário', property: 'Fit Planalto Residencial', income: 3800, value: 175000, notes: 'Score de crédito baixo impedindo repasse Caixa.', createdAt: '2026-05-05T16:00:00Z' }
+    ];
+
+    const defaultProperties = [
+      { id: 'p1', title: 'Residencial Parque das Oliveiras', type: 'MCMV', location: 'São Paulo - SP', price: 189000, description: 'Subsídios de até R$ 55 mil pelo Minha Casa Minha Vida. Financiamento Facilitado.', beds: 2, baths: 1, area: 48 },
+      { id: 'p2', title: 'Residencial Aurora Premium', type: 'SBPE', location: 'Campinas - SP', price: 340000, description: 'Amplo lazer, sacada gourmet e acabamento premium refinado.', beds: 3, baths: 2, area: 72 },
+      { id: 'p3', title: 'Cobertura Duplex Bella Vista', type: 'SBPE', location: 'Santo André - SP', price: 550000, description: 'Exclusiva vista panorâmica, sauna privativa e lareira central.', beds: 3, baths: 3, area: 135 },
+      { id: 'p4', title: 'Fit Planalto Residencial', type: 'MCMV', location: 'São Bernardo - SP', price: 175000, description: 'Excelente custo-benefício próximo ao terminal metroviário.', beds: 1, baths: 1, area: 40 }
+    ];
+
+    let state = {
+      leads: loadFromStorage('leads', defaultLeads),
+      properties: loadFromStorage('properties', defaultProperties),
+      xp: parseInt(loadFromStorage('user_xp', '1550')),
+      level: parseInt(loadFromStorage('user_level', '2')),
+      userName: loadFromStorage('user_name', 'Operador CicloCred'),
+      userEmail: loadFromStorage('user_email', 'operador@ciclocred.com'),
+      creci: loadFromStorage('creci_number', 'CRECI-SP 12345-F'),
+      theme: loadFromStorage('theme', 'claro'),
+      activeTab: 'dashboard',
+      appointments: loadFromStorage('appointments', [
+        { id: 'ap1', title: 'Assinatura Caixa - Família Felipe', date: '2026-06-03', time: '10:00', type: 'reuniao', leadName: 'Felipe Santos Oliveira' },
+        { id: 'ap2', title: 'Visita Técnica Decorado Aurora', date: '2026-06-05', time: '14:00', type: 'visita', leadName: 'Otávio Alexandre' }
+      ]),
+      mcmvNews: [
+        { title: 'Novas Taxas de Juros Faixa 1 e 2', date: '2026-05-28', snippet: 'Atualização das faixas de renda e redução histórica de taxas para correntistas federais.', url: '#' },
+        { title: 'Ampliação do Subsídio para R$ 55.000', date: '2026-05-25', snippet: 'O plano federal aumentou o limite de subsídios para imóveis enquadrados no MCMV.', url: '#' },
+        { title: 'Uso do FGTS Futuro na Aquisição da Casa Própria', date: '2026-05-15', snippet: 'Entenda as regras operacionais para amortizar prestações futuras usando contribuições corporativas recorrentes.', url: '#' }
+      ]
+    };
+
+    // UTILS
+    function saveToStorage(key, value) {
+      localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value));
+    }
+    function loadFromStorage(key, fallback) {
+      const saved = localStorage.getItem(STORAGE_PREFIX + key);
+      if (saved === null) return fallback;
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return fallback;
+      }
+    }
+
+    // AUDIO FEEDBACK & CONTEXT GAME MECHANICS
+    function playSfx(type) {
+      try {
+        const tick = document.getElementById('audio-tick');
+        const lock = document.getElementById('audio-lock');
+        if (type === 'click' && tick) {
+          tick.currentTime = 0;
+          tick.play();
+        } else if (type === 'success' && lock) {
+          lock.currentTime = 0;
+          lock.play();
+        }
+      } catch (err) {
+        console.warn('Audio feedback blocked by browser.', err);
+      }
+    }
+
+    function awardXp(amount) {
+      state.xp += amount;
+      const requiredXp = state.level * 1000;
+      if (state.xp >= requiredXp) {
+        state.xp -= requiredXp;
+        state.level += 1;
+        playSfx('success');
+        alert(`💥 PARABÉNS! Você subiu para o NÍVEL ${state.level}! Continue com a excelente performance comercial.`);
+      } else {
+        playSfx('click');
+      }
+      saveToStorage('user_xp', state.xp);
+      saveToStorage('user_level', state.level);
+      updateHeaderXpVisuals();
+    }
+
+    function updateHeaderXpVisuals() {
+      document.getElementById('header-xp-val').innerText = state.xp.toLocaleString();
+      document.getElementById('header-level-val').innerText = state.level;
+    }
+
+    // DYNAMIC NAVIGATION BUILDING
+    const navItems = [
+      { id: 'dashboard', name: 'Dashboard', icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />` },
+      { id: 'leads', name: 'Leads (Funil)', icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.109A11.386 11.386 0 0110.089 21m-5.08-1.5a5.125 5.125 0 017.533-2.493M3.75 15.521c0-1.285.997-2.349 2.276-2.394.01-.001.02-.001.03-.001a11.54 11.54 0 0113.882 0c.01 0 .02 0 .03.002 1.279.045 2.276 1.11 2.276 2.393V17a3 3 0 01-3 3H6a3 3 0 01-3-3v-1.479z" />` },
+      { id: 'appointments', name: 'Agendamentos', icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5m-9-6h.008v.008H12v-.008zM12 15h.008v.008H12V15zm0 2.25h.008v.008H12v-.008zM9.75 15h.008v.008H9.75V15zm0 2.25h.008v.008H9.75v-.008zM7.5 15h.008v.008H7.5V15zm0-2.25h.008v.008H7.5v-.008zm6.75 4.5h.008v.008h-.008v-.008zm0-2.25h.008v.008h-.008V15zm0-2.25h.008v.008h-.008v-.008zm2.25 4.5h.008v.008H16.5v-.008zm0-2.25h.008v.008H16.5V15z" />` },
+      { id: 'marketing-multinivel', name: 'Mídia & Captação', icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935-2.186 2.25 2.25 0 00-3.935 2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />` },
+      { id: 'inventory', name: 'Estoque de Imóveis', icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M2.25 13.5h3.86a2.25 2.25 0 012.008 1.24l.885 1.77a2.25 2.25 0 002.007 1.24h1.98a2.25 2.25 0 002.007-1.24l.885-1.77a2.25 2.25 0 012.007-1.24h3.86m-18 0h18" />` },
+      { id: 'simulador', name: 'Simulador Financeiro', icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />` },
+      { id: 'automation-flows', name: 'Templates & Scripts', icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 21l3.597-2.126 3.597 2.126-.813-5.096c1.825-1.366 2.625-3.693 1.944-5.83l-1.167-3.655a2.25 2.25 0 00-2.138-1.567H10.02a2.25 2.25 0 00-2.138 1.567L6.715 10.07c-.68 2.137.118 4.464 1.944 5.83z" />` },
+      { id: 'kids', name: 'Espaço Kids', icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M15.59 14.37a6 6 0 01-5.84 0M10.5 11a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zm5.25 0a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />` },
+      { id: 'mcmv-portal', name: 'Portal MCMV Inform', icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-.778.099-1.533.284-2.253" />` },
+      { id: 'settings', name: 'Ajustes do CRM', icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.43l-1.003.828c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.43l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.991l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.28z" /><circle cx="12" cy="12" r="3" />` }
+    ];
+
+    function renderSidebarNav() {
+      const parent = document.getElementById('sidebar-nav');
+      parent.innerHTML = '';
+      
+      navItems.forEach(item => {
+        const isActive = state.activeTab === item.id;
+        const btn = document.createElement('button');
+        btn.onclick = () => selectTab(item.id);
+        btn.className = `w-full flex items-center justify-between px-3.5 py-3 rounded-lg text-xs font-bold font-mono transition-all uppercase tracking-wider ${
+          isActive 
+            ? 'bg-indigo-600 text-white border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] font-black translate-y-[-1px]' 
+            : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+        }`;
+        
+        let badgeHtml = '';
+        if (item.id === 'leads') {
+          badgeHtml = `<span class="bg-zinc-950 text-white border border-zinc-700 font-mono font-black py-0.5 px-2 rounded text-[10px]">${state.leads.length}</span>`;
+        } else if (item.id === 'appointments') {
+          badgeHtml = `<span class="bg-zinc-950 text-white border border-zinc-700 font-mono font-black py-0.5 px-1.5 rounded text-[10px]">${state.appointments.length}</span>`;
+        }
+
+        btn.innerHTML = `
+          <div class="flex items-center gap-2.5">
+            <svg class="w-4 h-4 shrink-0 transition-all ${isActive ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'}" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">${item.icon}</svg>
+            <span>${item.name}</span>
+          </div>
+          ${badgeHtml}
+        `;
+        parent.appendChild(btn);
+      });
+    }
+
+    function toggleSignOutMenu() {
+      const panel = document.getElementById('popout-logout');
+      panel.classList.toggle('hidden');
+    }
+
+    // STATE INITIAL DATA PERSISTENCE RUNNERS
+    function checkAuthentication() {
+      const authenticated = localStorage.getItem('ciclocred_crm_authenticated');
+      if (authenticated === 'true') {
+        document.getElementById('login-screen').classList.add('hidden');
+        document.getElementById('system-layout').classList.remove('hidden');
+        renderSidebarNav();
+        selectTab(state.activeTab);
+      } else {
+        document.getElementById('login-screen').classList.remove('hidden');
+        document.getElementById('system-layout').classList.add('hidden');
+      }
+    }
+
+    document.getElementById('login-form').onsubmit = (e) => {
+      e.preventDefault();
+      const email = document.getElementById('login-email').value;
+      const pass = document.getElementById('login-password').value;
+      
+      if (email === 'operador@ciclocred.com' && pass === 'ciclocred123') {
+        localStorage.setItem('ciclocred_crm_authenticated', 'true');
+        playSfx('success');
+        checkAuthentication();
+      } else {
+        alert('Credenciais corporativas inválidas. Verifique o CRECI operacional e tente novamente.');
+      }
+    };
+
+    function triggerLogout() {
+      localStorage.removeItem('ciclocred_crm_authenticated');
+      checkAuthentication();
+    }
+
+    // TAB SWITCHER HUB & ACTIONS RENDERERS
+    function selectTab(tabId) {
+      state.activeTab = tabId;
+      playSfx('click');
+      renderSidebarNav();
+
+      const titleNode = document.getElementById('tab-title');
+      const descNode = document.getElementById('tab-desc');
+      const actionArea = document.getElementById('tab-actions-area');
+      actionArea.innerHTML = '';
+
+      switch (tabId) {
+        case 'dashboard':
+          titleNode.innerText = 'DASHBOARD COMERCIAL';
+          descNode.innerText = 'Métricas em tempo real, taxas de conversão e acompanhamento operacional unificado.';
+          actionArea.innerHTML = `
+            <button onclick="openLeadModalForCreate()" class="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-xs tracking-wider border-2 border-zinc-950 custom-shadow active:translate-y-[2px] transition-all">
+              <span>+ CADASTRAR RAPIDAMENTE</span>
+            </button>
+          `;
+          renderDashboardTab();
+          break;
+        case 'leads':
+          titleNode.innerText = 'FUNIL DE VENDAS (KANBAN)';
+          descNode.innerText = 'Gerencie sua carteira de clientes, movimente status e controle fluxos através de arrastar e soltar.';
+          actionArea.innerHTML = `
+            <button onclick="openLeadModalForCreate()" class="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-xs tracking-wider border-2 border-zinc-950 custom-shadow hover:translate-y-[-1px] transition">
+              <span>+ NOVO INTEGRANTE</span>
+            </button>
+          `;
+          renderLeadsTab();
+          break;
+        case 'appointments':
+          titleNode.innerText = 'AGENTES & AGENDAMENTOS';
+          descNode.innerText = 'Controle as visitas técnicas decorados MCMV, assinaturas bancárias e reuniões presenciais.';
+          renderAppointmentsTab();
+          break;
+        case 'marketing-multinivel':
+          titleNode.innerText = 'MÍDIA & CAMPANHAS';
+          descNode.innerText = 'Gere peças de copywriting otimizadas por inteligência de negócios para campanhas de WhatsApp.';
+          renderMarketingTab();
+          break;
+        case 'inventory':
+          titleNode.innerText = 'ESTOQUE DE IMÓVEIS DISPONÍVEIS';
+          descNode.innerText = 'Catálogo inteligente de captações integrando o portfólio oficial ciclocred.';
+          renderInventoryTab();
+          break;
+        case 'simulador':
+          titleNode.innerText = 'SIMULADOR FINANCEIRO INTELIGENTE';
+          descNode.innerText = 'Determine fluxos de financiamento com tabelas SAC/PRICE em tempo de obras com balões anuais.';
+          renderSimuladorTab();
+          break;
+        case 'automation-flows':
+          titleNode.innerText = 'TEMPLATES E AUTOMAÇÃO';
+          descNode.innerText = 'Scripts copy e automações predefinidas para envio direto multicanal de e-mail / whatsapp.';
+          renderAutomationTab();
+          break;
+        case 'kids':
+          titleNode.innerText = 'ESPAÇO KIDS (EDUCAÇÃO FINANCEIRA)';
+          descNode.innerText = 'Entretenimento focado para que as crianças dos proponentes joguem e aprendam sobre poupar.';
+          renderKidsTab();
+          break;
+        case 'mcmv-portal':
+          titleNode.innerText = 'PORTAL CICLOCRED INFORM';
+          descNode.innerText = 'Verifique programas habitacionais atualizados, regras de repasse e novidades federais.';
+          renderMcmvTab();
+          break;
+        case 'settings':
+          titleNode.innerText = 'CONFIGURAÇÕES DA INTEGRADORA';
+          descNode.innerText = 'Gerencie limpezas de banco de dados, nome do credenciamento e perfil.';
+          renderSettingsTab();
+          break;
+      }
+    }
+
+    // 1. DASHBOARD COMPONENT RENDERER
+    function renderDashboardTab() {
+      const container = document.getElementById('tab-host');
+      const leads = state.leads;
+
+      const totalLeads = leads.length;
+      const novoLeads = leads.filter(l => l.status === 'novo').length;
+      const contatoLeads = leads.filter(l => l.status === 'em_contato').length;
+      const propostaLeads = leads.filter(l => l.status === 'proposta').length;
+      const fechadoLeads = leads.filter(l => l.status === 'fechado').length;
+
+      // Calculate Conversions
+      const conversionRate = totalLeads > 0 ? ((fechadoLeads / totalLeads) * 100).toFixed(0) : '0';
+      const potentialCreciValue = leads.reduce((acc, lead) => acc + (lead.value || 0), 0);
+
+      container.innerHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div class="bg-white border-4 border-zinc-950 p-5 rounded-2xl flex items-center justify-between shadow-[4px_4px_0px_0px_rgba(24,24,27,1)]">
+            <div class="space-y-1">
+              <span class="text-[10px] tracking-wider uppercase font-black text-zinc-400 font-mono">Total de Clientes</span>
+              <h3 class="text-3xl font-black text-zinc-900 tracking-tight">${totalLeads}</h3>
+            </div>
+            <div class="p-2 border-2 border-zinc-950 rounded-xl bg-indigo-50">
+              <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 00-4.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.109A11.386 11.386 0 0110.089 21m-5.08-1.5a5.125 5.125 0 017.533-2.493M3.75 15.521c0-1.285.997-2.349 2.276-2.394.01-.001.02-.001.03-.001a11.54 11.54 0 0113.882 0c.01 0 .02 0 .03.002 1.279.045 2.276 1.11 2.276 2.394V17a3 3 0 01-3 3H6a3 3 0 01-3-3v-1.479z" /></svg>
+            </div>
+          </div>
+          <div class="bg-zinc-900 text-white border-4 border-zinc-950 p-5 rounded-2xl flex items-center justify-between shadow-[4px_4px_0px_0px_rgba(24,24,27,1)]">
+            <div class="space-y-1">
+              <span class="text-[10px] tracking-wider uppercase font-black text-zinc-500 font-mono">Taxa Conversão</span>
+              <h3 class="text-3xl font-black text-indigo-400 tracking-tight">${conversionRate}%</h3>
+            </div>
+            <div class="p-2 border-2 border-zinc-800 rounded-xl bg-zinc-950">
+              <svg class="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6a7.5 7.5 0 107.5 7.5h-7.5V6zM13.5 10.5H21A7.5 7.5 0 0013.5 3v7.5z" /></svg>
+            </div>
+          </div>
+          <div class="bg-white border-4 border-zinc-950 p-5 rounded-2xl flex items-center justify-between shadow-[4px_4px_0px_0px_rgba(24,24,27,1)]">
+            <div class="space-y-1">
+              <span class="text-[10px] tracking-wider uppercase font-black text-zinc-400 font-mono">Geração Negócio</span>
+              <h3 class="text-2xl font-black text-emerald-600 tracking-tight">R$ ${(potentialCreciValue/1000).toFixed(0)}k</h3>
+            </div>
+            <div class="p-2 border-2 border-zinc-950 rounded-xl bg-emerald-50">
+              <svg class="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 6v12m-3-2.818l.879-.659c1.171-.879 3.07-.879 4.242 0 1.172.879 1.172 2.303 0 3.182C13.536 21.602 12.316 22 11 22m0-3h1m-1-9H9m1 3l-.879-.659c-1.171-.879-1.171-2.303 0-3.182 1.172-.879 3.07-.879 4.242 0 .586.44.879.99.879 1.54M12 2v3" /></svg>
+            </div>
+          </div>
+          <div class="bg-indigo-650 text-white border-4 border-zinc-950 p-5 rounded-2xl flex items-center justify-between shadow-[4px_4px_0px_0px_rgba(24,24,27,1)]">
+            <div class="space-y-1">
+              <span class="text-[10px] tracking-wider uppercase font-black text-indigo-300 font-mono">Próximo Nível (Metas)</span>
+              <h3 class="text-lg font-black tracking-tight uppercase italic">${state.level * 1000 - state.xp} XP Restantes</h3>
+            </div>
+            <div class="p-2 border-2 border-zinc-950 rounded-xl bg-indigo-800">
+              <svg class="w-6 h-6 text-indigo-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.504-1.125-1.125-1.125h-2.25c-.621 0-1.125.504-1.125 1.125V18.75M16.5 9.75v3.375c0 .621-.504 1.125-1.125 1.125h-2.25c-.621 0-1.125-.504-1.125-1.125V9.75M12 9.75v-3.375c0-.621-.504-1.125-1.125-1.125h-2.25c-.621 0-1.125.504-1.125 1.125V9.75" /></svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <!-- Leads Status Dynamic Donut Chart Canvas Integration -->
+          <div class="lg:col-span-2 bg-white border-4 border-zinc-950 rounded-2xl p-6 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] space-y-4">
+            <h3 class="text-xs font-black uppercase tracking-wider font-mono text-zinc-500">Distribuição Estatística Real-time do Funil</h3>
+            
+            <div class="flex flex-col md:flex-row gap-6 items-center">
+              <div class="w-full max-w-[200px] flex justify-center relative">
+                <!-- Inline HTML Canvas containing highly reactive donut visualization rendering natively offline! -->
+                <canvas id="dashboardDonutCanvas" width="180" height="180" class="mx-auto select-none"></canvas>
+                <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span id="donut-total" class="text-2xl font-black text-zinc-900 leading-none">${totalLeads}</span>
+                  <span class="text-[8px] font-bold uppercase text-zinc-400 tracking-wider">Leads</span>
+                </div>
+              </div>
+              
+              <div class="flex-1 space-y-2 text-xs w-full">
+                <div class="flex justify-between items-center p-2.5 bg-cyan-50 border-2 border-zinc-950 rounded-xl">
+                  <span class="font-bold text-cyan-800 uppercase tracking-tight">Novo / Entrada</span>
+                  <strong class="font-mono text-zinc-900">${novoLeads}</strong>
+                </div>
+                <div class="flex justify-between items-center p-2.5 bg-yellow-50 border-2 border-zinc-950 rounded-xl">
+                  <span class="font-bold text-yellow-800 uppercase tracking-tight">Em Contato</span>
+                  <strong class="font-mono text-zinc-900">${contatoLeads}</strong>
+                </div>
+                <div class="flex justify-between items-center p-2.5 bg-purple-50 border-2 border-zinc-950 rounded-xl">
+                  <span class="font-bold text-purple-800 uppercase tracking-tight">Proposta Comercial</span>
+                  <strong class="font-mono text-zinc-900">${propostaLeads}</strong>
+                </div>
+                <div class="flex justify-between items-center p-2.5 bg-emerald-50 border-2 border-zinc-950 rounded-xl">
+                  <span class="font-bold text-emerald-800 uppercase tracking-tight">Fechado / Sucesso</span>
+                  <strong class="font-mono text-zinc-900">${fechadoLeads}</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Actions & System Health Overview -->
+          <div class="bg-white border-4 border-zinc-950 rounded-2xl p-6 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] space-y-4">
+            <h3 class="text-xs font-black uppercase tracking-wider font-mono text-zinc-500">Últimas Integrações</h3>
+            <div id="latest-leads-feed" class="space-y-3">
+              <!-- Rendered via JS -->
+            </div>
+            
+            <button onclick="generateFastMockLeads()" class="w-full text-center py-3 bg-zinc-900 text-white font-black text-xs uppercase tracking-wider rounded-xl neo-border shadow-sm hover:bg-zinc-800 transition active:translate-y-[2px]">
+              ⚡ Injetar Clientes para Testar
+            </button>
+          </div>
+        </div>
+      `;
+
+      drawDashboardDonutChart(novoLeads, contatoLeads, propostaLeads, fechadoLeads);
+      renderDashboardLatestLeads();
+    }
+
+    function drawDashboardDonutChart(novo, contato, proposta, fechado) {
+      const cv = document.getElementById('dashboardDonutCanvas');
+      if (!cv) return;
+      const ctx = cv.getContext('2d');
+      const total = novo + contato + proposta + fechado || 1;
+
+      const slices = [
+        { label: 'Novo', val: novo, color: '#06b6d4' },
+        { label: 'Contato', val: contato, color: '#f59e0b' },
+        { label: 'Proposta', val: proposta, color: '#a855f7' },
+        { label: 'Fechado', val: fechado, color: '#10b981' }
+      ];
+
+      // Draw standard neat high performance pixel ratio chart
+      const cx = cv.width / 2;
+      const cy = cv.height / 2;
+      const radius = 68;
+      const innerRadius = 45;
+
+      let startAngle = -0.5 * Math.PI;
+
+      ctx.clearRect(0, 0, cv.width, cv.height);
+
+      slices.forEach(slice => {
+        const val = slice.val === 0 && total === 1 ? 0.25 : slice.val; 
+        const sliceAngle = (val / total) * 2 * Math.PI;
+
+        if (sliceAngle > 0) {
+          ctx.beginPath();
+          ctx.arc(cx, cy, radius, startAngle, startAngle + sliceAngle, false);
+          ctx.arc(cx, cy, innerRadius, startAngle + sliceAngle, startAngle, true);
+          ctx.closePath();
+          ctx.fillStyle = slice.color;
+          ctx.fill();
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          startAngle += sliceAngle;
+        }
+      });
+    }
+
+    function renderDashboardLatestLeads() {
+      const feed = document.getElementById('latest-leads-feed');
+      if (!feed) return;
+      feed.innerHTML = '';
+      const list = state.leads.slice(-3).reverse();
+
+      if (list.length === 0) {
+        feed.innerHTML = `<div class="p-4 text-center text-zinc-400 text-xs font-mono">Sem clientes cadastrados.</div>`;
+        return;
+      }
+
+      list.forEach(item => {
+        const div = document.createElement('div');
+        div.className = "flex items-center justify-between p-3 bg-zinc-50 border-2 border-zinc-950 rounded-xl hover:bg-zinc-100 transition";
+        div.innerHTML = `
+          <div>
+            <h4 class="font-bold text-xs text-zinc-900">${item.name}</h4>
+            <span class="text-[9px] font-mono uppercase tracking-widest text-[#6366f1]">${item.source}</span>
+          </div>
+          <span class="px-2 py-0.5 rounded text-[8px] font-black uppercase font-mono bg-indigo-50 border border-zinc-900 text-indigo-700">${item.status}</span>
+        `;
+        feed.appendChild(div);
+      });
+    }
+
+    function generateFastMockLeads() {
+      state.leads.push(
+        { id: 'm1', name: 'Ana Carolina Nogueira', phone: '(11) 95555-5555', email: 'carol@gmail.com', status: 'novo', source: 'Portal Imobiliário', property: 'Residencial Aurora', income: 6500, value: 230000, notes: 'Pretendente MCMV Caixa Econômica.', createdAt: new Date().toISOString() },
+        { id: 'm2', name: 'Leandro Rodrigues', phone: '(21) 96666-6666', email: 'leandro.rod@gmail.com', status: 'proposta', source: 'Campanha de Anúncios', property: 'Cobertura Duplex Bella Vista', income: 18000, value: 550000, notes: 'Análise de crédito Caixa em andamento.', createdAt: new Date().toISOString() }
+      );
+      saveToStorage('leads', state.leads);
+      awardXp(150);
+      selectTab('dashboard');
+    }
+
+    // 2. KANBAN INTERACTIVE SALES PIPELINE RENDERER
+    function renderLeadsTab() {
+      const container = document.getElementById('tab-host');
+      container.innerHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 overflow-x-auto pb-4">
+          <div class="bg-zinc-200 border-4 border-zinc-950 p-4 rounded-2xl min-h-[450px]" id="col-novo" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'novo')">
+            <div class="flex items-center justify-between border-b-2 border-zinc-950 pb-2 mb-4">
+              <span class="text-xs font-black uppercase tracking-wider font-mono">ENTRADA (NOVO)</span>
+              <span class="bg-zinc-950 text-white font-mono text-xs px-2 py-0.5 rounded-md" id="cnt-novo">0</span>
+            </div>
+            <div class="space-y-3" id="cards-novo"></div>
+          </div>
+          <div class="bg-zinc-200 border-4 border-zinc-950 p-4 rounded-2xl min-h-[450px]" id="col-em_contato" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'em_contato')">
+            <div class="flex items-center justify-between border-b-2 border-zinc-950 pb-2 mb-4">
+              <span class="text-xs font-black uppercase tracking-wider font-mono text-yellow-650">EM CONTATO</span>
+              <span class="bg-zinc-950 text-white font-mono text-xs px-2 py-0.5 rounded-md" id="cnt-em_contato">0</span>
+            </div>
+            <div class="space-y-3" id="cards-em_contato"></div>
+          </div>
+          <div class="bg-zinc-200 border-4 border-zinc-950 p-4 rounded-2xl min-h-[450px]" id="col-proposta" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'proposta')">
+            <div class="flex items-center justify-between border-b-2 border-zinc-950 pb-2 mb-4">
+              <span class="text-xs font-black uppercase tracking-wider font-mono text-purple-650">PROPOSTA</span>
+              <span class="bg-zinc-950 text-white font-mono text-xs px-2 py-0.5 rounded-md" id="cnt-proposta">0</span>
+            </div>
+            <div class="space-y-3" id="cards-proposta"></div>
+          </div>
+          <div class="bg-zinc-200 border-4 border-zinc-950 p-4 rounded-2xl min-h-[450px]" id="col-fechado" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'fechado')">
+            <div class="flex items-center justify-between border-b-2 border-zinc-950 pb-2 mb-4">
+              <span class="text-xs font-black uppercase tracking-wider font-mono text-emerald-650">FECHADO (VENDIDO)</span>
+              <span class="bg-zinc-950 text-white font-mono text-xs px-2 py-0.5 rounded-md" id="cnt-fechado">0</span>
+            </div>
+            <div class="space-y-3" id="cards-fechado"></div>
+          </div>
+          <div class="bg-zinc-200 border-4 border-zinc-950 p-4 rounded-2xl min-h-[450px]" id="col-perdido" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'perdido')">
+            <div class="flex items-center justify-between border-b-2 border-zinc-950 pb-2 mb-4">
+              <span class="text-xs font-black uppercase tracking-wider font-mono text-rose-650">PERDIDO</span>
+              <span class="bg-zinc-950 text-white font-mono text-xs px-2 py-0.5 rounded-md" id="cnt-perdido">0</span>
+            </div>
+            <div class="space-y-3" id="cards-perdido"></div>
+          </div>
+        </div>
+      `;
+
+      populateKanbanCards();
+    }
+
+    function allowDrop(ev) {
+      ev.preventDefault();
+    }
+
+    let dragLeadId = '';
+    function handleDragLead(ev, id) {
+      dragLeadId = id;
+    }
+
+    function handleDropColumn(ev, status) {
+      ev.preventDefault();
+      const lead = state.leads.find(l => l.id === dragLeadId);
+      if (lead) {
+        lead.status = status;
+        saveToStorage('leads', state.leads);
+        awardXp(50);
+        renderLeadsTab();
+      }
+    }
+
+    function populateKanbanCards() {
+      const cols = {
+        novo: document.getElementById('cards-novo'),
+        em_contato: document.getElementById('cards-em_contato'),
+        proposta: document.getElementById('cards-proposta'),
+        fechado: document.getElementById('cards-fechado'),
+        perdido: document.getElementById('cards-perdido')
+      };
+
+      const counts = { novo: 0, em_contato: 0, proposta: 0, fechado: 0, perdido: 0 };
+
+      // Reset
+      Object.keys(cols).forEach(k => cols[k].innerHTML = '');
+
+      state.leads.forEach(lead => {
+        counts[lead.status]++;
+        const div = document.createElement('div');
+        div.className = "bg-white p-3.5 border-2 border-zinc-950 rounded-xl hover:scale-102 transition duration-200 cursor-move";
+        div.draggable = true;
+        div.ondragstart = (ev) => handleDragLead(ev, lead.id);
+        
+        div.innerHTML = `
+          <div class="flex justify-between items-start gap-1">
+            <h4 class="font-black text-xs text-zinc-900 tracking-tight leading-4">${lead.name}</h4>
+            <button onclick="deleteLead('${lead.id}')" class="text-rose-500 hover:text-rose-700">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+            </button>
+          </div>
+          <span class="text-[9px] font-semibold text-zinc-400 mt-0.5 block font-mono">${lead.phone}</span>
+          <div class="border-t border-dashed border-zinc-200 my-2 pt-2 flex items-center justify-between text-[10px] font-mono">
+            <span class="text-indigo-600 font-bold uppercase tracking-widest text-[8px]">${lead.source}</span>
+            <strong class="text-zinc-600 font-black">R$ ${(lead.value/1000 || 0).toFixed(0)}k</strong>
+          </div>
+        `;
+        
+        if (cols[lead.status]) {
+          cols[lead.status].appendChild(div);
+        }
+      });
+
+      // Update counters
+      Object.keys(counts).forEach(k => {
+        document.getElementById('cnt-' + k).innerText = counts[k];
+      });
+    }
+
+    function deleteLead(id) {
+      if (confirm('Tem certeza de que deseja expurgar este lead permanente do CRM?')) {
+        state.leads = state.leads.filter(l => l.id !== id);
+        saveToStorage('leads', state.leads);
+        playSfx('success');
+        renderLeadsTab();
+      }
+    }
+
+    // LEAD MODAL WORKFLOW
+    function openLeadModalForCreate() {
+      document.getElementById('lead-modal-title').innerText = 'CADASTRAR NOVO INTEGRANTE / CLIENTE';
+      document.getElementById('form-lead-id').value = '';
+      document.getElementById('form-lead-name').value = '';
+      document.getElementById('form-lead-phone').value = '';
+      document.getElementById('form-lead-email').value = '';
+      document.getElementById('form-lead-status').value = 'novo';
+      document.getElementById('form-lead-source').value = 'Portal Imobiliário';
+      document.getElementById('form-lead-property').value = '';
+      document.getElementById('form-lead-income').value = '';
+      document.getElementById('form-lead-value').value = '';
+      document.getElementById('form-lead-notes').value = '';
+      
+      document.getElementById('lead-modal').classList.remove('hidden');
+    }
+
+    function closeLeadModal() {
+      document.getElementById('lead-modal').classList.add('hidden');
+    }
+
+    document.getElementById('lead-form').onsubmit = (e) => {
+      e.preventDefault();
+      const id = document.getElementById('form-lead-id').value;
+      const name = document.getElementById('form-lead-name').value;
+      const phone = document.getElementById('form-lead-phone').value;
+      const email = document.getElementById('form-lead-email').value;
+      const status = document.getElementById('form-lead-status').value;
+      const source = document.getElementById('form-lead-source').value;
+      const property = document.getElementById('form-lead-property').value;
+      const income = parseFloat(document.getElementById('form-lead-income').value) || 0;
+      const value = parseFloat(document.getElementById('form-lead-value').value) || 0;
+      const notes = document.getElementById('form-lead-notes').value;
+
+      if (id) {
+        const lead = state.leads.find(l => l.id === id);
+        if (lead) {
+          lead.name = name;
+          lead.phone = phone;
+          lead.email = email;
+          lead.status = status;
+          lead.source = source;
+          lead.property = property;
+          lead.income = income;
+          lead.value = value;
+          lead.notes = notes;
+        }
+      } else {
+        const newLead = {
+          id: 'lead-' + Math.random().toString(36).substr(2, 9),
+          name, phone, email, status, source, property, income, value, notes,
+          createdAt: new Date().toISOString()
+        };
+        state.leads.push(newLead);
+        awardXp(200);
+      }
+
+      saveToStorage('leads', state.leads);
+      closeLeadModal();
+
+      if (state.activeTab === 'dashboard') {
+        renderDashboardTab();
+      } else {
+        renderLeadsTab();
+      }
+    };
+
+    // 3. APPOINTMENTS SCHEDULER TAB
+    function renderAppointmentsTab() {
+      const parent = document.getElementById('tab-host');
+      const listHtml = state.appointments.map(appt => `
+        <div class="p-4 bg-white border-2 border-zinc-950 rounded-xl flex items-center justify-between gap-4">
+          <div class="space-y-1">
+            <h4 class="font-black text-sm uppercase text-indigo-600 font-mono tracking-wider">${appt.time} - ${appt.title}</h4>
+            <p class="text-xs text-zinc-650 font-medium">Cliente: <strong class="text-zinc-900">${appt.leadName}</strong></p>
+          </div>
+          <span class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase font-mono bg-zinc-900 border border-zinc-950 text-white">${appt.date}</span>
+        </div>
+      `).join('');
+
+      parent.innerHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div class="bg-white border-4 border-zinc-950 p-6 rounded-2xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] space-y-4">
+            <h3 class="font-sans font-black uppercase text-sm">AGENDAR ATENDIMENTO</h3>
+            <form id="appt-form" class="space-y-3 font-mono text-xs text-zinc-650" onsubmit="addAppointment(event)">
+              <div class="space-y-1.5">
+                <label class="block font-bold">Título do Evento</label>
+                <input type="text" id="new-appt-title" required class="w-full p-2.5 bg-zinc-50 border-2 border-zinc-950 rounded-xl" placeholder="Apresentação Caixa Econômica">
+              </div>
+              <div class="space-y-1.5">
+                <label class="block font-bold">Data (AAAA-MM-DD)</label>
+                <input type="date" id="new-appt-date" required class="w-full p-2.5 bg-zinc-50 border-2 border-zinc-950 rounded-xl">
+              </div>
+              <div class="space-y-1.5">
+                <label class="block font-bold">Horário (HH:MM)</label>
+                <input type="time" id="new-appt-time" required class="w-full p-2.5 bg-zinc-50 border-2 border-zinc-950 rounded-xl">
+              </div>
+              <div class="space-y-1.5">
+                <label class="block font-bold">Nome do Cliente</label>
+                <input type="text" id="new-appt-lead" required class="w-full p-2.5 bg-zinc-50 border-2 border-zinc-950 rounded-xl" placeholder="Felipe Santos">
+              </div>
+              <button type="submit" class="w-full py-3 bg-indigo-600 text-white font-black text-xs uppercase rounded-xl neo-border shadow-sm hover:bg-indigo-700 transition">
+                CONFIRMAR COMPROMISSO
+              </button>
+            </form>
+          </div>
+
+          <div class="md:col-span-2 bg-zinc-200 border-4 border-zinc-950 p-6 rounded-2xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] space-y-4">
+            <h3 class="font-sans font-black uppercase text-sm">CRONOGRAMA ATIVO</h3>
+            <div class="space-y-3" id="appointments-feed">
+              ${listHtml || '<p class="text-xs font-mono text-zinc-500 text-center p-8">Nenhum compromisso agendado para os próximos dias.</p>'}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function addAppointment(e) {
+      e.preventDefault();
+      const title = document.getElementById('new-appt-title').value;
+      const date = document.getElementById('new-appt-date').value;
+      const time = document.getElementById('new-appt-time').value;
+      const leadName = document.getElementById('new-appt-lead').value;
+
+      state.appointments.push({
+        id: 'ap-' + Math.random().toString(36).substr(2, 9),
+        title, date, time, leadName, type: 'reuniao'
+      });
+
+      saveToStorage('appointments', state.appointments);
+      awardXp(120);
+      selectTab('appointments');
+    }
+
+    // 4. MARKETING MULTINIVEL / ASSETS
+    function renderMarketingTab() {
+      const parent = document.getElementById('tab-host');
+      parent.innerHTML = `
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div class="bg-white border-4 border-zinc-950 p-6 rounded-2xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] space-y-4">
+            <h3 class="font-sans font-black uppercase text-sm">GERador DE COPYWRITING</h3>
+            <div class="text-xs space-y-2">
+              <label class="block font-black font-mono text-[9px] uppercase tracking-wider text-zinc-400">Estilo de Abordagem Mágica</label>
+              <select id="marketing-style" class="w-full p-2.5 bg-zinc-50 border-2 border-zinc-950 rounded-xl font-bold font-mono text-xs">
+                <option value="mcmv">Programa MCMV (Minha Casa Minha Vida)</option>
+                <option value="sbpe">Poupança Caixa SBPE (Intermediário)</option>
+                <option value="corporate">Giro Comercial / Investimentos</option>
+              </select>
+            </div>
+            <button onclick="generateMarketingCopy()" class="w-full py-3 bg-indigo-600 text-white font-black text-xs uppercase rounded-xl border-2 border-zinc-950 shadow-sm hover:translate-y-[-1px] active:translate-y-[1px] transition">
+              💥 GERAR MODELO DE TEXTO
+            </button>
+          </div>
+
+          <div class="lg:col-span-2 bg-zinc-200 border-4 border-zinc-950 p-6 rounded-2xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] space-y-4">
+            <h3 class="font-sans font-black uppercase text-sm">TEXTO FINAL DE ABORDAGEM</h3>
+            <textarea id="copywriting-output" rows="12" readonly class="w-full p-4 bg-zinc-50 border-2 border-zinc-950 rounded-2xl font-mono text-[11px] leading-5 focus:outline-none shrink-0" placeholder="Selecione um estilo ao lado e clique em gerar texto para carregar um roteiro infalível..."></textarea>
+            <div class="flex justify-end gap-3">
+              <button onclick="copiarMarketingCopy()" class="px-5 py-2.5 bg-indigo-600 text-white border-2 border-zinc-950 font-black text-xs uppercase rounded-xl shadow-sm hover:bg-indigo-700 transition">
+                📋 COPIAR TEXTO
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function generateMarketingCopy() {
+      const style = document.getElementById('marketing-style').value;
+      const output = document.getElementById('copywriting-output');
+      let text = '';
+
+      if (style === 'mcmv') {
+        text = `Olá, tudo bem? 🏠✨\n\nConheça as novas regras oficiais do programa Minha Casa Minha Vida!\nAgora, você pode conquistar o seu apartamento próprio com subsídios de até R$ 55.000 concedidos pelo Governo Federal e parcelas mensais que cabem perfeitamente no seu bolso (muitas vezes mais baratas que o seu aluguel municipal!).\n\n🎯 Faça agora mesmo sua simulação cicloCRED sem compromisso de maneira 100% online!\nResponda com seu WhatsApp operacional para receber uma consultoria qualificada instantânea.\n\ncicloCRED CRM - Realizando sonhos.`;
+      } else if (style === 'sbpe') {
+        text = `Olá! Excelente dia. 🌟\n\nBusca o imóvel dos seus sonhos com amplos layouts, sacada diferenciada e excelente acabamento pelo plano SBPE Poupança Caixa?\n\nTemos as melhores taxas de financiamento residencial do mercado atual. Use o seu saldo de FGTS como entrada exclusiva do negócio e simule as parcelas de amortização SAC ou PRICE de maneira simplificada.\n\nFale conosco preenchendo o formulário de propostas digitais!\n\nAbraços,\nEquipe de Relacionamento CICLOCRED.`;
+      } else {
+        text = `Prezado parceiro comercial,\n\nProcurando fomento robusto ou portfólio para Capital de Giro corporativo integrado?\n\nA cicloCRED disponibiliza linhas de financiamento diferenciadas e empréstimos estruturados sob medida para o fluxo de caixa empresarial. Taxas diferenciadas e prazos de carência ampliados.\n\nRetorne o contato para agendar uma reunião exclusiva com seu CRECI qualificado do CRM!\n\nAtenciosamente.`;
+      }
+
+      output.value = text;
+      awardXp(80);
+    }
+
+    function copiarMarketingCopy() {
+      const area = document.getElementById('copywriting-output');
+      if (!area.value) {
+        alert('Gere um modelo de copywriting antes de copiar!');
+        return;
+      }
+      area.select();
+      document.execCommand('copy');
+      playSfx('success');
+      alert('Texto copiado com sucesso para a área de transferência corporativa!');
+    }
+
+    // 5. INVENTORY PORTFOLIO
+    function renderInventoryTab() {
+      const parent = document.getElementById('tab-host');
+      const cardsHtml = state.properties.map(p => `
+        <div class="bg-white border-2 border-zinc-950 rounded-2xl p-4 flex flex-col justify-between shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] gap-3">
+          <div class="space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="px-2 py-0.5 rounded text-[8px] font-black uppercase font-mono bg-indigo-50 border border-indigo-950 text-indigo-700">${p.type}</span>
+              <strong class="font-mono text-zinc-900 text-xs">R$ ${p.price.toLocaleString('pt-BR')}</strong>
+            </div>
+            <h4 class="font-black text-xs text-zinc-900 uppercase tracking-tight">${p.title}</h4>
+            <span class="text-[9px] font-bold text-zinc-400 font-mono block">${p.location}</span>
+            <p class="text-[10px] text-zinc-650 font-medium">${p.description}</p>
+          </div>
+          <div class="border-t border-zinc-150 pt-2 flex items-center justify-between text-[10px] font-mono text-zinc-500">
+            <span>🛏️ ${p.beds} Qq</span>
+            <span>🚿 ${p.baths} Wc</span>
+            <span>📐 ${p.area}m²</span>
+          </div>
+        </div>
+      `).join('');
+
+      parent.innerHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+          ${cardsHtml}
+        </div>
+      `;
+    }
+
+    // 6. FINANCIAL SIMULATOR SPREADSHEET
+    function renderSimuladorTab() {
+      const parent = document.getElementById('tab-host');
+      parent.innerHTML = `
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div class="bg-white border-4 border-zinc-950 p-6 rounded-2xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] space-y-4 text-xs font-mono">
+            <h3 class="font-sans font-black uppercase text-sm tracking-tight text-zinc-900">PREFEITURA DE CÁLCULO</h3>
+            <div class="space-y-3">
+              <div class="space-y-1.5">
+                <label class="block font-bold">Valor Total Imóvel (R$)</label>
+                <input type="number" id="sim-imovel" value="250000" class="w-full p-2.5 bg-zinc-50 border-2 border-zinc-950 rounded-xl font-bold font-mono">
+              </div>
+              <div class="space-y-1.5">
+                <label class="block font-bold">Entrada Sinal (R$)</label>
+                <input type="number" id="sim-sinal" value="15000" class="w-full p-2.5 bg-zinc-50 border-2 border-zinc-950 rounded-xl font-bold font-mono">
+              </div>
+              <div class="space-y-1.5">
+                <label class="block font-bold">Número Parcelas Mensais Obra</label>
+                <input type="number" id="sim-meses" value="30" class="w-full p-2.5 bg-zinc-50 border-2 border-zinc-950 rounded-xl font-bold font-mono">
+              </div>
+              <div class="space-y-1.5">
+                <label class="block font-bold">Anuais Balões (Qtd 2)</label>
+                <input type="number" id="sim-balao" value="8000" class="w-full p-2.5 bg-zinc-50 border-2 border-zinc-950 rounded-xl font-bold font-mono">
+              </div>
+              <button onclick="calcularSimulador()" class="w-full py-3 bg-indigo-600 text-white font-black text-xs uppercase rounded-xl border-2 border-zinc-950 custom-shadow hover:bg-indigo-700 transition">
+                🖩 CALCULAR FLUXO DE CAIXA
+              </button>
+            </div>
+          </div>
+
+          <div class="lg:col-span-2 bg-zinc-200 border-4 border-zinc-950 p-6 rounded-2xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] space-y-4">
+            <h3 class="font-sans font-black uppercase text-sm">FLUXO FINANCEIRO DETALHADO DO CLIENTE</h3>
+            <div class="grid grid-cols-2 gap-4 text-xs font-mono">
+              <div class="bg-white border-2 border-zinc-950 p-4 rounded-xl">
+                <span class="text-zinc-400 font-bold uppercase text-[9px] block">TOTAL FINANCIADO CAIXA</span>
+                <strong id="res-financiado" class="text-xl font-black text-zinc-900">R$ 180.000</strong>
+              </div>
+              <div class="bg-white border-2 border-zinc-950 p-4 rounded-xl">
+                <span class="text-zinc-400 font-bold uppercase text-[9px] block">PRESTAÇÃO MENSAL OBRAS (MÉDIA)</span>
+                <strong id="res-mensal" class="text-xl font-black text-indigo-700">R$ 1.300</strong>
+              </div>
+            </div>
+            <div class="p-4 bg-zinc-950 text-white rounded-xl text-[10px] font-mono leading-5 border-2 border-zinc-800">
+              <span class="text-indigo-400 font-bold">PROPOSTA DE ENQUADRAMENTO MCMV:</span><br>
+              • Entrada Comercial Sinal de Facilitado direto com a integradora.<br>
+              • Taxas calculadas usando o simulador inteligente padrão TR + 4,99% a.a.<br>
+              • Parcela de chaves estimada em R$ 15.000 ao fim das 30 parcelas mensais de construção residencial.
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function calcularSimulador() {
+      const imovel = parseFloat(document.getElementById('sim-imovel').value) || 0;
+      const sinal = parseFloat(document.getElementById('sim-sinal').value) || 0;
+      const meses = parseInt(document.getElementById('sim-meses').value) || 1;
+      const balao = parseFloat(document.getElementById('sim-balao').value) || 0;
+
+      // Simple real time simulation arithmetic
+      const baloesTotal = balao * 2;
+      const residual = imovel - sinal - baloesTotal;
+      const financiado = Math.max(residual * 0.8, 0); 
+      const mensalObra = Math.max((residual - financiado) / meses, 0);
+
+      document.getElementById('res-financiado').innerText = financiado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+      document.getElementById('res-mensal').innerText = mensalObra.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+
+      awardXp(60);
+    }
+
+    // 7. TEMPLATES AUTOMATION
+    function renderAutomationTab() {
+      const parent = document.getElementById('tab-host');
+      parent.innerHTML = `
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div class="bg-white border-4 border-zinc-950 p-6 rounded-2xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] space-y-4">
+            <h3 class="font-sans font-black uppercase text-sm">NOTIFICADORES E DISPAROS</h3>
+            <div class="text-xs space-y-2">
+              <label class="block font-black font-mono text-[9px] uppercase tracking-wider text-zinc-400">Canal Destinatário</label>
+              <select class="w-full p-2.5 bg-zinc-50 border-2 border-zinc-950 rounded-xl font-bold font-mono text-xs">
+                <option>WhatsApp Corporativo Integrado</option>
+                <option>E-mail Marketing Servidor</option>
+              </select>
+            </div>
+            <button onclick="dispatchFakeNotification()" class="w-full py-3 bg-indigo-600 text-white font-black text-xs uppercase rounded-xl border-2 border-zinc-950 shadow-sm hover:translate-y-[-1px] transition">
+              ⚡ CONFIGURAR TEMPLATE ATIVO
+            </button>
+          </div>
+
+          <div class="lg:col-span-2 bg-white border-4 border-zinc-950 p-6 rounded-2xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] space-y-3 font-mono text-xs text-zinc-650">
+            <h3 class="font-sans font-black uppercase text-sm text-zinc-900 shrink-0">TEMPLATES PRÉ-CONFIGURADOS</h3>
+            <div class="space-y-2">
+              <div class="p-3 bg-zinc-50 border-2 border-zinc-950 rounded-xl">
+                <strong>[Boas vindas]</strong> Cadastro e validação de documentos Caixa.
+              </div>
+              <div class="p-3 bg-zinc-50 border-2 border-zinc-950 rounded-xl">
+                <strong>[Cobrança do Sinal]</strong> Transmissão de Chaves e Balões.
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function dispatchFakeNotification() {
+      awardXp(50);
+      alert('Automação qualificada ajustada com sucesso! Os disparos estão parametrizados.');
+    }
+
+    // 8. KIDS FINANCIAL LITERACY QUIZ
+    let kidsScore = 0;
+    function renderKidsTab() {
+      const parent = document.getElementById('tab-host');
+      parent.innerHTML = `
+        <div class="bg-white border-4 border-zinc-950 p-8 rounded-2xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] text-center space-y-6">
+          <div class="inline-flex p-4 bg-yellow-100 rounded-full border-2 border-zinc-950">
+            <svg class="w-10 h-10 text-yellow-600" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.008v.008H12V18zm0-2.25h.008v.008H12V15.75m0-2.25h.008v.008H12v-.008zm0-2.25h.008v.008H12v-.008zm0-2.25a2.25 2.25 0 00-2.25 2.25H6a6 6 0 1112 0h-3.75A2.25 2.25 0 0012 6.75z" /></svg>
+          </div>
+          <div class="space-y-2">
+            <h2 class="text-2xl font-black uppercase tracking-tight">O que é Educação Financeira Infantil?</h2>
+            <p class="text-xs text-zinc-500 max-w-md mx-auto">Enquanto os proponentes realizam análises sérias de crédito, seus filhos podem responder este quiz sobre planejamento para acumular moedas infantis!</p>
+          </div>
+
+          <div id="quiz-box" class="max-w-md mx-auto bg-zinc-50 border-2 border-zinc-950 p-6 rounded-2xl space-y-4 text-xs font-bold leading-5">
+            <p id="quiz-question" class="text-zinc-900 text-sm">Se você ganhar R$ 10 de mesada e poupar metade na caderneta por dois meses, com quanto você fica ao final?</p>
+            <div class="grid grid-cols-1 gap-2.5 font-mono">
+              <button onclick="answerQuiz(true)" class="p-3 bg-white border-2 border-zinc-950 rounded-xl hover:bg-emerald-50 transition text-left">A) R$ 10 (Dez reais economizados reais)</button>
+              <button onclick="answerQuiz(false)" class="p-3 bg-white border-2 border-zinc-950 rounded-xl hover:bg-rose-50 transition text-left">B) R$ 0 (Gastei tudo em balas de canela!)</button>
+            </div>
+          </div>
+
+          <div class="text-xs font-mono text-zinc-400">
+            Pontuação das Crianças: <strong id="kids-score" class="text-indigo-600">${kidsScore}</strong> pontos acumulados.
+          </div>
+        </div>
+      `;
+    }
+
+    function answerQuiz(correct) {
+      if (correct) {
+        kidsScore += 10;
+        awardXp(50);
+        playSfx('success');
+        alert('🎯 CERTINHO! Economizar ajuda a comprar coisas maiores e mais divertidas no futuro, como seu próprio quarto!');
+      } else {
+        playSfx('click');
+        alert('❌ Ops! Se você gastar tudo agora, não terá nada guardado. Tente focar em planejar um pouco!');
+      }
+      renderKidsTab();
+    }
+
+    // 9. PORTAL INBOUND PUBLIC WEB
+    function renderMcmvTab() {
+      const parent = document.getElementById('tab-host');
+      const newsHtml = state.mcmvNews.map(item => `
+        <div class="bg-white border-2 border-zinc-950 p-4 rounded-xl space-y-2">
+          <h4 class="font-black text-xs text-zinc-900 uppercase tracking-tight font-mono">${item.title}</h4>
+          <span class="text-[9px] text-zinc-400">${item.date}</span>
+          <p class="text-[10px] text-zinc-650 font-semibold">${item.snippet}</p>
+        </div>
+      `).join('');
+
+      parent.innerHTML = `
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div class="lg:col-span-2 space-y-4">
+            <h3 class="text-xs font-black uppercase tracking-wider font-mono text-zinc-500">Últimas Notícias Habitacionais</h3>
+            <div class="grid grid-cols-1 gap-4">
+              ${newsHtml}
+            </div>
+          </div>
+
+          <div class="bg-white border-4 border-zinc-950 p-6 rounded-2xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] space-y-4">
+            <h3 class="font-sans font-black uppercase text-sm tracking-tight text-zinc-900">SIMULAR CAPTAÇÃO PÚBLICA</h3>
+            <p class="text-xs text-zinc-500 font-medium">Assegure a captação inserindo um interessado diretamente no CRM simulação:</p>
+            <form id="public-intake-form" class="space-y-3 font-mono text-xs" onsubmit="handlePublicInbound(event)">
+              <div class="space-y-1.5">
+                <label class="block font-bold">Interessado Nome</label>
+                <input type="text" id="intake-name" required class="w-full p-2.5 bg-zinc-50 border-2 border-zinc-950 rounded-xl">
+              </div>
+              <div class="space-y-1.5">
+                <label class="block font-bold">Contato WhatsApp</label>
+                <input type="text" id="intake-phone" required class="w-full p-2.5 bg-zinc-50 border-2 border-zinc-950 rounded-xl" placeholder="(11) 90000-0000">
+              </div>
+              <button type="submit" class="w-full py-3 bg-indigo-600 text-white font-black text-xs uppercase rounded-xl border-2 border-zinc-950 custom-shadow hover:bg-indigo-700 transition">
+                ⚡ ENVIAR PROPOSTA DIGITAL
+              </button>
+            </form>
+          </div>
+        </div>
+      `;
+    }
+
+    function handlePublicInbound(e) {
+      e.preventDefault();
+      const name = document.getElementById('intake-name').value;
+      const phone = document.getElementById('intake-phone').value;
+
+      state.leads.push({
+        id: 'pub-' + Math.random().toString(36).substr(2, 9),
+        name, phone, status: 'novo', source: 'Inbound ciclocred', income: 5000, value: 200000, notes: 'Lead inserido através do Formulário Público cicloCRED Inform.', createdAt: new Date().toISOString()
+      });
+
+      saveToStorage('leads', state.leads);
+      awardXp(150);
+      alert('Cadastro processado com sucesso! O operador receberá a ficha de contato do prospect.');
+      selectTab('mcmv-portal');
+    }
+
+    // 10. SYSTEM SETTINGS
+    function renderSettingsTab() {
+      const parent = document.getElementById('tab-host');
+      parent.innerHTML = `
+        <div class="bg-white border-4 border-zinc-950 p-8 rounded-2xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] space-y-6">
+          <h2 class="text-lg font-black uppercase text-zinc-900">Configurações Gerais do Administrador</h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs font-mono text-zinc-650">
+            <div class="space-y-1.5">
+              <label class="block font-bold">Nome do Corretor / Operador</label>
+              <input type="text" id="setter-name" value="${state.userName}" class="w-full p-2.5 bg-zinc-50 border-2 border-zinc-950 rounded-xl">
+            </div>
+            <div class="space-y-1.5">
+              <label class="block font-bold">Número de Registro CRECI oficial</label>
+              <input type="text" id="setter-creci" value="${state.creci}" class="w-full p-2.5 bg-zinc-50 border-2 border-zinc-950 rounded-xl">
+            </div>
+          </div>
+          <div class="flex gap-4 pt-4 border-t border-zinc-200">
+            <button onclick="saveCRMGeneralSettings()" class="px-6 py-3 bg-indigo-600 text-white font-black text-xs uppercase rounded-xl border-2 border-zinc-950 shadow-sm hover:bg-indigo-700 transition">
+              💾 SALVAR AJUSTES
+            </button>
+            <button onclick="wipeCRMBackup()" class="px-6 py-3 bg-rose-650 text-rose-600 font-black text-xs uppercase rounded-xl border-2 border-rose-600 hover:bg-rose-50 transition">
+              🗑️ ZERAR BANCO LOCAL (WIPE)
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function saveCRMGeneralSettings() {
+      const name = document.getElementById('setter-name').value;
+      const creci = document.getElementById('setter-creci').value;
+
+      state.userName = name;
+      state.creci = creci;
+
+      saveToStorage('user_name', name);
+      saveToStorage('creci_number', creci);
+
+      document.getElementById('u-name').innerText = name;
+
+      playSfx('success');
+      alert('Configurações de credenciamento do operador salvas perfeitamente!');
+    }
+
+    function wipeCRMBackup() {
+      if (confirm('ATENÇÃO permanente! Deseja apagar todas as propostas, agendamentos e leads locais do localStorage corporativo?')) {
+        localStorage.clear();
+        state.leads = defaultLeads;
+        state.properties = defaultProperties;
+        state.xp = 1500;
+        state.level = 1;
+        saveToStorage('leads', defaultLeads);
+        saveToStorage('properties', defaultProperties);
+        saveToStorage('user_xp', 1500);
+        saveToStorage('user_level', 1);
+        playSfx('success');
+        location.reload();
+      }
+    }
+
+    // RUNNING REAL-TIME CLOCK FOR CRITICAL ENGAGEMENT
+    setInterval(() => {
+      const d = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const timeStr = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      const clockNode = document.getElementById('running-clock');
+      if (clockNode) {
+        clockNode.innerText = timeStr;
+      }
+    }, 1000);
+
+    // SYSTEM INITIALIZER
+    window.onload = () => {
+      checkAuthentication();
+      updateHeaderXpVisuals();
+    };
+
+  </script>
+</body>
+</html>

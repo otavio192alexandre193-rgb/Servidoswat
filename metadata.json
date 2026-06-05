@@ -1,0 +1,6 @@
+{
+  "name": "SWAT CRM",
+  "description": "CRM SWAT completo para gestão de leads com automações e abas de atendimento personalizáveis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

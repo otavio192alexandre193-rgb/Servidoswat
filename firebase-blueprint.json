@@ -1,0 +1,176 @@
+{
+  "entities": {
+    "Lead": {
+      "title": "Lead",
+      "description": "A potential prospective client for real estate financing.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "company": { "type": "string" },
+        "value": { "type": "integer" },
+        "status": { "type": "string", "enum": ["novo", "em_contato", "proposta", "fechado", "perdido"] },
+        "notes": { "type": "string" },
+        "origin": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "lastContactAt": { "type": "string" }
+      },
+      "required": ["id", "name", "email", "phone", "value", "status", "createdAt"]
+    },
+    "EmailTemplate": {
+      "title": "EmailTemplate",
+      "description": "An email layout template or campaign boilerplate script.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "subject": { "type": "string" },
+        "body": { "type": "string" },
+        "triggerEvent": { "type": "string" }
+      },
+      "required": ["id", "name", "subject", "body"]
+    },
+    "EmailLog": {
+      "title": "EmailLog",
+      "description": "Audit record of an automated or assisted message delivery.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "leadId": { "type": "string" },
+        "leadName": { "type": "string" },
+        "templateName": { "type": "string" },
+        "subject": { "type": "string" },
+        "body": { "type": "string" },
+        "sentAt": { "type": "string" },
+        "status": { "type": "string", "enum": ["enviado", "falhou"] }
+      },
+      "required": ["id", "leadId", "leadName", "templateName", "subject", "body", "sentAt", "status"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "Scheduled interactions and business visits for prospective clients.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "leadId": { "type": "string" },
+        "leadName": { "type": "string" },
+        "title": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["agendado", "realizado", "cancelado"] },
+        "type": { "type": "string", "enum": ["reuniao", "telefone", "proposta", "outro"] },
+        "reminderMinutes": { "type": "integer" },
+        "reminderSent": { "type": "boolean" }
+      },
+      "required": ["id", "leadId", "leadName", "title", "date", "time", "status", "type"]
+    },
+    "InventoryItem": {
+      "title": "InventoryItem",
+      "description": "Physical terminal infrastructure for paper or digital logistics.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "sku": { "type": "string" },
+        "category": { "type": "string" },
+        "quantity": { "type": "integer" },
+        "minQuantity": { "type": "integer" },
+        "price": { "type": "integer" },
+        "status": { "type": "string", "enum": ["disponivel", "baixo_estoque", "indisponivel", "esgotado"] },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "name", "sku", "category", "quantity", "minQuantity", "price", "status"]
+    },
+    "RealEstateProperty": {
+      "title": "RealEstateProperty",
+      "description": "A real estate asset belonging to the developer portfolio.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string", "enum": ["apartamento", "casa", "lote", "comercial"] },
+        "price": { "type": "integer" },
+        "bedrooms": { "type": "integer" },
+        "suites": { "type": "integer" },
+        "bathrooms": { "type": "integer" },
+        "parkingSpaces": { "type": "integer" },
+        "sizeSqm": { "type": "integer" },
+        "location": { "type": "string" },
+        "neighborhood": { "type": "string" },
+        "status": { "type": "string", "enum": ["disponivel", "reservado", "vendido"] },
+        "description": { "type": "string" },
+        "imageUrl": { "type": "string" }
+      },
+      "required": ["id", "code", "title", "type", "price", "bedrooms", "suites", "bathrooms", "parkingSpaces", "sizeSqm", "location", "neighborhood", "status", "description"]
+    },
+    "Goal": {
+      "title": "Goal",
+      "description": "An interactive daily, weekly, or monthly gamified activity goal.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "targetCount": { "type": "integer" },
+        "currentCount": { "type": "integer" },
+        "xpReward": { "type": "integer" },
+        "frequency": { "type": "string", "enum": ["diaria", "semanal", "mensal"] },
+        "category": { "type": "string", "enum": ["venda", "prospecção", "visita", "email"] },
+        "completed": { "type": "boolean" }
+      },
+      "required": ["id", "title", "targetCount", "currentCount", "xpReward", "frequency", "category", "completed"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "An overarching planning container.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["em_planejamento", "ativo", "concluido"] },
+        "progress": { "type": "integer" },
+        "xpReward": { "type": "integer" },
+        "assignedToGoalId": { "type": "string" }
+      },
+      "required": ["id", "name", "description", "status", "progress", "xpReward"]
+    }
+  },
+  "firestore": {
+    "/leads/{leadId}": {
+      "schema": "Lead",
+      "description": "Collection storing real estate financing prospects."
+    },
+    "/templates/{templateId}": {
+      "schema": "EmailTemplate",
+      "description": "Collection storing email marketing structure formats."
+    },
+    "/emailLogs/{logId}": {
+      "schema": "EmailLog",
+      "description": "Collection tracking communication history."
+    },
+    "/appointments/{appointmentId}": {
+      "schema": "Appointment",
+      "description": "Collection of scheduled tours, meetings, and calls."
+    },
+    "/inventory/{itemId}": {
+      "schema": "InventoryItem",
+      "description": "Physical collateral/maquininha inventory stock tracking."
+    },
+    "/properties/{propertyId}": {
+      "schema": "RealEstateProperty",
+      "description": "Collection cataloging real estate developments."
+    },
+    "/gamificationGoals/{goalId}": {
+      "schema": "Goal",
+      "description": "Gamified progression daily and weekly targets."
+    },
+    "/gamificationProjects/{projectId}": {
+      "schema": "Project",
+      "description": "Interactive projects linked with gamification."
+    }
+  }
+}

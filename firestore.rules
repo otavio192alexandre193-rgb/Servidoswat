@@ -1,0 +1,309 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 1. Global Catch-All Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- REUSABLE SECURITY PRIMITIVES ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // --- ENTITY SCHEMA VALIDATIONS (THE 8 PILLARS) ---
+
+    // LEAD VALIDATION
+    function isValidLead(data) {
+      return data.id is string
+        && data.name is string && data.name.size() > 0
+        && (!('email' in data) || data.email == null || data.email is string)
+        && (!('phone' in data) || data.phone == null || data.phone is string)
+        && (!('value' in data) || data.value == null || data.value is number)
+        && (!('status' in data) || data.status == null || data.status is string)
+        && (!('company' in data) || data.company == null || data.company is string)
+        && (!('notes' in data) || data.notes == null || data.notes is string)
+        && (!('origin' in data) || data.origin == null || data.origin is string)
+        && (!('createdAt' in data) || data.createdAt == null || data.createdAt is string)
+        && (!('lastContactAt' in data) || data.lastContactAt == null || data.lastContactAt is string)
+        && (!('familyIncome' in data) || data.familyIncome == null || data.familyIncome is number);
+    }
+
+    // EMAIL TEMPLATE VALIDATION
+    function isValidEmailTemplate(data) {
+      return data.id is string && data.id.size() <= 100
+        && data.name is string && data.name.size() <= 150 && data.name.size() > 0
+        && data.subject is string && data.subject.size() <= 300
+        && data.body is string && data.body.size() <= 10000
+        && (!('triggerEvent' in data) || data.triggerEvent == null || (data.triggerEvent is string && data.triggerEvent.size() <= 100));
+    }
+
+    // EMAIL LOG VALIDATION
+    function isValidEmailLog(data) {
+      return data.id is string && data.id.size() <= 100
+        && data.leadId is string && data.leadId.size() <= 100
+        && data.leadName is string && data.leadName.size() <= 150
+        && data.templateName is string && data.templateName.size() <= 150
+        && data.subject is string && data.subject.size() <= 300
+        && data.body is string && data.body.size() <= 10000
+        && data.status in ['enviado', 'falhou']
+        && (!('sentAt' in data) || data.sentAt == null || (data.sentAt is string && data.sentAt.size() <= 100));
+    }
+
+    // APPOINTMENT VALIDATION
+    function isValidAppointment(data) {
+      return data.id is string && data.id.size() <= 100
+        && data.leadId is string && data.leadId.size() <= 100
+        && data.leadName is string && data.leadName.size() <= 150
+        && data.title is string && data.title.size() <= 200 && data.title.size() > 0
+        && data.date is string && data.date.size() == 10
+        && data.time is string && data.time.size() == 5
+        && data.status in ['agendado', 'realizado', 'cancelado']
+        && data.type in ['reuniao', 'telefone', 'proposta', 'outro']
+        && (!('description' in data) || data.description == null || (data.description is string && data.description.size() <= 5000))
+        && (!('reminderMinutes' in data) || data.reminderMinutes == null || (data.reminderMinutes is number && data.reminderMinutes >= 0))
+        && (!('reminderSent' in data) || data.reminderSent == null || (data.reminderSent is bool));
+    }
+
+    // INVENTORY ITEM VALIDATION
+    function isValidInventoryItem(data) {
+      return data.id is string && data.id.size() <= 100
+        && data.name is string && data.name.size() <= 150 && data.name.size() > 0
+        && data.sku is string && data.sku.size() <= 100
+        && data.category is string && data.category.size() <= 100
+        && data.quantity is number && data.quantity >= 0
+        && data.minQuantity is number && data.minQuantity >= 0
+        && data.price is number && data.price >= 0
+        && data.status in ['disponivel', 'baixo_estoque', 'indisponivel', 'esgotado']
+        && (!('notes' in data) || data.notes == null || (data.notes is string && data.notes.size() <= 5000));
+    }
+
+    // REAL ESTATE PROPERTY VALIDATION
+    function isValidRealEstateProperty(data) {
+      return data.id is string && data.id.size() <= 100
+        && data.code is string && data.code.size() <= 50
+        && data.title is string && data.title.size() <= 200 && data.title.size() > 0
+        && data.type in ['apartamento', 'casa', 'lote', 'comercial']
+        && data.price is number && data.price >= 0
+        && data.bedrooms is number && data.bedrooms >= 0
+        && data.suites is number && data.suites >= 0
+        && data.bathrooms is number && data.bathrooms >= 0
+        && data.parkingSpaces is number && data.parkingSpaces >= 0
+        && data.sizeSqm is number && data.sizeSqm >= 0
+        && data.location is string && data.location.size() <= 300
+        && data.neighborhood is string && data.neighborhood.size() <= 150
+        && data.status in ['disponivel', 'reservado', 'vendido']
+        && data.description is string && data.description.size() <= 10000
+        && (!('imageUrl' in data) || data.imageUrl == null || (data.imageUrl is string && data.imageUrl.size() <= 1000))
+        && (!('images' in data) || data.images == null || (data.images is list));
+    }
+
+    // GOAL VALIDATION
+    function isValidGoal(data) {
+      return data.id is string && data.id.size() <= 100
+        && data.title is string && data.title.size() <= 250 && data.title.size() > 0
+        && data.targetCount is number && data.targetCount >= 0
+        && data.currentCount is number && data.currentCount >= 0
+        && data.xpReward is number && data.xpReward >= 0
+        && data.frequency in ['diaria', 'semanal', 'mensal']
+        && data.category in ['venda', 'prospecção', 'visita', 'email']
+        && data.completed is bool;
+    }
+
+    // PROJECT VALIDATION
+    function isValidProject(data) {
+      return data.id is string && data.id.size() <= 100
+        && data.name is string && data.name.size() <= 200 && data.name.size() > 0
+        && data.description is string && data.description.size() <= 5000
+        && data.status in ['em_planejamento', 'ativo', 'concluido']
+        && data.progress is number && data.progress >= 0 && data.progress <= 100
+        && data.xpReward is number && data.xpReward >= 0
+        && (!('assignedToGoalId' in data) || data.assignedToGoalId == null || (data.assignedToGoalId is string && data.assignedToGoalId.size() <= 100));
+    }
+
+    // FOLLOW-UP VALIDATION
+    function isValidFollowUp(data) {
+      return data.id is string
+        && data.leadId is string
+        && data.leadName is string
+        && data.date is string
+        && data.type in ['ligacao', 'whatsapp', 'email', 'reuniao', 'proposta']
+        && data.notes is string
+        && (!('time' in data) || data.time == null || data.time is string)
+        && (!('nextStepTitle' in data) || data.nextStepTitle == null || data.nextStepTitle is string)
+        && (!('nextStepDate' in data) || data.nextStepDate == null || data.nextStepDate is string)
+        && (!('nextStepTime' in data) || data.nextStepTime == null || data.nextStepTime is string)
+        && (!('userEmail' in data) || data.userEmail == null || data.userEmail is string);
+    }
+
+    // BROKER RANKING VALIDATION
+    function isValidBrokerRanking(data) {
+      return data.id is string && data.id.size() <= 100
+        && data.name is string && data.name.size() <= 150
+        && data.email is string && data.email.size() <= 150
+        && data.level is number && data.level >= 0
+        && data.xp is number && data.xp >= 0
+        && data.dealsClosed is number && data.dealsClosed >= 0
+        && data.actionsCount is number && data.actionsCount >= 0
+        && data.lastActive is string;
+    }
+
+    // AI SETTINGS CONFIGURATION VALIDATION
+    function isValidSettings(data) {
+      return (!('active' in data) || data.active is bool)
+        && (!('model_name' in data) || data.model_name is string && data.model_name.size() <= 100)
+        && (!('system_instruction' in data) || data.system_instruction is string && data.system_instruction.size() <= 15000)
+        && (!('temperature' in data) || data.temperature is number)
+        && (!('whatsapp_enabled' in data) || data.whatsapp_enabled is bool)
+        && (!('leads_auto_creation_enabled' in data) || data.leads_auto_creation_enabled is bool)
+        && (!('autoresponder_url' in data) || data.autoresponder_url is string && data.autoresponder_url.size() <= 2000)
+        && (!('updatedAt' in data) || data.updatedAt is string && data.updatedAt.size() <= 100);
+    }
+
+    // AI WEBHOOK PROCESS LOGS VALIDATION
+    function isValidAiLog(data) {
+      return data.id is string && data.id.size() <= 100
+        && data.timestamp is string && data.timestamp.size() <= 100
+        && data.phone is string && data.phone.size() <= 100
+        && data.sender is string && data.sender.size() <= 200
+        && data.message is string && data.message.size() <= 15000
+        && data.reply is string && data.reply.size() <= 15000
+        && data.status in ['sucesso', 'erro']
+        && data.model_used is string && data.model_used.size() <= 100
+        && data.latency_ms is number
+        && (!('error_message' in data) || data.error_message is string && data.error_message.size() <= 15000);
+    }
+
+    // WEBHOOK DEBUG LOGS VALIDATION
+    function isValidWebhookDebugLog(data) {
+      return data.id is string && data.id.size() <= 100
+        && data.timestamp is string && data.timestamp.size() <= 100
+        && data.direction is string && data.direction.size() <= 100
+        && data.endpoint is string && data.endpoint.size() <= 2000
+        && data.method is string && data.method.size() <= 20
+        && data.isValid is bool
+        && data.responseStatus is number;
+    }
+
+
+    // --- COLLECTION RULE MATCH ENTRIES ---
+
+    // LEADS COLLECTION (Requires server read/write validation compatibility)
+    match /leads/{leadId} {
+      allow read: if true;
+      allow create: if isValidId(leadId) && isValidLead(incoming());
+      allow update: if isValidId(leadId) && isValidLead(incoming());
+      allow delete: if isSignedIn() && isValidId(leadId);
+    }
+
+    // EMAIL TEMPLATES COLLECTION
+    match /templates/{templateId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(templateId) && isValidEmailTemplate(incoming());
+      allow update: if isSignedIn() && isValidId(templateId) && isValidEmailTemplate(incoming());
+      allow delete: if isSignedIn() && isValidId(templateId);
+    }
+
+    // EMAIL COMMUNICATIONS LOG
+    match /emailLogs/{logId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(logId) && isValidEmailLog(incoming());
+      allow update: if isSignedIn() && isValidId(logId) && isValidEmailLog(incoming());
+      allow delete: if isSignedIn() && isValidId(logId);
+    }
+
+    // CLIENT APPOINTMENTS
+    match /appointments/{appointmentId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(appointmentId) && isValidAppointment(incoming());
+      allow update: if isSignedIn() && isValidId(appointmentId) && isValidAppointment(incoming());
+      allow delete: if isSignedIn() && isValidId(appointmentId);
+    }
+
+    // COLLATERAL INVENTORY
+    match /inventory/{itemId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(itemId) && isValidInventoryItem(incoming());
+      allow update: if isSignedIn() && isValidId(itemId) && isValidInventoryItem(incoming());
+      allow delete: if isSignedIn() && isValidId(itemId);
+    }
+
+    // PROPERTIES
+    match /properties/{propertyId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(propertyId) && isValidRealEstateProperty(incoming());
+      allow update: if isSignedIn() && isValidId(propertyId) && isValidRealEstateProperty(incoming());
+      allow delete: if isSignedIn() && isValidId(propertyId);
+    }
+
+    // PROGRESSION GOALS
+    match /gamificationGoals/{goalId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(goalId) && isValidGoal(incoming());
+      allow update: if isSignedIn() && isValidId(goalId) && isValidGoal(incoming());
+      allow delete: if isSignedIn() && isValidId(goalId);
+    }
+
+    // GAMIFIED DISPATCH PROJECTS
+    match /gamificationProjects/{projectId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(projectId) && isValidProject(incoming());
+      allow update: if isSignedIn() && isValidId(projectId) && isValidProject(incoming());
+      allow delete: if isSignedIn() && isValidId(projectId);
+    }
+
+    // FOLLOW-UP ENTRIES
+    match /followups/{followUpId} {
+      allow read: if isSignedIn();
+      allow create: if isValidId(followUpId) && isValidFollowUp(incoming());
+      allow update: if isValidId(followUpId) && isValidFollowUp(incoming());
+      allow delete: if isSignedIn() && isValidId(followUpId);
+    }
+
+    // BROKER RANKINGS COLLECTION
+    match /brokerRankings/{rankingId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(rankingId) && isValidBrokerRanking(incoming());
+      allow update: if isSignedIn() && isValidId(rankingId) && isValidBrokerRanking(incoming());
+      allow delete: if isSignedIn() && isSignedIn();
+    }
+
+    // AI WEBHOOK PROCESS LOGS COLLECTION
+    match /ai_logs/{logId} {
+      allow read: if true;
+      allow create: if isValidId(logId) && isValidAiLog(incoming());
+      allow update: if isValidId(logId) && isValidAiLog(incoming());
+      allow delete: if isSignedIn() && isValidId(logId);
+    }
+
+    // WEBHOOK DEBUG LOGS REPOSITORY
+    match /webhook_debug_logs/{logId} {
+      allow read: if true;
+      allow create: if isValidId(logId) && isValidWebhookDebugLog(incoming());
+      allow update: if isValidId(logId) && isValidWebhookDebugLog(incoming());
+      allow delete: if isSignedIn() && isValidId(logId);
+    }
+
+    // AI CONFIG SERVER SETTINGS COLLECTION
+    match /settings/{settingsId} {
+      allow read: if true;
+      allow create: if isValidId(settingsId) && isValidSettings(incoming());
+      allow update: if isValidId(settingsId) && isValidSettings(incoming());
+      allow delete: if isSignedIn() && isValidId(settingsId);
+    }
+
+  }
+}

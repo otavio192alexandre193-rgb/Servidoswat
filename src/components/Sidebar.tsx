@@ -1,0 +1,174 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState } from 'react';
+import { 
+  LayoutDashboard, 
+  Trello, 
+  Users, 
+  Mail, 
+  TrendingUp,
+  Briefcase,
+  Calendar,
+  Package,
+  Trophy,
+  Settings,
+  LogOut,
+  ChevronUp,
+  User,
+  Share2,
+  Sliders,
+  Camera,
+  FileSpreadsheet,
+  MessageSquare,
+  Gamepad2,
+  Cpu,
+  Cloud,
+  Sparkles
+} from 'lucide-react';
+import { AccessibilitySettings, triggerSensoryFeedback, INITIAL_ACCESSIBILITY_SETTINGS } from '../utils/sensory';
+
+interface SidebarProps {
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
+  leadsCount: number;
+  userName?: string;
+  userEmail?: string;
+  onLogout?: () => void;
+  accSettings?: AccessibilitySettings;
+}
+
+export default function Sidebar({ 
+  activeTab, 
+  setActiveTab, 
+  leadsCount,
+  userName = 'Operador CicloCred',
+  userEmail = 'operador@ciclocred.com',
+  onLogout,
+  accSettings = INITIAL_ACCESSIBILITY_SETTINGS
+}: SidebarProps) {
+  const [showUserMenu, setShowUserMenu] = useState(false);
+
+  // Load profile photo from localStorage if present
+  const profilePhoto = localStorage.getItem('ciclocred_user_photo') || '';
+
+  const menuItems = [
+    { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard },
+    { id: 'leads', name: 'Leads', icon: Users, badge: leadsCount },
+    { id: 'follow-up', name: 'Follow-up', icon: MessageSquare },
+    { id: 'marketing-multinivel', name: 'Marketing Multinível', icon: Share2 },
+    { id: 'appointments', name: 'Agendamentos', icon: Calendar },
+    { id: 'inventory', name: 'Estoque de Imóveis', icon: Package },
+    { id: 'simulador', name: 'Simulador Financeiro', icon: FileSpreadsheet },
+    { id: 'automation-flows', name: 'Fluxos & Scripts', icon: Cpu },
+    { id: 'gemini-server', name: 'Servidor Gemini IA', icon: Sparkles },
+    { id: 'google-workspace', name: 'Google Workspace', icon: Cloud },
+    { id: 'kids', name: 'Alavancagem & Finanças', icon: TrendingUp },
+    { id: 'user-central', name: 'Painel do Usuário (Metas & Adm)', icon: Trophy },
+    { id: 'reports', name: 'Relatórios Integrados', icon: TrendingUp },
+  ];
+
+  return (
+    <aside className="w-68 bg-zinc-900 border-r-4 border-zinc-950 flex flex-col h-screen text-zinc-100 shrink-0 md:block hidden">
+      {/* Brand Header */}
+      <div className="p-6 border-b-4 border-zinc-950">
+        <div className="flex items-center gap-2">
+          <Briefcase className="w-6 h-6 text-indigo-400" />
+          <span className="font-sans font-black tracking-tighter text-2xl uppercase italic text-white">
+            SWAT<span className="text-indigo-400"></span> CRM
+          </span>
+        </div>
+        <p className="text-[10px] text-zinc-400 uppercase tracking-widest font-black mt-1.5 font-mono">
+          ▲ GESTOR COMERCIAL DE LEADS
+        </p>
+      </div>
+
+      {/* Navigation Links */}
+      <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+        <div className="px-3 mb-3 text-[10px] font-black text-zinc-500 uppercase tracking-widest font-mono">
+          Menu Principal
+        </div>
+        {menuItems.map((item) => {
+          const IconComponent = item.icon;
+          const isActive = activeTab === item.id;
+          return (
+            <button
+              id={`nav-btn-${item.id}`}
+              key={item.id}
+              onClick={() => {
+                triggerSensoryFeedback('click', accSettings);
+                setActiveTab(item.id);
+              }}
+              className={`w-full flex items-center justify-between px-3.5 py-3 rounded-lg text-sm font-bold transition-all ${
+                isActive
+                  ? 'bg-indigo-600 text-white border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] font-extrabold translate-y-[-1px]'
+                  : 'text-zinc-400 hover:text-white hover:bg-zinc-800/80 hover:translate-x-1'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <IconComponent className={`w-4 h-4 ${isActive ? 'text-white' : 'text-zinc-400'}`} />
+                <span>{item.name}</span>
+              </div>
+              {item.badge !== undefined && item.badge > 0 && (
+                <span className={`text-[10px] font-black px-2 py-0.5 rounded border border-zinc-950 font-mono ${isActive ? 'bg-zinc-950 text-white' : 'bg-zinc-800 text-zinc-300'}`}>
+                  {item.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* User Profile Footer Card with Actionable Sign-out */}
+      <div className="p-4 border-t-4 border-zinc-950 bg-zinc-950 relative">
+        {showUserMenu && (
+          <div className="absolute bottom-16 left-4 right-4 bg-zinc-900 border-2 border-zinc-950 p-2 rounded-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] z-30 animate-scaleIn text-xs space-y-1">
+            {onLogout && (
+              <button
+                onClick={() => {
+                  triggerSensoryFeedback('warning', accSettings);
+                  setShowUserMenu(false);
+                  onLogout();
+                }}
+                className="w-full flex items-center gap-2 text-rose-400 hover:text-white hover:bg-rose-950/40 p-2.5 rounded-lg transition-all font-mono font-black uppercase text-[10px]"
+              >
+                <LogOut className="w-3.5 h-3.5 shrink-0" />
+                <span>Sair do Sistema</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        <div 
+          onClick={() => {
+            triggerSensoryFeedback('click', accSettings);
+            setShowUserMenu(!showUserMenu);
+          }}
+          className="flex items-center justify-between p-1 hover:bg-zinc-900 rounded-lg cursor-pointer transition select-none"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            {profilePhoto && profilePhoto !== '' ? (
+              <img 
+                src={profilePhoto || undefined} 
+                alt={userName} 
+                className="w-9 h-9 rounded object-cover border-2 border-zinc-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] shrink-0"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded bg-indigo-500 border-2 border-zinc-900 flex items-center justify-center text-zinc-950 font-black text-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] shrink-0 font-mono">
+                {userName.substring(0, 2).toUpperCase()}
+              </div>
+            )}
+            <div className="min-w-0">
+              <h4 className="text-xs font-black text-white hover:text-indigo-400 uppercase tracking-wider font-mono truncate">{userName}</h4>
+              <p className="text-[10px] text-zinc-400 font-bold font-mono truncate">{userEmail}</p>
+            </div>
+          </div>
+          <ChevronUp className={`w-4 h-4 text-zinc-400 transition-transform shrink-0 ${showUserMenu ? 'rotate-180' : ''}`} />
+        </div>
+      </div>
+    </aside>
+  );
+}

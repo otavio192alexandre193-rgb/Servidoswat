@@ -1,0 +1,1881 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>cicloCRED CRM - Versão Completa Single-File</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Space Grotesk', 'Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace']
+          },
+          colors: {
+            indigo: {
+              650: '#4f46e5',
+              750: '#3730a3'
+            },
+            pink: {
+              550: '#db2777'
+            }
+          },
+          borderWidth: {
+            '5': '5px'
+          },
+          boxShadow: {
+            'comic': '4px 4px 0px 0px rgba(24, 24, 27, 1)',
+            'comic-lg': '6px 6px 0px 0px rgba(24, 24, 27, 1)',
+            'comic-sm': '2px 2px 0px 0px rgba(24, 24, 27, 1)'
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    body {
+      background-color: #f4f4f5;
+      font-family: 'Space Grotesk', 'Inter', sans-serif;
+    }
+    
+    /* Playful neo-brutalist styling scrollbars */
+    ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f4f4f5;
+      border-left: 2px solid #18181b;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #18181b;
+      border-radius: 4px;
+    }
+
+    /* Custom Animations */
+    @keyframes bounce-slow {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+    .animate-bounce-slow {
+      animation: bounce-slow 2s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="text-zinc-900 min-h-screen flex flex-col antialiased">
+
+  <!-- SOUND SYNTHESIZER MODULE FOR SENSORY ACCESSIBILITY FEEDBACKS -->
+  <script>
+    const soundContext = new (window.AudioContext || window.webkitAudioContext)();
+    
+    function playSensorySound(type) {
+      if (!soundContext) return;
+      try {
+        if (soundContext.state === 'suspended') {
+          soundContext.resume();
+        }
+        
+        switch(type) {
+          case 'click': {
+            const osc = soundContext.createOscillator();
+            const gain = soundContext.createGain();
+            osc.connect(gain);
+            gain.connect(soundContext.destination);
+            osc.frequency.setValueAtTime(600, soundContext.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(150, soundContext.currentTime + 0.08);
+            gain.gain.setValueAtTime(0.08, soundContext.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, soundContext.currentTime + 0.08);
+            osc.start();
+            osc.stop(soundContext.currentTime + 0.08);
+            break;
+          }
+          case 'success': {
+            // Happy arpeggio
+            const notes = [300, 400, 500, 600];
+            notes.forEach((freq, idx) => {
+              const osc = soundContext.createOscillator();
+              const gain = soundContext.createGain();
+              osc.connect(gain);
+              gain.connect(soundContext.destination);
+              osc.frequency.setValueAtTime(freq, soundContext.currentTime + idx * 0.06);
+              gain.gain.setValueAtTime(0.08, soundContext.currentTime + idx * 0.06);
+              gain.gain.exponentialRampToValueAtTime(0.01, soundContext.currentTime + idx * 0.06 + 0.15);
+              osc.start(soundContext.currentTime + idx * 0.06);
+              osc.stop(soundContext.currentTime + idx * 0.06 + 0.15);
+            });
+            break;
+          }
+          case 'warning': {
+            const osc = soundContext.createOscillator();
+            const gain = soundContext.createGain();
+            osc.type = 'triangle';
+            osc.connect(gain);
+            gain.connect(soundContext.destination);
+            osc.frequency.setValueAtTime(220, soundContext.currentTime);
+            gain.gain.setValueAtTime(0.12, soundContext.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, soundContext.currentTime + 0.25);
+            osc.start();
+            osc.stop(soundContext.currentTime + 0.25);
+            break;
+          }
+          case 'complete': {
+            // Chime finish
+            const osc = soundContext.createOscillator();
+            const gain = soundContext.createGain();
+            osc.type = 'sine';
+            osc.connect(gain);
+            gain.connect(soundContext.destination);
+            osc.frequency.setValueAtTime(440, soundContext.currentTime);
+            osc.frequency.setValueAtTime(880, soundContext.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.08, soundContext.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, soundContext.currentTime + 0.4);
+            osc.start();
+            osc.stop(soundContext.currentTime + 0.45);
+            break;
+          }
+        }
+      } catch (err) {
+        console.warn("Audio Context failure", err);
+      }
+    }
+  </script>
+
+  <!-- NAVIGATION HEADER -->
+  <header class="bg-zinc-950 text-white border-b-4 border-zinc-950 py-4 px-6 sticky top-0 z-50 shadow-[0_4px_0_0_rgba(24,24,27,1)] flex flex-wrap items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <div class="bg-yellow-400 text-zinc-950 border-2 border-white rounded-xl p-2 font-mono font-black text-sm uppercase -rotate-2 select-none shadow-comic-sm">
+        cicloCRED 🚀
+      </div>
+      <div>
+        <h1 class="text-lg md:text-xl font-extrabold uppercase italic tracking-tighter leading-none">CRM Habib corporativo</h1>
+        <span class="text-[10px] font-mono font-bold tracking-widest text-indigo-400 uppercase">Single-file Standalone Edition</span>
+      </div>
+    </div>
+
+    <!-- Active profile indicators header -->
+    <div class="flex items-center gap-4">
+      <div class="hidden sm:flex bg-zinc-900 border border-zinc-805 p-1.5 rounded-xl text-right font-mono flex-col justify-center">
+        <span class="text-[10px] font-black uppercase text-yellow-300" id="user-header-name">Operador CicloCred</span>
+        <span class="text-[9px] text-zinc-400" id="user-header-creci">CRECI: MT-18239</span>
+      </div>
+      <div class="bg-indigo-650 text-white border-2 border-zinc-950 px-3.5 py-1.5 rounded-full font-mono text-xs font-black shadow-comic flex items-center gap-1.5 select-none animate-bounce-slow">
+        <span class="inline-flex h-2 w-2 rounded-full bg-yellow-400"></span>
+        <span id="user-header-level">Lvl 1</span>
+        <span class="text-[10px] text-zinc-300">|</span>
+        <span id="user-header-xp">0 XP</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- OUTER CONTENT WRAPPER -->
+  <div class="flex-1 flex flex-col md:flex-row">
+    
+    <!-- SIDEBAR NAVIGATION MENU -->
+    <aside class="w-full md:w-64 bg-white border-b-4 md:border-b-0 md:border-r-4 border-zinc-950 p-6 flex flex-col justify-between shrink-0">
+      <div class="space-y-4">
+        <span class="text-[10px] font-mono tracking-widest font-black uppercase text-zinc-400 block mb-2">Painéis Operacionais</span>
+        
+        <div class="space-y-1.5 flex flex-col" id="sidebar-menu">
+          <!-- Active tab buttons are populated with custom ID handlers -->
+          <button onclick="switchTab('dashboard')" class="tab-btn active w-full flex items-center gap-2.5 px-4 py-3 border-2 border-zinc-950 rounded-xl font-bold text-xs uppercase text-left tracking-wider transition bg-zinc-50 border-zinc-950" id="sidebar-tab-dashboard">
+            <i data-lucide="layout-dashboard" class="w-4.5 h-4.5 shrink-0 text-zinc-950"></i>
+            <span>Painel Principal</span>
+          </button>
+
+          <button onclick="switchTab('kanban')" class="tab-btn w-full flex items-center gap-2.5 px-4 py-3 border-2 border-transparent hover:border-zinc-300 rounded-xl font-bold text-xs uppercase text-left tracking-wider transition text-zinc-650" id="sidebar-tab-kanban">
+            <i data-lucide="clipboard-list" class="w-4.5 h-4.5 shrink-0"></i>
+            <span>Kanban do Funil</span>
+          </button>
+
+          <button onclick="switchTab('inventory')" class="tab-btn w-full flex items-center gap-2.5 px-4 py-3 border-2 border-transparent hover:border-zinc-300 rounded-xl font-bold text-xs uppercase text-left tracking-wider transition text-zinc-650" id="sidebar-tab-inventory">
+            <i data-lucide="package" class="w-4.5 h-4.5 shrink-0"></i>
+            <span>Estoque Empreendimentos</span>
+          </button>
+
+          <button onclick="switchTab('simulator')" class="tab-btn w-full flex items-center gap-2.5 px-4 py-3 border-2 border-transparent hover:border-zinc-300 rounded-xl font-bold text-xs uppercase text-left tracking-wider transition text-zinc-650" id="sidebar-tab-simulator">
+            <i data-lucide="file-spreadsheet" class="w-4.5 h-4.5 shrink-0"></i>
+            <span>Simulador MCMV</span>
+          </button>
+
+          <button onclick="switchTab('automation')" class="tab-btn w-full flex items-center gap-2.5 px-4 py-3 border-2 border-transparent hover:border-zinc-300 rounded-xl font-bold text-xs uppercase text-left tracking-wider transition text-zinc-650" id="sidebar-tab-automation">
+            <i data-lucide="cpu" class="w-4.5 h-4.5 shrink-0"></i>
+            <span>Fluxos & Scripts</span>
+          </button>
+
+          <button onclick="switchTab('kids')" class="tab-btn w-full flex items-center gap-2.5 px-4 py-3 border-2 border-transparent hover:border-zinc-300 rounded-xl font-bold text-xs uppercase text-left tracking-wider transition text-zinc-650" id="sidebar-tab-kids">
+            <i data-lucide="gamepad-2" class="w-4.5 h-4.5 shrink-0"></i>
+            <span>Espaço Kids Jovem</span>
+          </button>
+
+          <button onclick="switchTab('user-central')" class="tab-btn w-full flex items-center gap-2.5 px-4 py-3 border-2 border-transparent hover:border-zinc-300 rounded-xl font-bold text-xs uppercase text-left tracking-wider transition text-zinc-650" id="sidebar-tab-user-central">
+            <i data-lucide="trophy" class="w-4.5 h-4.5 shrink-0"></i>
+            <span>Metas, Team & Configs</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Credits -->
+      <div class="pt-6 border-t border-zinc-200 text-left space-y-1 mt-6">
+        <span class="text-[9px] font-mono text-zinc-400 block">PRODUTO OFICIAL</span>
+        <span class="text-[9px] font-bold text-indigo-650 block leading-tight">MCMV cicloCRED Corp</span>
+        <span class="text-[8.5px] text-zinc-450 block leading-normal">Ambiente estático persistente via LocalStorage.</span>
+      </div>
+    </aside>
+
+    <!-- MAIN APP SCREEN FOR SELECTED TABS WRAPPER -->
+    <main class="flex-1 p-6 md:p-8 max-w-7xl mx-auto w-full space-y-8 overflow-y-auto">
+      
+      <!--================= 1. TAB: DASHBOARD =================-->
+      <section id="tab-dashboard" class="space-y-8 text-left">
+        <!-- Intro Hero Card -->
+        <div class="bg-gradient-to-br from-indigo-650 to-indigo-800 border-4 border-zinc-950 p-6 md:p-8 rounded-3xl shadow-comic-lg text-white">
+          <h2 class="text-2xl md:text-3xl font-black uppercase italic tracking-tighter mb-2">Seu Painel de Comando Inteligente 🛸</h2>
+          <p class="text-xs md:text-sm text-indigo-100 max-w-2xl font-medium leading-relaxed">
+            Organize e movimente seus leads, acesse roteiros persuasivos, planeje empreendimentos habitacionais inovadores e desafie-se com metas dinâmicas de corretagem!
+          </p>
+        </div>
+
+        <!-- Dashboard Widgets Row style bento Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 font-sans">
+          <!-- Total Leads Widget -->
+          <div class="bg-yellow-50 border-4 border-zinc-950 p-5 rounded-3xl shadow-comic flex items-center gap-4">
+            <div class="p-3 bg-yellow-400 border-2 border-zinc-950 rounded-2xl">
+              <i data-lucide="users" class="w-6 h-6 text-zinc-950"></i>
+            </div>
+            <div>
+              <span class="text-[10px] font-mono text-zinc-500 font-extrabold uppercase">Total de Leads</span>
+              <h3 class="text-2xl font-black text-zinc-900 leading-none" id="widget-total-leads">0</h3>
+            </div>
+          </div>
+
+          <!-- Total Properties Widget -->
+          <div class="bg-pink-50 border-4 border-zinc-950 p-5 rounded-3xl shadow-comic flex items-center gap-4">
+            <div class="p-3 bg-pink-400 border-2 border-zinc-950 rounded-2xl">
+              <i data-lucide="home" class="w-6 h-6 text-zinc-950"></i>
+            </div>
+            <div>
+              <span class="text-[10px] font-mono text-zinc-500 font-extrabold uppercase">Estoque Ativo</span>
+              <h3 class="text-2xl font-black text-zinc-900 leading-none" id="widget-total-properties">0</h3>
+            </div>
+          </div>
+
+          <!-- Total Deals Wins Widget -->
+          <div class="bg-emerald-50 border-4 border-zinc-950 p-5 rounded-3xl shadow-comic flex items-center gap-4">
+            <div class="p-3 bg-emerald-400 border-2 border-zinc-950 rounded-2xl">
+              <i data-lucide="badge-dollar-sign" class="w-6 h-6 text-zinc-950"></i>
+            </div>
+            <div>
+              <span class="text-[10px] font-mono text-zinc-500 font-extrabold uppercase">Fechados (Win!)</span>
+              <h3 class="text-2xl font-black text-zinc-550 leading-none text-emerald-900" id="widget-total-wins">0</h3>
+            </div>
+          </div>
+
+          <!-- Total Activities count -->
+          <div class="bg-indigo-50 border-4 border-zinc-950 p-5 rounded-3xl shadow-comic flex items-center gap-4">
+            <div class="p-3 bg-indigo-400 border-2 border-zinc-950 rounded-2xl text-white">
+              <i data-lucide="check-circle-2" class="w-6 h-6 text-white"></i>
+            </div>
+            <div>
+              <span class="text-[10px] font-mono text-zinc-500 font-extrabold uppercase">Interações</span>
+              <h3 class="text-2xl font-black text-zinc-900 leading-none" id="widget-total-actions">0</h3>
+            </div>
+          </div>
+        </div>
+
+        <!-- Custom SVG Chart and Actions List section -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 text-left">
+          
+          <!-- Graphic Visualizer block -->
+          <div class="lg:col-span-8 bg-white border-4 border-zinc-950 p-6 rounded-3xl shadow-comic space-y-4">
+            <h3 class="text-sm font-black uppercase font-mono text-zinc-900">Estatísticas de Vendas Anuais (Previsão de Crédito)</h3>
+            
+            <div class="relative overflow-hidden w-full h-56 flex items-end justify-between border-b border-zinc-200 pb-2 px-4 mt-6">
+              <!-- Visual columns of our chart -->
+              <div class="flex flex-col items-center justify-end h-full w-8">
+                <div class="bg-zinc-200 border-2 border-zinc-950 w-full rounded-t-lg h-[20%] transition hover:bg-yellow-400"></div>
+                <span class="text-[9px] font-mono font-bold text-zinc-400 mt-2">Jan</span>
+              </div>
+              <div class="flex flex-col items-center justify-end h-full w-8">
+                <div class="bg-zinc-200 border-2 border-zinc-950 w-full rounded-t-lg h-[40%] transition hover:bg-pink-400"></div>
+                <span class="text-[9px] font-mono font-bold text-zinc-400 mt-2">Fev</span>
+              </div>
+              <div class="flex flex-col items-center justify-end h-full w-8">
+                <div class="bg-zinc-200 border-2 border-zinc-950 w-full rounded-t-lg h-[35%] transition hover:bg-indigo-400"></div>
+                <span class="text-[9px] font-mono font-bold text-zinc-400 mt-2">Mar</span>
+              </div>
+              <div class="flex flex-col items-center justify-end h-full w-8">
+                <div class="bg-pink-400 border-2 border-zinc-950 w-full rounded-t-lg h-[65%] transition hover:bg-pink-500"></div>
+                <span class="text-[9px] font-mono font-bold text-zinc-400 mt-2">Abr</span>
+              </div>
+              <div class="flex flex-col items-center justify-end h-full w-8">
+                <div class="bg-indigo-600 border-2 border-zinc-950 w-full rounded-t-lg h-[80%] transition hover:bg-indigo-700"></div>
+                <span class="text-[9px] font-mono font-bold text-zinc-400 mt-2">Mai</span>
+              </div>
+              <div class="flex flex-col items-center justify-end h-full w-8">
+                <div class="bg-yellow-400 border-2 border-zinc-950 w-full rounded-t-lg h-[95%] transition hover:bg-yellow-500"></div>
+                <span class="text-[9px] font-mono font-bold text-zinc-400 mt-2">Jun</span>
+              </div>
+            </div>
+            
+            <p class="text-xs text-zinc-400 font-sans italic text-center">Gráfico em tempo real alimentado pela simulação do MCMV cicloCRED.</p>
+          </div>
+
+          <!-- Quick Tip Panel Column -->
+          <div class="lg:col-span-4 bg-zinc-950 text-white border-4 border-zinc-950 p-6 rounded-3xl shadow-comic flex flex-col justify-between space-y-6">
+            <div class="space-y-4">
+              <span class="text-[10px] font-mono text-yellow-300 font-black tracking-widest uppercase">💡 Insight do Consultor</span>
+              <p class="text-xs font-sans leading-relaxed text-zinc-350 font-medium">
+                Sempre preencha a <strong>Renda Mensal</strong> do lead com precisão. O algoritmo utiliza essa variável para calcular subsidiados da Caixa Federal de forma instantânea e prever a conversão do imóvel!
+              </p>
+            </div>
+
+            <!-- Quick Access link -->
+            <button onclick="switchTab('kanban')" class="w-full bg-yellow-400 hover:bg-yellow-500 border-2 border-zinc-950 py-2.5 text-zinc-950 font-mono font-black text-xs uppercase rounded-xl shadow-comic transition select-none">
+              Avançar para Kanban ⚡
+            </button>
+          </div>
+
+        </div>
+      </section>
+
+      <!--================= 2. TAB: KANBAN BOARD =================-->
+      <section id="tab-kanban" class="space-y-6 hidden text-left">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 pb-4">
+          <div class="space-y-1">
+            <h2 class="text-lg font-black uppercase leading-none">Pipeline de Negociação (Kanban) 📋</h2>
+            <p class="text-xs text-zinc-500">Mova os leads pelas etapas e acumule até 400 XP a cada contrato assinado de habitação!</p>
+          </div>
+
+          <!-- Register Lead Button -->
+          <button onclick="openLeadModal()" class="bg-indigo-650 hover:bg-indigo-750 text-white border-2 border-zinc-950 px-4 py-2.5 rounded-xl font-mono text-xs font-extrabold uppercase shadow-comic select-none">
+            + Cadastrar Novo Lead
+          </button>
+        </div>
+
+        <!-- Kanban Columns Container Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4" id="kanban-columns-container">
+          <!-- Populated by JS script -->
+        </div>
+      </section>
+
+      <!--================= 3. TAB: PROPERTY INVENTORY =================-->
+      <section id="tab-inventory" class="space-y-6 hidden text-left">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 pb-4">
+          <div class="space-y-1">
+            <h2 class="text-lg font-black uppercase leading-none">Estoque de Imóveis cicloCRED 🏢</h2>
+            <p class="text-xs text-zinc-500">Gestão e catálogo de lotes, apartamentos e casas elegíveis ao plano MCMV.</p>
+          </div>
+
+          <button onclick="openPropertyModal()" class="bg-pink-550 hover:bg-pink-600 text-white border-2 border-zinc-950 px-4 py-2.5 rounded-xl font-mono text-xs font-extrabold uppercase shadow-comic select-none">
+            + Adicionar Imóvel
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6" id="properties-grid-container">
+          <!-- Populated by JS script -->
+        </div>
+      </section>
+
+      <!--================= 4. TAB: FINANCIAL SIMULATOR =================-->
+      <section id="tab-simulator" class="space-y-8 hidden text-left">
+        <div class="bg-gradient-to-br from-pink-500 to-rose-600 border-4 border-zinc-950 p-6 rounded-3xl shadow-comic text-white flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h2 class="text-xl md:text-2xl font-black uppercase tracking-tight">Simulados Rápidos MCMV & cicloCRED 📊</h2>
+            <p class="text-xs text-pink-100 max-w-xl font-medium">Insira os termos financeiros e a renda mensal familiar para simular subsídios governamentais e parcelamentos na hora para o seu cliente.</p>
+          </div>
+          <div class="bg-zinc-950 text-white border-2 border-zinc-950 px-4 py-2 rounded-xl font-mono text-xs font-black shrink-0">
+            Acurácia de 98% cicloCRED
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          
+          <!-- Slider inputs column -->
+          <div class="lg:col-span-7 bg-white border-4 border-zinc-950 p-6 rounded-3xl shadow-comic space-y-6">
+            <div class="space-y-1 pb-2 border-b border-zinc-150">
+              <h3 class="text-sm font-black uppercase font-sans text-zinc-900">Variáveis Operacionais</h3>
+            </div>
+
+            <!-- Income slider -->
+            <div class="space-y-2">
+              <div class="flex justify-between items-center text-xs font-mono font-bold">
+                <span class="text-zinc-650">Renda Mensal Familiar</span>
+                <span class="bg-indigo-100 text-indigo-900 px-3 py-1 rounded-full font-black text-xs" id="sim-income-display">R$ 3.500,00</span>
+              </div>
+              <input type="range" min="1500" max="12000" step="100" value="3500" id="sim-income-slider" oninput="calculateSimulation()" class="w-full h-2.5 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-indigo-650 pb-0">
+              <div class="flex justify-between text-[10px] font-bold text-zinc-400 font-mono">
+                <span>R$ 1.500</span>
+                <span>R$ 12.000</span>
+              </div>
+            </div>
+
+            <!-- Property Value slider -->
+            <div class="space-y-2">
+              <div class="flex justify-between items-center text-xs font-mono font-bold">
+                <span class="text-zinc-650">Preço do Imóvel</span>
+                <span class="bg-pink-100 text-pink-900 px-3 py-1 rounded-full font-black text-xs" id="sim-price-display">R$ 190.000,00</span>
+              </div>
+              <input type="range" min="120000" max="350000" step="5000" value="190000" id="sim-price-slider" oninput="calculateSimulation()" class="w-full h-2.5 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-pink-500 pb-0">
+              <div class="flex justify-between text-[10px] font-bold text-zinc-400 font-mono">
+                <span>R$ 120.000</span>
+                <span>R$ 350.000</span>
+              </div>
+            </div>
+
+            <!-- Extra Entrance block -->
+            <div class="space-y-2">
+              <div class="flex justify-between items-center text-xs font-mono font-bold">
+                <span class="text-zinc-650">FGTS ou Entrada Inicial</span>
+                <span class="bg-emerald-100 text-emerald-990 px-3 py-1 rounded-full font-black text-xs" id="sim-entrance-display">R$ 15.000,00</span>
+              </div>
+              <input type="range" min="0" max="100000" step="1000" value="15000" id="sim-entrance-slider" oninput="calculateSimulation()" class="w-full h-2.5 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-emerald-500 pb-0">
+              <div class="flex justify-between text-[10px] font-bold text-zinc-400 font-mono">
+                <span>R$ 0</span>
+                <span>R$ 100.000</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Calculated outputs column -->
+          <div class="lg:col-span-5 bg-zinc-100 border-4 border-zinc-950 p-6 rounded-3xl shadow-comic flex flex-col justify-between space-y-6">
+            <div class="space-y-4">
+              <div class="space-y-1 border-b border-zinc-200 pb-2">
+                <h3 class="text-sm font-black uppercase font-sans text-zinc-900">Resultado do Financiamento</h3>
+                <span class="text-[9px] font-mono font-bold text-zinc-400 block tracking-widest leading-none">PREVISÃO OPERACIONAL</span>
+              </div>
+
+              <div class="space-y-3 font-mono">
+                <!-- Subsídio Caixa label -->
+                <div class="bg-white border-2 border-zinc-950 p-3 rounded-xl shadow-comic-sm flex justify-between items-center">
+                  <span class="text-[10px] font-extrabold text-indigo-900">🎁 Subsídio Estimado</span>
+                  <span class="text-sm font-black text-indigo-950" id="sim-res-subsidio">R$ 47.500</span>
+                </div>
+
+                <!-- Financiado label -->
+                <div class="bg-white border-2 border-zinc-950 p-3 rounded-xl shadow-comic-sm flex justify-between items-center">
+                  <span class="text-[10px] font-extrabold text-zinc-500">🏢 Valor Financiado</span>
+                  <span class="text-sm font-bold text-zinc-900" id="sim-res-financiado">R$ 127.500</span>
+                </div>
+
+                <!-- Parcela Mensal Estimate label -->
+                <div class="bg-white border-2 border-zinc-950 p-3 rounded-xl shadow-comic-sm flex justify-between items-center">
+                  <span class="text-[10px] font-extrabold text-pink-650">📅 Parcela Média Estimada</span>
+                  <span class="text-sm font-black text-pink-650" id="sim-res-parcela">R$ 785/mês</span>
+                </div>
+
+                <!-- Warning Check note -->
+                <div class="text-[10px] font-sans text-zinc-500 leading-normal bg-zinc-100/50 p-3.5 border-2 border-dashed border-zinc-300 rounded-xl" id="sim-res-rule-verdict">
+                  ✓ Este cliente enquadra-se na faixa ideal <strong>MCMV Habitação</strong>! O valor estimado das parcelas compromete apenas 22% do orçamento mensal declarado.
+                </div>
+              </div>
+            </div>
+
+            <!-- Actions button simulation -->
+            <button onclick="playSensorySound('success'); alert('Relatório gerado! Você pode anexar esses termos simulados como anotação rápida de follow-up do lead no Kanban!')" class="w-full bg-zinc-950 hover:bg-zinc-850 border-2 border-zinc-950 py-3 text-white font-mono font-black text-xs uppercase rounded-xl transition shadow-comic-sm">
+              Anexar Termos ao Contrato 📋
+            </button>
+          </div>
+
+        </div>
+      </section>
+
+      <!--================= 5. TAB: AUTOMATION FLOWS =================-->
+      <section id="tab-automation" class="space-y-8 hidden text-left">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          
+          <!-- Action rules block visual configuration -->
+          <div class="lg:col-span-7 bg-white border-4 border-zinc-950 p-6 rounded-3xl shadow-comic space-y-6">
+            <div class="space-y-1 border-b border-zinc-200 pb-3">
+              <h3 class="text-base font-black text-zinc-900 uppercase italic tracking-tighter flex items-center gap-1.5">
+                <i data-lucide="cpu" class="w-5 h-5 text-indigo-650"></i>
+                Automação Cósmica cicloCRED 🤖
+              </h3>
+              <p class="text-xs text-zinc-500 font-sans">Vincule eventos operacionais a bônus de XP instantâneos ou avisos no WhatsApp!</p>
+            </div>
+
+            <!-- Dynamic List of active rules with toggle triggers -->
+            <div class="space-y-4" id="automation-rules-list">
+              <!-- Rendered by JS -->
+            </div>
+          </div>
+
+          <!-- Live copywriting templates manager -->
+          <div class="lg:col-span-5 bg-white border-4 border-zinc-950 p-6 rounded-3xl shadow-comic flex flex-col justify-between space-y-6">
+            <div class="space-y-4">
+              <div class="space-y-1 border-b border-zinc-200 pb-3">
+                <h3 class="text-xs font-black uppercase text-zinc-900 font-sans flex items-center gap-1.5">
+                  <i data-lucide="file-code" class="w-4 h-4 text-pink-500"></i>
+                  Abordagens & Copywriting (WhatsApp)
+                </h3>
+              </div>
+
+              <!-- List of quick selectable template presets -->
+              <div class="grid grid-cols-1 gap-2 font-mono" id="copy-presets-container">
+                <!-- Loaded templates -->
+              </div>
+
+              <div class="space-y-3 font-mono text-xs">
+                <div>
+                  <label class="text-[9px] font-black text-zinc-450 uppercase block mb-1">Título do Copião</label>
+                  <input type="text" id="copy-edit-title" class="w-full bg-zinc-50 border-2 border-zinc-950 p-2 font-bold rounded-xl focus:outline-none" value="" placeholder="Nome do modelo">
+                </div>
+                <div>
+                  <label class="text-[9px] font-black text-zinc-450 uppercase block mb-1">Copy da Mensagem</label>
+                  <textarea id="copy-edit-body" rows="6" class="w-full bg-zinc-50 border-2 border-zinc-950 p-2.5 font-bold rounded-xl focus:outline-none focus:bg-white text-[11px] leading-relaxed" placeholder="Mensagem persuasiva"></textarea>
+                </div>
+              </div>
+            </div>
+
+            <!-- Save Copy button -->
+            <div class="grid grid-cols-3 gap-2 font-mono">
+              <button onclick="deleteActiveCopy()" class="py-2.5 bg-zinc-50 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300 border-2 border-zinc-950 text-zinc-500 text-[10px] uppercase font-black rounded-xl cursor-pointer">Apagar</button>
+              <button onclick="saveActiveCopy()" class="col-span-2 py-2.5 bg-indigo-650 hover:bg-indigo-750 text-white font-black border-2 border-zinc-950 text-[10px] uppercase rounded-xl cursor-pointer">Salvar Modelo 💾</button>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!--================= 6. TAB: KIDS LITERACY SPACE =================-->
+      <section id="tab-kids" class="space-y-8 hidden text-left">
+        <!-- Playful comic banner with active styling -->
+        <div class="bg-gradient-to-br from-pink-500 via-purple-600 to-indigo-600 border-4 border-zinc-950 p-6 md:p-8 rounded-3xl shadow-comic text-white relative overflow-hidden">
+          <div class="absolute right-4 bottom-2 text-8xl text-white/5 font-black uppercase tracking-tighter">KIDS</div>
+          
+          <div class="relative z-15 max-w-3xl space-y-3">
+            <span class="inline-block bg-yellow-400 text-zinc-950 font-mono text-[9px] font-black uppercase px-2.5 py-1 rounded-full border border-zinc-950 animate-bounce">
+              🎮 Espaço Mini-Investidor cicloCRED
+            </span>
+            <h2 class="text-xl md:text-3xl font-black uppercase italic tracking-tighter">Aprender a Poupar é o seu Superpoder! 👶🚀</h2>
+            <p class="text-xs md:text-sm text-pink-100 font-sans leading-relaxed font-semibold">
+              Traga seus filhos para entender o valor do dinheiro, juros fantásticos, planejar metas de vida e simular o castelo habitacional de amanhã neste espaço lúdico interativo!
+            </p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          
+          <!-- Interactive Kids Savings PiggyBank Calculator -->
+          <div class="bg-white border-4 border-zinc-950 p-6 rounded-3xl shadow-comic flex flex-col justify-between space-y-5">
+            <div class="space-y-1 pb-3 border-b border-zinc-200">
+              <h3 class="text-sm font-black uppercase font-sans text-zinc-900 flex items-center gap-1.5 leading-none">
+                <i data-lucide="piggy-bank" class="w-5 h-5 text-pink-500 shrink-0"></i>
+                Simulador Cofrinho da Fortuna 🪙
+              </h3>
+              <p class="text-[11px] text-zinc-450 leading-relaxed font-sans">Ajuste e assista seu montante de moedinhas de ouro crescer ao longo dos anos!</p>
+            </div>
+
+            <div class="space-y-4 font-mono text-xs">
+              <div class="flex justify-between items-center font-bold">
+                <span class="text-[11px] text-zinc-650">Quanto guardar a cada dia?</span>
+                <span class="bg-pink-100 text-pink-900 px-3 py-1 rounded-full text-xs font-black" id="kids-savings-display">R$ 5,00 / dia</span>
+              </div>
+              <input type="range" min="1" max="50" step="1" value="5" id="kids-savings-slider" oninput="calculateKidsSavings()" class="w-full h-2.5 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-pink-500 pb-0">
+              <div class="flex justify-between text-[9px] font-black text-zinc-400">
+                <span>R$ 1 (Moedinha)</span>
+                <span>R$ 50 (Super Poupança!)</span>
+              </div>
+
+              <!-- Simulated values grids with comic style rewards badges -->
+              <div class="grid grid-cols-3 gap-3 pt-2 text-center select-none font-mono">
+                <div class="bg-zinc-50 border-2 border-zinc-950 p-2.5 rounded-xl text-zinc-900 relative">
+                  <span class="text-[8px] font-black text-zinc-400 block uppercase mb-1">1 MÊS 📅</span>
+                  <span class="text-xs font-black text-zinc-900 block" id="kids-val-month">R$ 150</span>
+                  <span class="text-[7px] text-zinc-500 font-bold block mt-1">🛒 Jogos ou Doces</span>
+                </div>
+
+                <div class="bg-pink-50 border-2 border-zinc-950 p-2.5 rounded-xl text-pink-900 relative">
+                  <span class="text-[8px] font-black text-pink-500 block uppercase mb-1">1 ANO 🎄</span>
+                  <span class="text-[13px] font-black text-pink-900 block" id="kids-val-year">R$ 1.825</span>
+                  <span class="text-[7.5px] text-pink-700 font-bold block mt-1">🚲 Uma Bike Legal!</span>
+                </div>
+
+                <div class="bg-indigo-50 border-2 border-zinc-950 p-2.5 rounded-xl text-indigo-900 relative">
+                  <span class="text-[8px] font-black text-indigo-500 block uppercase mb-1">5 ANOS 🏰</span>
+                  <span class="text-[13px] font-black text-indigo-900 block" id="kids-val-five">R$ 9.125</span>
+                  <span class="text-[7.5px] text-indigo-700 font-bold block mt-1">🎮 PC Gamer/Férias</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Magic Juros explain bubble visual card -->
+            <div class="bg-zinc-950 text-white p-4 rounded-xl text-[11px] font-sans leading-relaxed">
+              <span class="font-mono text-[9px] text-yellow-300 font-black uppercase tracking-wider block mb-0.5">🌟 PRESTIDIGITAÇÃO FINANCEIRA</span>
+              <p class="text-zinc-350">Ao guardar no banco, você recebe juros mágicos! Em 5 anos você acumula cerca de <strong>+R$ 2.200 extras</strong> de moedinhas geradas sozinhas.</p>
+            </div>
+          </div>
+
+          <!-- Interactive Castelo Builder Space -->
+          <div class="bg-white border-4 border-zinc-950 p-6 rounded-3xl shadow-comic flex flex-col justify-between space-y-5">
+            <div class="space-y-1 pb-3 border-b border-zinc-200 flex justify-between items-start">
+              <div>
+                <h3 class="text-sm font-black uppercase font-sans text-zinc-900 flex items-center gap-1.5 leading-none">
+                  <i data-lucide="home" class="w-5 h-5 text-indigo-650 shrink-0"></i>
+                  Crie sua Casa dos Sonhos! 🏰
+                </h3>
+                <p class="text-[11px] text-zinc-450 leading-relaxed">Selecione os adereços fantásticos de energia e lazer de sua casa fictícia!</p>
+              </div>
+              <div class="bg-indigo-650 text-white border-2 border-zinc-950 text-[10px] font-mono px-3 py-1 rounded-xl shadow-comic-sm font-black" id="kids-house-points-badge">
+                30 Pontos
+              </div>
+            </div>
+
+            <!-- Adereços interactive buttons pool grid -->
+            <div class="grid grid-cols-2 gap-2" id="kids-house-options-pool">
+              <!-- Rendered options dynamically by JS -->
+            </div>
+
+            <!-- House Preview Canvas display box -->
+            <div class="bg-zinc-50 border-2 border-zinc-950 p-3 rounded-2xl text-center relative overflow-hidden flex flex-col items-center justify-center min-h-[90px]">
+              <div class="text-[8px] font-mono font-bold text-zinc-400 absolute top-1.5 left-2 uppercase">Pré-visualização do Castelo</div>
+              
+              <div class="flex items-end justify-center pt-3 select-none gap-2" id="kids-house-sprite-preview">
+                <!-- Dynamic emojis container -->
+                <span class="text-4xl">🏠</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Kids Educational Playable Interactive Quiz Box -->
+        <div class="bg-zinc-950 text-white border-4 border-zinc-950 p-6 rounded-3xl shadow-comic-lg text-left space-y-5">
+          <div class="space-y-1 pb-2 border-b border-zinc-800 flex justify-between items-center">
+            <div>
+              <span class="text-[10px] text-purple-400 font-mono font-black uppercase tracking-widest leading-none block">Desafio Divertido</span>
+              <h3 class="text-sm font-black uppercase font-sans leading-none mt-1">Quiz do Dinheirinho Inteligente 💡</h3>
+            </div>
+            <span class="text-[10px] font-mono text-yellow-300 font-black uppercase shrink-0" id="kids-quiz-score-indicator">PERGUNTA 1 DE 3</span>
+          </div>
+
+          <div class="space-y-4 max-w-3xl" id="kids-quiz-body-wrapper">
+            <!-- Active quiz questions loaded here -->
+          </div>
+        </div>
+      </section>
+
+      <!--================= 7. TAB: TEAM, METAS & SETTINGS =================-->
+      <section id="tab-user-central" class="space-y-8 hidden text-left">
+        
+        <!-- Tab Selector Header Inside Central Tab -->
+        <div class="flex bg-zinc-950 p-1.5 border-4 border-zinc-950 rounded-2xl w-full sm:w-max select-none">
+          <button onclick="switchCentralInner('gaming')" class="central-subtab-btn active px-5 py-2.5 rounded-lg text-xs font-black uppercase font-mono tracking-wider transition-all duration-150 flex items-center justify-center gap-1.5 bg-indigo-650 text-white" id="subtab-gaming">
+            <i data-lucide="trophy" class="w-4 h-4 shrink-0"></i>
+            <span>Troféus & Metas</span>
+          </button>
+          
+          <button onclick="switchCentralInner('configs')" class="central-subtab-btn px-5 py-2.5 rounded-lg text-xs font-black uppercase font-mono tracking-wider transition-all duration-150 flex items-center justify-center gap-1.5 text-zinc-400" id="subtab-configs">
+            <i data-lucide="settings" class="w-4 h-4 shrink-0"></i>
+            <span>Administração</span>
+          </button>
+        </div>
+
+        <!-- Inner Content 1: Gamification and Live Team Rankings -->
+        <div class="space-y-8" id="inner-user-gaming">
+          
+          <!-- Live Leaderboard list scoreboard -->
+          <div class="bg-white border-4 border-zinc-950 p-6 rounded-3xl shadow-comic space-y-5">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 pb-3">
+              <div class="space-y-1">
+                <h3 class="text-base font-black uppercase font-mono text-zinc-950">Ranking Geral de Corretores ao Vivo</h3>
+                <p class="text-xs text-zinc-500">Membros ativos da equipe sincronizados e listados por nível de progressão.</p>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <span class="text-[9px] bg-emerald-100 border border-emerald-300 text-emerald-800 px-2 py-0.5 rounded-full font-mono font-black uppercase">● Online</span>
+                <button onclick="inviteTeammatesMock()" class="p-1 px-3 bg-indigo-50 border border-indigo-200 text-indigo-700 text-[9px] font-black uppercase rounded-xl cursor-pointer select-none">Convidar +5</button>
+              </div>
+            </div>
+
+            <!-- Dynamic grid rank of colleagues -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="live-board-rankings-container">
+              <!-- Rendered by JS -->
+            </div>
+          </div>
+
+          <!-- Dynamic Trophy awards pool grid block -->
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 text-left">
+            <div class="lg:col-span-8 bg-white border-4 border-zinc-950 p-6 rounded-3xl shadow-comic space-y-4">
+              <h3 class="text-sm font-black uppercase font-sans text-zinc-900 border-b pb-2 border-zinc-150 flex items-center gap-1.5">
+                <i data-lucide="award" class="w-4.5 h-4.5 text-yellow-500"></i>
+                Seus Troféus Conquistados
+              </h3>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" id="trophies-list-container">
+                <!-- Rendered by JS -->
+              </div>
+            </div>
+
+            <div class="lg:col-span-4 bg-zinc-950 text-white border-4 border-zinc-950 p-6 rounded-3xl shadow-comic flex flex-col justify-between space-y-6">
+              <div class="space-y-3">
+                <span class="text-[10px] text-yellow-300 font-mono tracking-widest font-black uppercase">🎯 Meta Semanal Ativa</span>
+                <h4 class="text-sm font-black font-sans uppercase leading-tight">Vender 1 Contrato MCMV em Loteamento</h4>
+                <p class="text-xs text-zinc-400 font-medium font-sans">Complete metas semanais de venda para faturar comissões em XP e avançar para corretor sênior de portfólio.</p>
+              </div>
+
+              <button onclick="playSensorySound('complete'); alert('Meta de progressão avaliada! Cadastre e feche vendas no Kanban para completar automaticamente.')" class="w-full bg-yellow-400 hover:bg-yellow-500 text-zinc-950 border-2 border-zinc-950 py-3 text-xs uppercase font-mono font-black rounded-xl shadow-comic-sm transition">Avaliar Metas ⚡</button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Inner Content 2: Professional Profile Form and CRM wiped admins -->
+        <div class="space-y-8 hidden" id="inner-user-configs">
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            <!-- Left panel: Form profile fields update -->
+            <div class="lg:col-span-7 bg-white border-4 border-zinc-950 p-6 rounded-3xl shadow-comic space-y-6">
+              <div class="space-y-1 border-b border-zinc-200 pb-3">
+                <h3 class="text-base font-black text-zinc-900 uppercase italic tracking-tighter">Perfil Profissional do Corretor</h3>
+                <p class="text-xs text-zinc-500">Altere seu cadastro CRECI, e-mail e cargo exibidos no funil e nos relatórios.</p>
+              </div>
+
+              <!-- Inputs form grid -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 font-mono text-xs text-left">
+                <div class="space-y-1">
+                  <label class="text-[9px] font-black text-zinc-450 uppercase block">Nome completo</label>
+                  <input type="text" id="prof-input-name" oninput="updateProfileFromInputs()" class="w-full bg-zinc-50 border-2 border-zinc-950 p-2 rounded-xl font-bold" value="Operador CicloCred">
+                </div>
+                <div class="space-y-1">
+                  <label class="text-[9px] font-black text-zinc-450 uppercase block">Registro CRECI</label>
+                  <input type="text" id="prof-input-creci" oninput="updateProfileFromInputs()" class="w-full bg-zinc-50 border-2 border-zinc-950 p-2 rounded-xl font-bold" value="MT-18239">
+                </div>
+                <div class="space-y-1">
+                  <label class="text-[9px] font-black text-zinc-450 uppercase block">E-mail Corporativo</label>
+                  <input type="email" id="prof-input-email" oninput="updateProfileFromInputs()" class="w-full bg-zinc-50 border-2 border-zinc-950 p-2 rounded-xl font-bold" value="corretor@ciclocred.com.br">
+                </div>
+                <div class="space-y-1">
+                  <label class="text-[9px] font-black text-zinc-450 uppercase block">Imobiliária Associada</label>
+                  <input type="text" id="prof-input-agency" oninput="updateProfileFromInputs()" class="w-full bg-zinc-50 border-2 border-zinc-950 p-2 rounded-xl font-bold" value="Habib Corporativos">
+                </div>
+              </div>
+
+              <!-- Quick Success Alert confirm button -->
+              <div class="pt-2 flex justify-end">
+                <button onclick="playSensorySound('success'); alert('Dados do seu cadastro CRECI atualizados instantaneamente nas metas de gamificação do cockpit!')" class="px-5 py-2.5 bg-zinc-950 text-white font-mono text-xs uppercase font-black rounded-xl border-2 border-zinc-950 cursor-pointer shadow-comic-sm">Salvar Registro 💾</button>
+              </div>
+            </div>
+
+            <!-- Right panel: Dangerous cleanup system wipes -->
+            <div class="lg:col-span-5 bg-white border-4 border-zinc-950 p-6 rounded-3xl shadow-comic flex flex-col justify-between space-y-6">
+              <div class="space-y-4">
+                <div class="space-y-1 border-b border-zinc-200 pb-3">
+                  <span class="text-[9px] font-mono font-black text-rose-600 block uppercase leading-none">Cuidado extrema</span>
+                  <h3 class="text-sm font-black uppercase font-sans text-zinc-900 mt-1">Painel Administrativo de Limpeza</h3>
+                </div>
+
+                <p class="text-xs text-zinc-500 leading-relaxed font-sans">
+                  Você pode restaurar as configurações padrão de fábrica de leads do funil ou estoque se precisar iniciar novas simulações de vendas de testes imobiliários do MCMV.
+                </p>
+
+                <!-- Action clearing buttons list -->
+                <div class="space-y-2.5 font-mono text-xs">
+                  <button onclick="cleanCRMData('leads')" class="w-full text-left p-3 border-2 border-zinc-950 rounded-xl bg-rose-50 hover:bg-rose-100 font-bold transition flex items-center gap-2 cursor-pointer">
+                    <i data-lucide="trash-2" class="w-4.5 h-4.5 text-rose-700"></i>
+                    <span class="text-rose-900">Limpar Leads do Kanban</span>
+                  </button>
+
+                  <button onclick="cleanCRMData('properties')" class="w-full text-left p-3 border-2 border-zinc-950 rounded-xl bg-orange-50 hover:bg-orange-100 font-bold transition flex items-center gap-2 cursor-pointer">
+                    <i data-lucide="home" class="w-4.5 h-4.5 text-orange-700"></i>
+                    <span class="text-orange-900">Limpar Estoque Habitacional</span>
+                  </button>
+
+                  <button onclick="cleanCRMData('full')" class="w-full text-left p-3 border-2 border-zinc-950 rounded-xl bg-purple-50 hover:bg-purple-100 font-bold transition flex items-center gap-2 cursor-pointer">
+                    <i data-lucide="rotate-ccw" class="w-4.5 h-4.5 text-purple-700"></i>
+                    <span class="text-purple-900">Restaurar Todo o CRM (Reset)</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Tip advisory -->
+              <div class="bg-zinc-100 p-3 rounded-xl text-[10px] font-mono text-zinc-500 flex items-start gap-1.5 leading-tight">
+                <i data-lucide="info" class="w-4 h-4 text-zinc-500 shrink-0 mt-0.5"></i>
+                <span>A limpeza de banco funciona instantaneamente excluindo chaves do LocalStorage de seu navegador atual.</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+
+  </div>
+
+  <!--================= MODAL: SAVE / REGISTER LEAD FORM =================-->
+  <div id="lead-modal" class="hidden fixed inset-0 z-50 bg-black/55 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white border-4 border-zinc-950 rounded-3xl w-full max-w-lg shadow-comic-lg overflow-hidden animate-fadeIn text-left">
+      <!-- Header -->
+      <div class="p-4.5 bg-zinc-950 text-white border-b-4 border-zinc-950 flex justify-between items-center select-none">
+        <h3 class="font-sans font-black text-sm uppercase italic tracking-wider">📋 Registrar Novo Lead Habib</h3>
+        <button onclick="closeLeadModal()" class="text-white hover:text-zinc-300 font-bold">X</button>
+      </div>
+
+      <!-- Content forms -->
+      <form id="lead-form" onsubmit="handleLeadFormSubmit(event)" class="p-6 space-y-4 font-mono text-xs select-none">
+        <input type="hidden" id="lead-form-id" value="">
+        
+        <div class="space-y-1">
+          <label class="text-[9px] font-black uppercase text-zinc-400 block">Nome do Cliente</label>
+          <input type="text" id="lead-input-name" required class="w-full bg-zinc-50 border-2 border-zinc-950 p-2.5 rounded-xl font-bold text-zinc-900 outline-none" placeholder="Ex: Otávio Alexandre">
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-1">
+            <label class="text-[9px] font-black uppercase text-zinc-400 block">WhatsApp de Contato</label>
+            <input type="text" id="lead-input-whatsapp" required class="w-full bg-zinc-50 border-2 border-zinc-950 p-2.5 rounded-xl font-bold text-zinc-900 outline-none" placeholder="(00) 00000-0000">
+          </div>
+          <div class="space-y-1">
+            <label class="text-[9px] font-black uppercase text-zinc-400 block">Renda Familiar Declarada</label>
+            <input type="number" id="lead-input-income" required class="w-full bg-zinc-50 border-2 border-zinc-950 p-2.5 rounded-xl font-bold text-zinc-900 outline-none" placeholder="R$ 3000">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-1">
+            <label class="text-[9px] font-black uppercase text-zinc-400 block">Fase de Funil</label>
+            <select id="lead-input-status" class="w-full bg-zinc-50 border-2 border-zinc-950 p-2.5 rounded-xl font-bold text-zinc-900 outline-none">
+              <option value="novo">📅 Lead Novo</option>
+              <option value="em_contato">📞 Em Contato</option>
+              <option value="proposta">📝 Proposta Feita</option>
+              <option value="fechado">💰 Contrato Ganho (Win!)</option>
+              <option value="perdido">❌ Perdido / Arquivado</option>
+            </select>
+          </div>
+          <div class="space-y-1">
+            <label class="text-[9px] font-black uppercase text-zinc-400 block">Empreendimento de Interesse</label>
+            <select id="lead-input-interest" class="w-full bg-zinc-50 border-2 border-zinc-950 p-2.5 rounded-xl font-bold text-zinc-900 outline-none">
+              <!-- Loaded dynamically from inventory -->
+            </select>
+          </div>
+        </div>
+
+        <!-- Footer actions -->
+        <div class="pt-3 border-t flex justify-end gap-3 select-none">
+          <button type="button" onclick="closeLeadModal()" class="px-4 py-2 border-2 border-zinc-950 text-zinc-500 font-black text-[10px] uppercase rounded-xl">Cancelar</button>
+          <button type="submit" class="px-5 py-2 bg-indigo-650 hover:bg-indigo-700 text-white font-black border-2 border-zinc-950 text-[10px] uppercase rounded-xl shadow-comic-sm">Cadastrar Lead ⚡</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!--================= MODAL: ADICIONAR IMÓVEL FORM =================-->
+  <div id="property-modal" class="hidden fixed inset-0 z-50 bg-black/55 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white border-4 border-zinc-950 rounded-3xl w-full max-w-lg shadow-comic-lg overflow-hidden animate-fadeIn text-left">
+      <!-- Header -->
+      <div class="p-4.5 bg-zinc-950 text-white border-b-4 border-zinc-950 flex justify-between items-center select-none">
+        <h3 class="font-sans font-black text-sm uppercase italic tracking-wider">🏢 Novo Empreendimento Minha Casa Minha Vida</h3>
+        <button onclick="closePropertyModal()" class="text-white hover:text-zinc-300 font-bold">X</button>
+      </div>
+
+      <!-- Content forms -->
+      <form id="property-form" onsubmit="handlePropertyFormSubmit(event)" class="p-6 space-y-4 font-mono text-xs select-none">
+        
+        <div class="space-y-1">
+          <label class="text-[9px] font-black uppercase text-zinc-400 block">Nome do Loteamento / Residencial</label>
+          <input type="text" id="prop-input-name" required class="w-full bg-zinc-50 border-2 border-zinc-950 p-2.5 rounded-xl font-bold text-zinc-900 outline-none" placeholder="Ex: Residencial Portal das Flores">
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-1">
+            <label class="text-[9px] font-black uppercase text-zinc-400 block">Preço de Venda (R$)</label>
+            <input type="number" id="prop-input-price" required class="w-full bg-zinc-50 border-2 border-zinc-950 p-2.5 rounded-xl font-bold text-zinc-900 outline-none" placeholder="185000">
+          </div>
+          <div class="space-y-1">
+            <label class="text-[9px] font-black uppercase text-zinc-400 block">Área Útil (m²)</label>
+            <input type="number" id="prop-input-area" required class="w-full bg-zinc-50 border-2 border-zinc-950 p-2.5 rounded-xl font-bold text-zinc-900 outline-none" placeholder="54">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-1">
+            <label class="text-[9px] font-black uppercase text-zinc-400 block">Bairro ou Loteamento</label>
+            <input type="text" id="prop-input-address" required class="w-full bg-zinc-50 border-2 border-zinc-950 p-2.5 rounded-xl font-bold text-zinc-900 outline-none" placeholder="Centro">
+          </div>
+          <div class="space-y-1">
+            <label class="text-[9px] font-black uppercase text-zinc-400 block">Destaque Lúdico (Emoji)</label>
+            <select id="prop-input-emoji" class="w-full bg-zinc-50 border-2 border-zinc-950 p-2.5 rounded-xl font-bold text-zinc-900 outline-none">
+              <option value="🏢">🏢 Apartamento Moderno</option>
+              <option value="🏠">🏠 Casa Germinada</option>
+              <option value="🌳">🌳 Lote em Condomínio Verde</option>
+              <option value="✨">✨ Lançamento Exclusivo</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Footer actions -->
+        <div class="pt-3 border-t flex justify-end gap-3 select-none">
+          <button type="button" onclick="closePropertyModal()" class="px-4 py-2 border-2 border-zinc-950 text-zinc-500 font-black text-[10px] uppercase rounded-xl">Cancelar</button>
+          <button type="submit" class="px-5 py-2 bg-pink-550 hover:bg-pink-600 text-white font-black border-2 border-zinc-950 text-[10px] uppercase rounded-xl shadow-comic-sm">Adicionar Imóvel 💾</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!--========================================================================
+                      MAIN APPLICATION LOGIC SCRIPT (JAVASCRIPT)
+  =========================================================================-->
+  <script>
+    // --- SEED SEEDED DATA DEFINITIONS ---
+    const SEED_PROPERTIES = [
+      { id: 'prop-1', name: 'Residencial Amoreiras', price: 165000, area: 54, address: 'Parque Verde', emoji: '🏢' },
+      { id: 'prop-2', name: 'Viva Loteamento Sul', price: 195000, area: 120, address: 'Sul Habitacional', emoji: '🌳' },
+      { id: 'prop-3', name: 'Apartamento Jardins Caixa', price: 220000, area: 62, address: 'Vila Olímpica', emoji: '🏢' }
+    ];
+
+    const SEED_LEADS = [
+      { id: 'lead-1', name: 'Juliane de Castro', whatsapp: '65992831234', income: 3200, status: 'novo', interest: 'Viva Loteamento Sul' },
+      { id: 'lead-2', name: 'Bruno Guimarães', whatsapp: '21981232345', income: 4500, status: 'em_contato', interest: 'Residencial Amoreiras' },
+      { id: 'lead-3', name: 'Fabiola Toledo', whatsapp: '11977651239', income: 2800, status: 'proposta', interest: 'Apartamento Jardins Caixa' }
+    ];
+
+    const SEED_AUTOMATION_RULES = [
+      { id: 'flow-1', name: 'WhatsApp de Boas-vindas', trigger: 'create_lead', action: 'whatsapp', value: 'Boas-vindas cicloCRED', active: true, xp: 50 },
+      { id: 'flow-2', name: 'Pontuação de Visita Premiada', trigger: 'advance_proposta', action: 'xp', value: '150', active: true, xp: 150 },
+      { id: 'flow-3', name: 'Sinalização Habitacional Fechado', trigger: 'closed_win', action: 'notify', value: 'Parabéns pela assinatura do contrato Minha Casa Minha Vida!', active: true, xp: 200 }
+    ];
+
+    const SEED_COPY_TEMPLATES = [
+      { id: 'wa-1', name: 'Boas-vindas cicloCRED', body: 'Olá {{clientName}}, seja bem-vindo à cicloCRED! Identificamos seu interesse pelo imóvel {{propertyInterest}} com renda familiar de R$ {{income}}. Vamos estruturar seu MCMV?' },
+      { id: 'wa-2', name: 'Roteiro de Quebra de Objeção', body: 'Olá {{clientName}}, sabendo que sua renda mensal com o cônjuge está excelente, conseguimos parcelar sua entrada diretamente em até 36x sem juros! Que tal fechar a proposta?' }
+    ];
+
+    const SEED_ONLINE_RANKINGS = [
+      { name: 'Gabriel Alencar', email: 'gabriel.corretor@uol.com', level: 4, xp: 4200, deals: 3, actions: 12 },
+      { name: 'Sonia Mara Reis', email: 'soniamara@imobiliaria.com.br', level: 3, xp: 2800, deals: 2, actions: 18 },
+      { name: 'Vitor Hugo Souza', email: 'vitor.hugo@ciclocred.com', level: 2, xp: 1900, deals: 1, actions: 8 },
+      { name: 'Operador CicloCred', email: 'corretor@ciclocred.com.br', level: 1, xp: 450, deals: 0, actions: 0 }
+    ];
+
+    // --- APPLICATION STATE ENGINE ---
+    let appState = {
+      userXP: 450,
+      userLevel: 1,
+      userName: 'Operador CicloCred',
+      userCreci: 'MT-18239',
+      userEmail: 'corretor@ciclocred.com.br',
+      userAgency: 'Habib Corporativos',
+      properties: [],
+      leads: [],
+      automationRules: [],
+      copyTemplates: [],
+      onlineRankings: [],
+      actionsCount: 4,
+      kidsDailySavings: 5,
+      kidsSelectedHouseItems: ['piscina', 'painel'],
+      kidsQuizIndex: 0,
+      kidsQuizScore: 0,
+      kidsQuizAnswered: false,
+      kidsQuizSelectedIdx: null
+    };
+
+    // --- INITIALIZE & SYNC WITH LOCAL STORAGE ---
+    function init() {
+      // Clear or load keys
+      appState.userXP = parseInt(localStorage.getItem('cc_xp') || '450');
+      appState.userLevel = parseInt(localStorage.getItem('cc_level') || '1');
+      appState.userName = localStorage.getItem('cc_name') || 'Operador CicloCred';
+      appState.userCreci = localStorage.getItem('cc_creci') || 'MT-18239';
+      appState.userEmail = localStorage.getItem('cc_email') || 'corretor@ciclocred.com.br';
+      appState.userAgency = localStorage.getItem('cc_agency') || 'Habib Corporativos';
+      appState.actionsCount = parseInt(localStorage.getItem('cc_actions') || '4');
+
+      // Arrays seeds load
+      appState.properties = JSON.parse(localStorage.getItem('cc_properties')) || SEED_PROPERTIES;
+      appState.leads = JSON.parse(localStorage.getItem('cc_leads')) || SEED_LEADS;
+      appState.automationRules = JSON.parse(localStorage.getItem('cc_rules')) || SEED_AUTOMATION_RULES;
+      appState.copyTemplates = JSON.parse(localStorage.getItem('cc_templates')) || SEED_COPY_TEMPLATES;
+      appState.onlineRankings = JSON.parse(localStorage.getItem('cc_online_ranks')) || SEED_ONLINE_RANKINGS;
+
+      // Populate Inputs with Current Config values
+      document.getElementById('prof-input-name').value = appState.userName;
+      document.getElementById('prof-input-creci').value = appState.userCreci;
+      document.getElementById('prof-input-email').value = appState.userEmail;
+      document.getElementById('prof-input-agency').value = appState.userAgency;
+
+      // Sync and render view tabs interfaces
+      updateGlobalBadges();
+      renderDashboardWidgets();
+      updateInterestSelectors();
+      renderKanbanColumns();
+      renderPropertiesGrid();
+      calculateSimulation();
+      renderAutomationRulesList();
+      renderCopyPresets();
+      calculateKidsSavings();
+      renderKidsHouseOptions();
+      loadActiveKidsQuizQuestion();
+      renderLiveRankings();
+      renderTrophies();
+
+      // Trigger Init Icons
+      lucide.createIcons();
+    }
+
+    function saveState() {
+      localStorage.setItem('cc_xp', appState.userXP.toString());
+      localStorage.setItem('cc_level', appState.userLevel.toString());
+      localStorage.setItem('cc_name', appState.userName);
+      localStorage.setItem('cc_creci', appState.userCreci);
+      localStorage.setItem('cc_email', appState.userEmail);
+      localStorage.setItem('cc_agency', appState.userAgency);
+      localStorage.setItem('cc_actions', appState.actionsCount.toString());
+
+      localStorage.setItem('cc_properties', JSON.stringify(appState.properties));
+      localStorage.setItem('cc_leads', JSON.stringify(appState.leads));
+      localStorage.setItem('cc_rules', JSON.stringify(appState.automationRules));
+      localStorage.setItem('cc_templates', JSON.stringify(appState.copyTemplates));
+      localStorage.setItem('cc_online_ranks', JSON.stringify(appState.onlineRankings));
+
+      // Refresh headers and numbers
+      updateGlobalBadges();
+      renderDashboardWidgets();
+    }
+
+    function awardXP(amount) {
+      appState.userXP += amount;
+      const xpToNext = 5000;
+      if (appState.userXP >= xpToNext) {
+        appState.userLevel += 1;
+        appState.userXP -= xpToNext;
+        playSensorySound('complete');
+        alert(`🌟 PARABÉNS! Você subiu de nível profissional! Agora está no Nível ${appState.userLevel}!`);
+      }
+      saveState();
+    }
+
+    function updateGlobalBadges() {
+      // Header indicators
+      document.getElementById('user-header-name').innerText = appState.userName;
+      document.getElementById('user-header-creci').innerText = "CRECI: " + appState.userCreci;
+      document.getElementById('user-header-level').innerText = "Lvl " + appState.userLevel;
+      document.getElementById('user-header-xp').innerText = appState.userXP + " XP";
+    }
+
+    // --- TAB NAV SWITCHING SYSTEM ---
+    function switchTab(tabId) {
+      playSensorySound('click');
+      // Hide all tabs
+      document.querySelectorAll('main > section').forEach(sec => sec.classList.add('hidden'));
+      // Show chosen
+      document.getElementById('tab-' + tabId).classList.remove('hidden');
+
+      // Clear button styles in navbar
+      document.querySelectorAll('#sidebar-menu button').forEach(btn => {
+        btn.classList.remove('bg-zinc-50', 'border-zinc-950', 'active');
+        btn.classList.add('border-transparent', 'text-zinc-650');
+      });
+
+      // Highlight active
+      const targetBtn = document.getElementById('sidebar-tab-' + tabId);
+      if (targetBtn) {
+        targetBtn.classList.add('bg-zinc-50', 'border-zinc-950', 'active');
+        targetBtn.classList.remove('border-transparent', 'text-zinc-650');
+      }
+    }
+
+    function switchCentralInner(subTab) {
+      playSensorySound('click');
+      if (subTab === 'gaming') {
+        document.getElementById('inner-user-gaming').classList.remove('hidden');
+        document.getElementById('inner-user-configs').classList.add('hidden');
+        document.getElementById('subtab-gaming').classList.add('bg-indigo-650', 'text-white');
+        document.getElementById('subtab-configs').classList.remove('bg-indigo-650', 'text-white');
+        document.getElementById('subtab-configs').classList.add('text-zinc-400');
+      } else {
+        document.getElementById('inner-user-gaming').classList.add('hidden');
+        document.getElementById('inner-user-configs').classList.remove('hidden');
+        document.getElementById('subtab-gaming').classList.remove('bg-indigo-650', 'text-white');
+        document.getElementById('subtab-gaming').classList.add('text-zinc-400');
+        document.getElementById('subtab-configs').classList.add('bg-indigo-650', 'text-white');
+      }
+    }
+
+    // --- DASHBOARD METRICS RENDER ---
+    function renderDashboardWidgets() {
+      const winsCount = appState.leads.filter(l => l.status === 'fechado').length;
+      document.getElementById('widget-total-leads').innerText = appState.leads.length;
+      document.getElementById('widget-total-properties').innerText = appState.properties.length;
+      document.getElementById('widget-total-wins').innerText = winsCount;
+      document.getElementById('widget-total-actions').innerText = appState.actionsCount;
+    }
+
+    // --- KANBAN LOGIC SYSTEM ---
+    const KANBAN_STAGES = [
+      { id: 'novo', title: 'Leads Novos', colorClass: 'bg-indigo-50 border-indigo-400 text-indigo-950' },
+      { id: 'em_contato', title: 'Em Contato', colorClass: 'bg-yellow-50 border-yellow-400 text-yellow-950' },
+      { id: 'proposta', title: 'Proposta Feita', colorClass: 'bg-purple-50 border-purple-400 text-purple-950' },
+      { id: 'fechado', title: 'Contrato Ganho 🏆', colorClass: 'bg-emerald-50 border-emerald-400 text-emerald-990' },
+      { id: 'perdido', title: 'Arquivado', colorClass: 'bg-zinc-100 border-zinc-300 text-zinc-650' }
+    ];
+
+    function renderKanbanColumns() {
+      const parent = document.getElementById('kanban-columns-container');
+      parent.innerHTML = '';
+      
+      KANBAN_STAGES.forEach(stage => {
+        const leadsInStage = appState.leads.filter(l => l.status === stage.id);
+        
+        const colHtml = `
+          <div class="bg-white border-4 border-zinc-950 rounded-3xl p-4.5 shadow-comic flex flex-col space-y-4">
+            <div class="${stage.colorClass} border-2 border-zinc-950 p-2.5 rounded-2x font-mono font-black text-[10px] uppercase tracking-wider flex justify-between items-center shadow-comic-sm">
+              <span>${stage.title}</span>
+              <span class="bg-zinc-950 text-white rounded-md px-1.5 py-0.5 text-[9px] font-bold">${leadsInStage.length}</span>
+            </div>
+
+            <div class="space-y-3 min-h-[300px] max-h-[500px] overflow-y-auto" id="kanban-stage-list-${stage.id}">
+              ${leadsInStage.length === 0 ? `
+                <div class="border-2 border-dashed border-zinc-200 rounded-2xl py-8 text-center text-[10px] uppercase font-bold text-zinc-400">Sem leads</div>
+              ` : ''}
+              
+              ${leadsInStage.map(lead => `
+                <div class="border-2 border-zinc-950 p-3 bg-zinc-50 rounded-2xl relative shadow-comic-sm hover:translate-y-[-1px] transition space-y-2 text-xs">
+                  <div class="flex justify-between items-start gap-1">
+                    <span class="font-black text-zinc-900 block truncate" style="max-width: 80%">${lead.name}</span>
+                    <button onclick="deleteLead('${lead.id}')" class="text-zinc-400 hover:text-red-650 hover:underline text-[9px] font-mono shrink-0">Apagar</button>
+                  </div>
+                  
+                  <div class="space-y-1 font-mono text-[9px] text-zinc-450 border-t pt-1 border-dashed">
+                    <div class="flex justify-between"><span>WhatsApp:</span><span class="font-bold text-zinc-700">${lead.whatsapp}</span></div>
+                    <div class="flex justify-between"><span>Renda:</span><span class="font-black text-zinc-900">R$ ${parseFloat(lead.income).toLocaleString()}</span></div>
+                    <div class="flex justify-between"><span>Imóvel:</span><span class="font-bold text-indigo-650 truncate max-w-[100px]">${lead.interest}</span></div>
+                  </div>
+
+                  <!-- Quick shift action buttons -->
+                  <div class="flex gap-1.5 border-t border-zinc-150 pt-2 select-none">
+                    ${stage.id !== 'fechado' ? `
+                      <button onclick="advanceLeadStage('${lead.id}', 'fechado')" class="flex-1 py-1 bg-emerald-500 hover:bg-emerald-600 font-mono text-[8.5px] font-black text-white rounded border border-zinc-950 shadow-comic-sm leading-none uppercase">Fechar Win 🏆</button>
+                    ` : ''}
+                    ${stage.id !== 'fechado' && stage.id !== 'perdido' ? `
+                      <button onclick="shiftLeadRight('${lead.id}')" class="py-1 px-2.5 bg-yellow-400 hover:bg-yellow-500 text-zinc-950 font-mono font-black text-[9px] rounded border border-zinc-950 shadow-comic-sm">→</button>
+                    ` : ''}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+        parent.insertAdjacentHTML('beforeend', colHtml);
+      });
+    }
+
+    function openLeadModal() {
+      playSensorySound('click');
+      document.getElementById('lead-form').reset();
+      document.getElementById('lead-form-id').value = '';
+      document.getElementById('lead-modal').classList.remove('hidden');
+    }
+
+    function closeLeadModal() {
+      document.getElementById('lead-modal').classList.add('hidden');
+    }
+
+    function updateInterestSelectors() {
+      const sel = document.getElementById('lead-input-interest');
+      if (!sel) return;
+      sel.innerHTML = appState.properties.map(p => `
+        <option value="${p.name}">${p.name} - R$ ${p.price.toLocaleString()}</option>
+      `).join('');
+    }
+
+    function handleLeadFormSubmit(e) {
+      e.preventDefault();
+      const id = document.getElementById('lead-form-id').value || 'lead_' + Date.now();
+      const name = document.getElementById('lead-input-name').value;
+      const whatsapp = document.getElementById('lead-input-whatsapp').value;
+      const income = parseFloat(document.getElementById('lead-input-income').value);
+      const status = document.getElementById('lead-input-status').value;
+      const interest = document.getElementById('lead-input-interest').value;
+
+      const editIdx = appState.leads.findIndex(l => l.id === id);
+      if (editIdx !== -1) {
+        appState.leads[editIdx] = { id, name, whatsapp, income, status, interest };
+      } else {
+        appState.leads.push({ id, name, whatsapp, income, status, interest });
+        // Trigger create rule trigger
+        evaluateAutomationTriggers('create_lead', name);
+      }
+
+      playSensorySound('success');
+      saveState();
+      renderKanbanColumns();
+      closeLeadModal();
+    }
+
+    function shiftLeadRight(leadId) {
+      const idx = appState.leads.findIndex(l => l.id === leadId);
+      if (idx === -1) return;
+      const current = appState.leads[idx].status;
+      
+      let next = 'novo';
+      if (current === 'novo') next = 'em_contato';
+      else if (current === 'em_contato') next = 'proposta';
+      else if (current === 'proposta') next = 'fechado';
+
+      advanceLeadStage(leadId, next);
+    }
+
+    function advanceLeadStage(leadId, targetStage) {
+      const idx = appState.leads.findIndex(l => l.id === leadId);
+      if (idx === -1) return;
+      const lead = appState.leads[idx];
+      lead.status = targetStage;
+      appState.actionsCount += 1;
+
+      // Rule evaluate
+      if (targetStage === 'fechado') {
+        awardXP(400); // 405 XP for sign win
+        evaluateAutomationTriggers('closed_win', lead.name);
+        alert(`🏆 NEGÓCIO GANHO COM SUCESSO! Você moveu "${lead.name}" para assinado e faturou +400 XP de comissão!`);
+      } else if (targetStage === 'proposta') {
+        awardXP(150);
+        evaluateAutomationTriggers('advance_proposta', lead.name);
+      } else {
+        awardXP(50);
+      }
+
+      playSensorySound('success');
+      saveState();
+      renderKanbanColumns();
+    }
+
+    function deleteLead(leadId) {
+      if (confirm("Deseja realmente arquivar permanentemente este lead de vendas?")) {
+        appState.leads = appState.leads.filter(l => l.id !== leadId);
+        playSensorySound('warning');
+        saveState();
+        renderKanbanColumns();
+      }
+    }
+
+    // --- EMPREENDIMENTOS STOCK INVENTORY LOGIC ---
+    function renderPropertiesGrid() {
+      const container = document.getElementById('properties-grid-container');
+      if (!container) return;
+      container.innerHTML = '';
+
+      if (appState.properties.length === 0) {
+        container.innerHTML = `<div class="col-span-full border-4 border-dashed border-zinc-200 rounded-3xl py-12 text-center text-xs font-black uppercase text-zinc-400 font-mono">Sem imóveis cadastrados no estoque</div>`;
+        return;
+      }
+
+      appState.properties.forEach(p => {
+        const cardHtml = `
+          <div class="bg-white border-4 border-zinc-950 rounded-3xl p-5 shadow-comic flex flex-col justify-between space-y-4 hover:translate-y-[-1.5px] transition">
+            <div class="flex justify-between items-start">
+              <div class="flex items-center gap-2">
+                <span class="text-3xl">${p.emoji || '🏢'}</span>
+                <div>
+                  <h4 class="text-xs font-black uppercase text-zinc-900 leading-none">${p.name}</h4>
+                  <span class="text-[9px] font-mono text-zinc-400 mt-1 block uppercase">${p.address}</span>
+                </div>
+              </div>
+              <button onclick="deleteProperty('${p.id}')" class="p-1 text-zinc-400 hover:text-red-500 transition font-mono text-[9px] uppercase hover:underline">Apagar</button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 font-mono border-t pt-3 border-dashed border-zinc-200">
+              <div class="bg-zinc-50 border border-zinc-250 p-2 rounded-xl text-center">
+                <span class="text-[8px] font-bold text-zinc-400 block uppercase">VALOR</span>
+                <span class="text-xs font-black text-indigo-950">R$ ${p.price.toLocaleString()}</span>
+              </div>
+              <div class="bg-zinc-50 border border-zinc-250 p-2 rounded-xl text-center">
+                <span class="text-[8px] font-bold text-zinc-400 block uppercase">ÁREA</span>
+                <span class="text-xs font-black text-zinc-800">${p.area} m² Úteis</span>
+              </div>
+            </div>
+            
+            <div class="text-[9px] font-mono text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg text-center font-bold">
+              ✓ Parcela FGTS elegível Minha Casa Minha Vida
+            </div>
+          </div>
+        `;
+        container.insertAdjacentHTML('beforeend', cardHtml);
+      });
+    }
+
+    function openPropertyModal() {
+      playSensorySound('click');
+      document.getElementById('property-form').reset();
+      document.getElementById('property-modal').classList.remove('hidden');
+    }
+
+    function closePropertyModal() {
+      document.getElementById('property-modal').classList.add('hidden');
+    }
+
+    function handlePropertyFormSubmit(e) {
+      e.preventDefault();
+      const id = 'prop_' + Date.now();
+      const name = document.getElementById('prop-input-name').value;
+      const price = parseFloat(document.getElementById('prop-input-price').value);
+      const area = parseInt(document.getElementById('prop-input-area').value);
+      const address = document.getElementById('prop-input-address').value;
+      const emoji = document.getElementById('prop-input-emoji').value;
+
+      appState.properties.push({ id, name, price, area, address, emoji });
+      playSensorySound('success');
+      awardXP(100); // 100XP on registered asset
+      saveState();
+      renderPropertiesGrid();
+      updateInterestSelectors();
+      closePropertyModal();
+    }
+
+    function deleteProperty(pId) {
+      if (confirm("Quer realmente remover do catálogo do CRM este empreendimento imobiliário?")) {
+        appState.properties = appState.properties.filter(p => p.id !== pId);
+        playSensorySound('warning');
+        saveState();
+        renderPropertiesGrid();
+        updateInterestSelectors();
+      }
+    }
+
+
+    // --- FINANCIAL MCMV RE-CALCULATIONS ---
+    function calculateSimulation() {
+      const incomeVal = parseFloat(document.getElementById('sim-income-slider').value);
+      const priceVal = parseFloat(document.getElementById('sim-price-slider').value);
+      const entranceVal = parseFloat(document.getElementById('sim-entrance-slider').value);
+
+      document.getElementById('sim-income-display').innerText = "R$ " + incomeVal.toLocaleString();
+      document.getElementById('sim-price-display').innerText = "R$ " + priceVal.toLocaleString();
+      document.getElementById('sim-entrance-display').innerText = "R$ " + entranceVal.toLocaleString();
+
+      // Calculation rules MCMV
+      // Subsídio Caixa grows higher if income drops lower
+      let subsidio = 0;
+      if (incomeVal <= 2640) {
+        subsidio = 55000;
+      } else if (incomeVal <= 4400) {
+        subsidio = 47500 - (incomeVal - 2640) * 4.5;
+      } else if (incomeVal <= 8000) {
+        subsidio = 26000 - (incomeVal - 4400) * 1.5;
+      }
+      subsidio = Math.max(0, Math.floor(subsidio));
+
+      const financiado = Math.max(0, priceVal - subsidio - entranceVal);
+      // Parcela approximate on 360 months amortized TR
+      const parcela = Math.ceil((financiado * 0.0055) + (incomeVal * 0.05));
+
+      document.getElementById('sim-res-subsidio').innerText = "R$ " + subsidio.toLocaleString();
+      document.getElementById('sim-res-financiado').innerText = "R$ " + financiado.toLocaleString();
+      document.getElementById('sim-res-parcela').innerText = "R$ " + parcela.toLocaleString() + "/mês";
+
+      // Verdict rules
+      const budgetVerdictEl = document.getElementById('sim-res-rule-verdict');
+      const percentageCompromised = (parcela / incomeVal) * 100;
+      if (percentageCompromised > 30) {
+        budgetVerdictEl.innerHTML = `⚠️ <strong>ALERTA DE PARCELA:</strong> A parcela estimada de R$ ${parcela} compromete <strong>${percentageCompromised.toFixed(0)}%</strong> da renda mensal declarada. Junte fiadores ou aumente a entrada!`;
+        budgetVerdictEl.className = 'text-[10px] font-sans text-rose-700 leading-normal bg-rose-50 p-3.5 border-2 border-dashed border-rose-300 rounded-xl';
+      } else {
+        budgetVerdictEl.innerHTML = `✓ Este cliente enquadra-se na faixa ideal <strong>MCMV Habitação</strong>! O valor estimado das parcelas compromete apenas <strong>${percentageCompromised.toFixed(0)}%</strong> do orçamento garantindo aprovação Caixa rápida.`;
+        budgetVerdictEl.className = 'text-[10px] font-sans text-emerald-700 leading-normal bg-emerald-50 p-3.5 border-2 border-dashed border-emerald-300 rounded-xl';
+      }
+    }
+
+
+    // --- COPYWRITING TEMPLATES LOGIC ---
+    let activeCopySelectedId = 'wa-1';
+
+    function renderCopyPresets() {
+      const parent = document.getElementById('copy-presets-container');
+      parent.innerHTML = '';
+
+      appState.copyTemplates.forEach(t => {
+        const isActive = t.id === activeCopySelectedId;
+        const btnHtml = `
+          <button onclick="selectCopyTemplate('${t.id}')" class="w-full text-left p-2 rounded-lg border text-[10px] font-bold truncate transition ${
+            isActive ? 'border-indigo-650 bg-indigo-50 text-indigo-900 font-extrabold' : 'border-zinc-200 hover:border-zinc-400 text-zinc-650'
+          }">
+            💬 ${t.name}
+          </button>
+        `;
+        parent.insertAdjacentHTML('beforeend', btnHtml);
+      });
+
+      // Load active editable details
+      const active = appState.copyTemplates.find(t => t.id === activeCopySelectedId) || appState.copyTemplates[0];
+      if (active) {
+        activeCopySelectedId = active.id;
+        document.getElementById('copy-edit-title').value = active.name;
+        document.getElementById('copy-edit-body').value = active.body;
+      }
+    }
+
+    function selectCopyTemplate(tId) {
+      playSensorySound('click');
+      activeCopySelectedId = tId;
+      renderCopyPresets();
+    }
+
+    function saveActiveCopy() {
+      const title = document.getElementById('copy-edit-title').value;
+      const body = document.getElementById('copy-edit-body').value;
+
+      if (!title.trim() || !body.trim()) return alert("Nome e conteúdo são obrigatórios!");
+
+      const idx = appState.copyTemplates.findIndex(t => t.id === activeCopySelectedId);
+      if (idx !== -1) {
+        appState.copyTemplates[idx] = { id: activeCopySelectedId, name: title, body: body };
+      } else {
+        appState.copyTemplates.push({ id: activeCopySelectedId, name: title, body: body });
+      }
+
+      playSensorySound('success');
+      awardXP(80);
+      saveState();
+      renderCopyPresets();
+      alert("Modelo estratégico atualizado e pronto para automação!");
+    }
+
+    function deleteActiveCopy() {
+      if (appState.copyTemplates.length <= 1) return alert("Você precisa de pelo menos 1 modelo de WhatsApp no CRM!");
+      appState.copyTemplates = appState.copyTemplates.filter(t => t.id !== activeCopySelectedId);
+      activeCopySelectedId = appState.copyTemplates[0].id;
+      playSensorySound('warning');
+      saveState();
+      renderCopyPresets();
+    }
+
+
+    // --- AUTOMATION ROBOT ACTUATORS TRIGGER ENGINE ---
+    function renderAutomationRulesList() {
+      const container = document.getElementById('automation-rules-list');
+      container.innerHTML = '';
+
+      appState.automationRules.forEach(rule => {
+        const itemHtml = `
+          <div class="border-4 border-zinc-950 rounded-2xl p-4 transition-all shadow-comic-sm flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden ${
+            rule.active ? 'bg-zinc-50' : 'bg-zinc-100 opacity-60'
+          }">
+            <div class="flex items-start gap-3 min-w-0">
+              <div class="p-2.5 bg-indigo-100 text-indigo-950 border-2 border-zinc-950 rounded-xl shrink-0">
+                <i data-lucide="activity" class="w-4 h-4"></i>
+              </div>
+              <div class="min-w-0">
+                <h4 class="text-xs font-black text-zinc-900 uppercase tracking-tight">${rule.name}</h4>
+                <div class="flex items-center gap-1.5 text-[9px] font-mono mt-1 font-black text-zinc-400 uppercase tracking-wider flex-wrap">
+                  <span class="bg-zinc-200 border border-zinc-300 text-zinc-800 px-1.5 py-0.5 rounded">${rule.trigger === 'create_lead' ? '📅 Novo Lead' : rule.trigger === 'advance_proposta' ? '📝 Proposta' : '💰 Negócio Ganho'}</span>
+                  <span>→</span>
+                  <span class="bg-indigo-600 text-white px-1.5 py-0.5 rounded">${rule.action.toUpperCase()} : "${rule.value}"</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2.5 shrink-0 select-none">
+              <span class="font-mono text-[9px] font-extrabold text-indigo-650 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full uppercase">+${rule.xp} XP</span>
+              <button onclick="toggleAutomationRule('${rule.id}')" class="font-bold text-xs uppercase underline hover:text-indigo-600">${rule.active ? 'Ativo 🟢' : 'Pausado 🔴'}</button>
+            </div>
+          </div>
+        `;
+        container.insertAdjacentHTML('beforeend', itemHtml);
+      });
+      lucide.createIcons();
+    }
+
+    function toggleAutomationRule(ruleId) {
+      playSensorySound('click');
+      const r = appState.automationRules.find(rule => rule.id === ruleId);
+      if (r) {
+        r.active = !r.active;
+        saveState();
+        renderAutomationRulesList();
+      }
+    }
+
+    function evaluateAutomationTriggers(eventKey, clientName) {
+      // Find rules matching the trigger
+      appState.automationRules.forEach(rule => {
+        if (rule.active && rule.trigger === eventKey) {
+          // Action dispatch mock alert or WhatsApp recommends
+          setTimeout(() => {
+            playSensorySound('complete');
+            if (rule.action === 'whatsapp') {
+              alert(`🤖 ROBÔ DE INTELIGÊNCIA: Disparo de Script de Abordagem para "${clientName}" agendado com sucesso!\n\nTemplate: "${rule.value}"`);
+            } else if (rule.action === 'notify') {
+              alert(`🔔 NOTIFICAÇÃO CRM: ${rule.value}`);
+            }
+            awardXP(parseInt(rule.xp));
+          }, 800);
+        }
+      });
+    }
+
+
+    // --- KIDS SPACE PLAYGROUND LOGIC ---
+    const KIDS_HOUSE_OPTIONS = [
+      { id: 'piscina', name: '🏊 Lente de Lazer (Tobogã)', cost: 15, label: 'Lazer' },
+      { id: 'painel', name: '☀️ Painéis Solares Verdes', cost: 10, label: 'Ecológico' },
+      { id: 'games', name: '🎮 Sala de Videogame Cósmico', cost: 25, label: 'Fun' },
+      { id: 'arvore', name: '🌳 Casa da Árvore', cost: 12, label: 'Aventura' }
+    ];
+
+    function calculateKidsSavings() {
+      const daily = parseFloat(document.getElementById('kids-savings-slider').value);
+      document.getElementById('kids-savings-display').innerText = "R$ " + daily.toLocaleString() + " / dia";
+
+      const monthVal = daily * 30;
+      const yearVal = daily * 365;
+      const fiveVal = yearVal * 5;
+
+      document.getElementById('kids-val-month').innerText = "R$ " + monthVal.toLocaleString();
+      document.getElementById('kids-val-year').innerText = "R$ " + yearVal.toLocaleString();
+      document.getElementById('kids-val-five').innerText = "R$ " + fiveVal.toLocaleString();
+    }
+
+    function renderKidsHouseOptions() {
+      const parent = document.getElementById('kids-house-options-pool');
+      parent.innerHTML = '';
+
+      KIDS_HOUSE_OPTIONS.forEach(opt => {
+        const isSelected = appState.kidsSelectedHouseItems.includes(opt.id);
+        const cardHtml = `
+          <button onclick="toggleKidsHouseItem('${opt.id}')" class="border-2 p-2 rounded-xl flex flex-col text-left justify-between transition cursor-pointer relative ${
+            isSelected ? 'border-indigo-600 bg-indigo-50 ring-1 ring-indigo-500' : 'border-zinc-200 bg-zinc-50 hover:border-zinc-450'
+          }">
+            <span class="text-[8px] uppercase text-zinc-400 font-bold block leading-none mb-1">${opt.label}</span>
+            <span class="text-[10px] font-bold text-zinc-800 leading-tight block truncate">${opt.name}</span>
+            <span class="text-[9px] text-indigo-650 font-black mt-1">+${opt.cost} pontos</span>
+          </button>
+        `;
+        parent.insertAdjacentHTML('beforeend', cardHtml);
+      });
+
+      // Update total points cost estimate
+      const selectionCosts = appState.kidsSelectedHouseItems.reduce((acc, currentId) => {
+        const matched = KIDS_HOUSE_OPTIONS.find(o => o.id === currentId);
+        return acc + (matched ? matched.cost : 0);
+      }, 30); // 30 points base
+
+      document.getElementById('kids-house-points-badge').innerText = selectionCosts + " Pontos";
+
+      // Render emojis inside canvas box represent selected items
+      const spriteContainer = document.getElementById('kids-house-sprite-preview');
+      spriteContainer.innerHTML = '<span class="text-4xl">🏠</span>';
+      appState.kidsSelectedHouseItems.forEach(id => {
+        if (id === 'piscina') spriteContainer.insertAdjacentHTML('beforeend', '<span class="text-3xl">🏊</span>');
+        else if (id === 'painel') spriteContainer.insertAdjacentHTML('beforeend', '<span class="text-3xl">☀️</span>');
+        else if (id === 'games') spriteContainer.insertAdjacentHTML('beforeend', '<span class="text-3xl">🎮</span>');
+        else if (id === 'arvore') spriteContainer.insertAdjacentHTML('beforeend', '<span class="text-3xl">🌳</span>');
+      });
+    }
+
+    function toggleKidsHouseItem(optId) {
+      playSensorySound('click');
+      if (appState.kidsSelectedHouseItems.includes(optId)) {
+        appState.kidsSelectedHouseItems = appState.kidsSelectedHouseItems.filter(id => id !== optId);
+      } else {
+        appState.kidsSelectedHouseItems.push(optId);
+      }
+      renderKidsHouseOptions();
+    }
+
+
+    // --- KIDS CHALLENGE INTERACTIVE QUIZ DATA ---
+    const QUIZ_QUESTIONS = [
+      {
+        text: "Se você guardar R$ 3 do seu dinheiro do cofrinho toda semana, o que acontece?",
+        options: [
+          "O dinheiro desaparece misteriosamente no armário",
+          "Você terá uma poupança para comprar um super brinquedo no futuro!",
+          "Gastar tudo no primeiro dia é melhor para se divertir hoje"
+        ],
+        correct: 1,
+        explain: "Excelente! Planejar compras futuras nos ajuda a conquistar sonhos muito maiores!"
+      },
+      {
+        text: "Qual o melhor lugar para planejar a compra perfeita de sua futura casa?",
+        options: [
+          "Colocar o dinheiro embaixo do colchão e não contar para ninguém",
+          "Usar o cicloCRED Jovem para planejar e poupar em família todo mês!",
+          "Gastar tudo em cartas de dragão colecionáveis"
+        ],
+        correct: 1,
+        explain: "Isso aí! Poupar em família é saudável, divertido e super seguro!"
+      },
+      {
+        text: "O que são Juros a seu favor quando poupamos no banco?",
+        options: [
+          "Um bônus em moedas que o banco te dá por confiar e guardar dinheiro com ele!",
+          "Um dinossauro que come suas economias",
+          "Nenhuma das alternativas"
+        ],
+        correct: 0,
+        explain: "Exato! Juros a favor fazem o dinheiro crescer sozinho feito mágica!"
+      }
+    ];
+
+    function loadActiveKidsQuizQuestion() {
+      const parent = document.getElementById('kids-quiz-body-wrapper');
+      parent.innerHTML = '';
+
+      if (appState.kidsQuizIndex >= QUIZ_QUESTIONS.length) {
+        // Complete state! Show reward commission XP for teaching
+        const bonusXP = appState.kidsQuizScore * 100 + 100;
+        
+        parent.innerHTML = `
+          <div class="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl text-center space-y-4 shadow-inner">
+            <span class="text-4xl animate-bounce block">🎉</span>
+            <h4 class="text-base font-black text-white uppercase font-sans tracking-tight">Desafio Concluído com Sucesso!</h4>
+            <p class="text-xs text-zinc-400">Excelente aproveitamento! Placar final: <strong>${appState.kidsQuizScore} de ${QUIZ_QUESTIONS.length} acertos</strong>!</p>
+            
+            <div class="p-3 bg-purple-950/40 border border-purple-500/30 rounded-xl leading-relaxed text-[11px] text-purple-300">
+              🌟 <strong>Bônus de Mentor Habitacional:</strong> Você acabou de ganhar <strong>+${bonusXP} XP real</strong> de comissão educacional!
+            </div>
+
+            <button onclick="restartKidsQuiz()" class="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white font-mono text-[9px] uppercase font-bold rounded-xl border border-zinc-700">Refazer Quiz 🔄</button>
+          </div>
+        `;
+        document.getElementById('kids-quiz-score-indicator').innerText = "COMPLETO 🎓";
+        awardXP(bonusXP);
+        return;
+      }
+
+      document.getElementById('kids-quiz-score-indicator').innerText = `PERGUNTA ${appState.kidsQuizIndex + 1} DE ${QUIZ_QUESTIONS.length}`;
+      const question = QUIZ_QUESTIONS[appState.kidsQuizIndex];
+
+      const qHtml = `
+        <div class="space-y-4">
+          <p class="text-sm font-black text-white leading-snug">${question.text}</p>
+          
+          <div class="space-y-2.5 font-sans text-xs">
+            ${question.options.map((opt, idx) => `
+              <button onclick="selectQuizAnswer(${idx})" id="quiz-btn-opt-${idx}" class="w-full text-left p-3.5 rounded-xl border transition flex items-center gap-3 cursor-pointer ${
+                appState.kidsQuizSelectedIdx === idx ? 'bg-indigo-600 text-white border-indigo-400' : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-850 border-zinc-800'
+              }">
+                <div class="w-5 h-5 rounded-full border border-zinc-750 flex items-center justify-center bg-zinc-950 text-[10px] font-mono shrink-0 font-bold">${String.fromCharCode(65 + idx)}</div>
+                <span class="flex-1">${opt}</span>
+              </button>
+            `).join('')}
+          </div>
+
+          <div class="pt-2">
+            ${appState.kidsQuizAnswered ? `
+              <div class="p-3.5 rounded-xl border leading-relaxed text-xs text-left mb-3.5 ${
+                appState.kidsQuizSelectedIdx === question.correct ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-300' : 'bg-red-950/40 border-red-500/50 text-red-300'
+              }">
+                <strong>${appState.kidsQuizSelectedIdx === question.correct ? '🎉 Correto!' : '😅 Ops, quase lá!'}</strong> ${question.explain}
+              </div>
+              <button onclick="advanceQuizQuestion()" class="w-full py-3 bg-indigo-650 hover:bg-indigo-750 text-xs font-mono font-black uppercase rounded-xl text-white">Avançar Desafio →</button>
+            ` : `
+              <button onclick="submitQuizAnswer()" ${appState.kidsQuizSelectedIdx === null ? 'disabled' : ''} class="w-full py-3 bg-yellow-400 hover:bg-yellow-500 text-zinc-950 font-mono font-black text-xs uppercase rounded-xl shadow-comic disabled:opacity-40 select-none cursor-pointer">Verificar Resposta ✔️</button>
+            `}
+          </div>
+        </div>
+      `;
+      parent.innerHTML = qHtml;
+    }
+
+    function selectQuizAnswer(idx) {
+      if (appState.kidsQuizAnswered) return;
+      playSensorySound('click');
+      appState.kidsSelectedIdx = idx; // Legacy
+      appState.kidsQuizSelectedIdx = idx;
+      loadActiveKidsQuizQuestion();
+    }
+
+    function submitQuizAnswer() {
+      if (appState.kidsQuizSelectedIdx === null || appState.kidsQuizAnswered) return;
+      appState.kidsQuizAnswered = true;
+      const question = QUIZ_QUESTIONS[appState.kidsQuizIndex];
+      if (appState.kidsQuizSelectedIdx === question.correct) {
+        playSensorySound('success');
+        appState.kidsQuizScore += 1;
+      } else {
+        playSensorySound('warning');
+      }
+      loadActiveKidsQuizQuestion();
+    }
+
+    function advanceQuizQuestion() {
+      appState.kidsQuizIndex += 1;
+      appState.kidsQuizAnswered = false;
+      appState.kidsQuizSelectedIdx = null;
+      loadActiveKidsQuizQuestion();
+    }
+
+    function restartKidsQuiz() {
+      playSensorySound('click');
+      appState.kidsQuizIndex = 0;
+      appState.kidsQuizScore = 0;
+      appState.kidsQuizAnswered = false;
+      appState.kidsQuizSelectedIdx = null;
+      loadActiveKidsQuizQuestion();
+    }
+
+
+    // --- TEAM AND LIVE LEADERBOARD ARENA DISPLAY ---
+    function renderLiveRankings() {
+      const parent = document.getElementById('live-board-rankings-container');
+      parent.innerHTML = '';
+
+      // Set current user dynamic stats mapping inside board list
+      const updatedRanks = appState.onlineRankings.map(item => {
+        if (item.email === appState.userEmail) {
+          return {
+            name: appState.userName,
+            email: appState.userEmail,
+            level: appState.userLevel,
+            xp: appState.userXP,
+            deals: appState.leads.filter(l => l.status === 'fechado').length,
+            actions: appState.actionsCount
+          };
+        }
+        return item;
+      });
+
+      // Sort by Level DESC, then XP DESC
+      updatedRanks.sort((a,b) => {
+        if (b.level !== a.level) return b.level - a.level;
+        return b.xp - a.xp;
+      });
+
+      updatedRanks.slice(0, 6).forEach((b, bIdx) => {
+        const isCurrent = b.email === appState.userEmail;
+        const placeColors = 
+          bIdx === 0 ? 'bg-yellow-400 text-zinc-950 border-yellow-500' :
+          bIdx === 1 ? 'bg-zinc-300 text-zinc-900 border-zinc-400' :
+          bIdx === 2 ? 'bg-amber-600 text-white border-amber-700' :
+          'bg-zinc-105 text-zinc-650 border-zinc-250';
+
+        const rawHtml = `
+          <div class="border-2 border-zinc-950 p-4 bg-zinc-50 rounded-2.5xl relative shadow-comic-sm hover:translate-y-[-1px] transition ${
+            isCurrent ? 'bg-indigo-50/45 border-indigo-650 ring-2 ring-indigo-300' : 'bg-zinc-50'
+          }">
+            <!-- Absolute ranking place placement -->
+            <div class="absolute right-3.5 top-3 w-7 h-7 rounded-full border-2 flex items-center justify-center font-bold text-[11px] font-mono shadow-inner ${placeColors}">
+              ${bIdx + 1}º
+            </div>
+
+            <div class="space-y-3.5">
+              <div class="space-y-0.5 max-w-[80%] font-sans">
+                <div class="flex items-center gap-1.5 truncate">
+                  <span class="text-xs font-black uppercase text-zinc-900 truncate block" title="${b.name}">${b.name}</span>
+                  ${isCurrent ? `<span class="bg-indigo-650 text-white text-[7px] px-1 rounded-md font-bold uppercase shrink-0 font-mono">VC</span>` : ''}
+                </div>
+                <span class="text-[9px] text-zinc-400 font-mono block truncate">${b.email}</span>
+              </div>
+
+              <!-- Small progress dashboard specs -->
+              <div class="grid grid-cols-2 gap-2 border-t border-dashed border-zinc-200 pt-2.5 font-mono text-[9.5px]">
+                <div>
+                  <span class="text-[7.5px] font-black text-zinc-450 uppercase block">PROGRESSO</span>
+                  <div class="flex items-center gap-1 leading-none mt-1">
+                    <span class="bg-zinc-950 text-white text-[8.5px] px-1.5 py-0.5 rounded">Lvl ${b.level}</span>
+                    <span class="text-zinc-600">${b.xp} XP</span>
+                  </div>
+                </div>
+
+                <div>
+                  <span class="text-[7.5px] font-black text-zinc-450 uppercase block">CONVERSÃO</span>
+                  <div class="flex items-center gap-1 text-zinc-650 mt-1 font-bold">
+                    <span class="text-emerald-600">💰 ${b.deals}</span>
+                    <span class="text-zinc-300">|</span>
+                    <span class="text-indigo-600">📞 ${b.actions}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+        parent.insertAdjacentHTML('beforeend', rawHtml);
+      });
+    }
+
+    function inviteTeammatesMock() {
+      playSensorySound('success');
+      navigator.clipboard.writeText(window.location.href);
+      alert("✓ LINK COMPARTILHÁVEL COPIADO!\nEnvie o link desta página para mais 5 colegas. Os corretores incluídos nas configurações podem sincronizar e participar do mesmo Ranking Arena!");
+    }
+
+
+    // --- UNLOCKED TROPHIES BADGES DISP ---
+    const TROPHIES_DATA = [
+      { id: 'tr-1', name: 'Primeira Abordagem', desc: 'Registre pelo menos 1 lead de interesse no Kanban', check: () => appState.leads.length >= 1 },
+      { id: 'tr-2', name: 'Corretor Sênior', desc: 'Atingir o Nível 2 de progressão nas metas', check: () => appState.userLevel >= 2 },
+      { id: 'tr-3', name: 'Tubarão de Vendas', desc: 'Fechar pelo menos 2 contratos habitacionais assinados do MCMV', check: () => appState.leads.filter(l => l.status === 'fechado').length >= 2 },
+      { id: 'tr-4', name: 'Mentor Estudantil', desc: 'Responda com excelência o quiz educativo Jovem', check: () => appState.kidsQuizScore >= 2 }
+    ];
+
+    function renderTrophies() {
+      const container = document.getElementById('trophies-list-container');
+      container.innerHTML = '';
+
+      TROPHIES_DATA.forEach(t => {
+        const isUnlocked = t.check();
+        const boxHtml = `
+          <div class="border-2 border-zinc-950 p-4.5 rounded-2xl flex items-center gap-3.5 transition ${
+            isUnlocked ? 'bg-yellow-50/50 border-yellow-500' : 'bg-zinc-50 opacity-55'
+          }">
+            <div class="p-2.5 rounded-xl border-2 border-zinc-950 shadow-comic-sm shrink-0 ${
+              isUnlocked ? 'bg-yellow-400 text-zinc-950' : 'bg-zinc-200 text-zinc-400'
+            }">
+              <i data-lucide="trophy" class="w-5 h-5 shrink-0"></i>
+            </div>
+            <div class="text-xs">
+              <span class="font-black text-zinc-900 uppercase block">${t.name}</span>
+              <p class="text-[10px] text-zinc-550 leading-snug mt-0.5">${t.desc}</p>
+              <div class="mt-2 text-[9px] font-mono leading-none">
+                ${isUnlocked ? '<span class="text-emerald-600 font-extrabold uppercase">✓ Conquistado!</span>' : '<span class="text-zinc-400 font-bold uppercase">🔐 Bloqueado</span>'}
+              </div>
+            </div>
+          </div>
+        `;
+        container.insertAdjacentHTML('beforeend', boxHtml);
+      });
+      lucide.createIcons();
+    }
+
+
+    // --- ADMINISTRATIVE SCRUB CONTROL UTILITIES ---
+    function updateProfileFromInputs() {
+      appState.userName = document.getElementById('prof-input-name').value;
+      appState.userCreci = document.getElementById('prof-input-creci').value;
+      appState.userEmail = document.getElementById('prof-input-email').value;
+      appState.userAgency = document.getElementById('prof-input-agency').value;
+      
+      saveState();
+    }
+
+    function cleanCRMData(mode) {
+      if (confirm(`Atenção: quer realmente prosseguir com a remoção dos dados de "${mode.toUpperCase()}" de seu painel local?`)) {
+        if (mode === 'leads') {
+          appState.leads = [];
+        } else if (mode === 'properties') {
+          appState.properties = [];
+        } else if (mode === 'full') {
+          localStorage.clear();
+          location.reload();
+          return;
+        }
+        playSensorySound('warning');
+        saveState();
+        init();
+        alert("Categorias de banco redefinidas com sucesso!");
+      }
+    }
+
+
+    // --- BOOTSTRAP INIT ON WINDOWS DOM LOADED ---
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+
+</body>
+</html>

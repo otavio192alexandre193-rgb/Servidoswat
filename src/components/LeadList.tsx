@@ -47,6 +47,18 @@ interface LeadListProps {
   addNotification?: (title: string, message: string, type?: any) => void;
   appointments?: any[];
   setAppointments?: any;
+  searchTerm?: string;
+  setSearchTerm?: (val: string) => void;
+  statusFilter?: string;
+  setStatusFilter?: (val: string) => void;
+  originFilter?: string;
+  setOriginFilter?: (val: string) => void;
+  initialLetterFilter?: string;
+  setInitialLetterFilter?: (val: string) => void;
+  externalShowImporter?: boolean;
+  setExternalShowImporter?: (val: boolean) => void;
+  externalShowPlanner?: boolean;
+  setExternalShowPlanner?: (val: boolean) => void;
 }
 
 export function isFictitiousPhone(phone: string | undefined | null): boolean {
@@ -403,17 +415,40 @@ export default function LeadList({
   awardXP,
   addNotification,
   appointments,
-  setAppointments
+  setAppointments,
+  searchTerm: propsSearchTerm,
+  setSearchTerm: propsSetSearchTerm,
+  statusFilter: propsStatusFilter,
+  setStatusFilter: propsSetStatusFilter,
+  originFilter: propsOriginFilter,
+  setOriginFilter: propsSetOriginFilter,
+  initialLetterFilter: propsInitialLetterFilter,
+  setInitialLetterFilter: propsSetInitialLetterFilter,
+  externalShowImporter,
+  setExternalShowImporter,
+  externalShowPlanner,
+  setExternalShowPlanner
 }: LeadListProps) {
-  const [searchTerm, setSearchTerm] = useState('');
+  const localSearchState = useState('');
+  const searchTerm = propsSearchTerm !== undefined ? propsSearchTerm : localSearchState[0];
+  const setSearchTerm = propsSetSearchTerm || localSearchState[1];
+
+  const localStatusState = useState<string>('todos');
+  const statusFilter = propsStatusFilter !== undefined ? propsStatusFilter : localStatusState[0];
+  const setStatusFilter = propsSetStatusFilter || localStatusState[1];
+
+  const localOriginState = useState<string>('todos');
+  const originFilter = propsOriginFilter !== undefined ? propsOriginFilter : localOriginState[0];
+  const setOriginFilter = propsSetOriginFilter || localOriginState[1];
+
+  const localLetterState = useState<string>('todos');
+  const initialLetterFilter = propsInitialLetterFilter !== undefined ? propsInitialLetterFilter : localLetterState[0];
+  const setInitialLetterFilter = propsSetInitialLetterFilter || localLetterState[1];
+
   const [accSettings] = useState<AccessibilitySettings>(() => {
     const saved = localStorage.getItem('crm_accessibility_settings');
     return saved ? JSON.parse(saved) : INITIAL_ACCESSIBILITY_SETTINGS;
   });
-  const [statusFilter, setStatusFilter] = useState<string>('todos');
-  const [originFilter, setOriginFilter] = useState<string>('todos');
-  const [genderFilter, setGenderFilter] = useState<'todos' | 'homens' | 'mulheres'>('todos');
-  const [initialLetterFilter, setInitialLetterFilter] = useState<string>('todos');
   const [sortBy, setSortBy] = useState<'name' | 'value' | 'createdAt'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
@@ -449,7 +484,6 @@ export default function LeadList({
   const batchCleanupRef = React.useRef<(() => void) | null>(null);
 
   // Advanced Gemini-Powered Bulk Lead Campaign Active Planner and Metrics Calculator
-  const [showCampaignPlanner, setShowCampaignPlanner] = useState(false);
   const [plannerLeadCount, setPlannerLeadCount] = useState<number>(30);
   const [plannerLeadOrigin, setPlannerLeadOrigin] = useState<string>('Planilha Comercial');
   const [plannerAverageValue, setPlannerAverageValue] = useState<number>(275000);
@@ -671,8 +705,11 @@ export default function LeadList({
   }, [isDispatchingBatch, campaignIsAssistedMode, activeBatchIndex, customCampaignText, selectedCampaignTemplate]);
 
   // Lead spreadsheet states
-  const [showImporter, setShowImporter] = useState(false);
-  const [importerTab, setImporterTab] = useState<'classic' | 'simulation'>('classic');
+  const showImporter = externalShowImporter !== undefined ? externalShowImporter : false;
+  const setShowImporter = setExternalShowImporter || (() => {});
+  const showCampaignPlanner = externalShowPlanner !== undefined ? externalShowPlanner : false;
+  const setShowCampaignPlanner = setExternalShowPlanner || (() => {});
+  const [importerTab, setImporterTab] = useState<'classic' | 'simulation' | 'export'>('classic');
   const [simulationLogs, setSimulationLogs] = useState<string[]>([]);
   const [simulationProgress, setSimulationProgress] = useState<number>(-1);
   const [extractedSimulationLead, setExtractedSimulationLead] = useState<any | null>(null);
@@ -740,8 +777,9 @@ export default function LeadList({
     let currentStep = 0;
     const interval = setInterval(() => {
       if (currentStep < steps.length) {
-        setSimulationProgress(steps[currentStep].prg);
-        setSimulationLogs(prev => [...prev, steps[currentStep].log]);
+        const stepDetail = steps[currentStep];
+        setSimulationProgress(stepDetail.prg);
+        setSimulationLogs(prev => [...prev, stepDetail.log]);
         currentStep++;
       } else {
         clearInterval(interval);
@@ -1018,16 +1056,11 @@ export default function LeadList({
       const matchesStatus = statusFilter === 'todos' || lead.status === statusFilter;
       const matchesOrigin = originFilter === 'todos' || lead.origin === originFilter;
       
-      const matchesGender = 
-        genderFilter === 'todos' ||
-        (genderFilter === 'homens' && inferGenderFromName(lead.name) === 'M') ||
-        (genderFilter === 'mulheres' && inferGenderFromName(lead.name) === 'F');
-
       const matchesInitial = 
         initialLetterFilter === 'todos' ||
         lead.name.trim().charAt(0).toUpperCase() === initialLetterFilter.toUpperCase();
 
-      return matchesSearch && matchesStatus && matchesOrigin && matchesGender && matchesInitial;
+      return matchesSearch && matchesStatus && matchesOrigin && matchesInitial;
     })
     .sort((a, b) => {
       let comparison = 0;
@@ -1044,7 +1077,7 @@ export default function LeadList({
   // Reset pagination on filter adjustments
   useEffect(() => {
     setVisibleCount(15);
-  }, [searchTerm, statusFilter, originFilter, genderFilter, initialLetterFilter]);
+  }, [searchTerm, statusFilter, originFilter, initialLetterFilter]);
 
   // Clean active campaign batch intervals on unmount or closing modal
   useEffect(() => {
@@ -1230,66 +1263,38 @@ export default function LeadList({
 
   return (
     <div className="space-y-8">
-      {/* Search and Advanced Filters toolbar */}
-      <div className="bg-white border-4 border-zinc-950 p-6 rounded-2xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] space-y-5 animate-fadeIn">
-        <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
-          <h2 id="leadbar-heading" className="text-md font-black text-zinc-950 flex items-center gap-2 uppercase tracking-tight">
-            <Filter className="w-5 h-5 text-indigo-600" />
-            <span>Filtros Avançados ({processedLeads.length} de {leads.length})</span>
-          </h2>
-          <div className="flex flex-col sm:flex-row gap-2.5 w-full md:w-auto">
-
-
-            <button
-              onClick={() => {
-                setPlannerLeadCount(leads.length || 30);
-                setShowCampaignPlanner(true);
-              }}
-              className="flex items-center justify-center gap-2 px-4 py-3 bg-zinc-900 border-2 border-zinc-950 text-white hover:bg-zinc-850 rounded-xl text-xs font-black uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all cursor-pointer"
-            >
-              <Sparkles className="w-4 h-4 text-emerald-400" />
-              <span>⚡ Planejar Campanha de Leads</span>
-            </button>
-
-            <button
-              onClick={() => setShowImporter(!showImporter)}
-              className={`flex items-center justify-center gap-2 px-4 py-3 border-2 border-zinc-950 rounded-xl text-xs font-black uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all ${
-                showImporter 
-                  ? 'bg-amber-100 text-amber-950' 
-                  : 'bg-white text-zinc-900 hover:bg-zinc-50'
-              }`}
-            >
-              <FileSpreadsheet className="w-4 h-4 text-indigo-600" />
-              <span>{showImporter ? 'Fechar Planilha ✕' : 'Planilha (Importar/Exportar)'}</span>
-            </button>
-
-            <button
-              onClick={onOpenCreateModal}
-              className="flex items-center justify-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-xs uppercase tracking-wider border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition-all"
-            >
-              <UserPlus className="w-4 h-4" />
-              <span>Cadastrar Lead</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Collapsible Importer/Exporter Panel */}
-        {showImporter && (
-          <div className="border-t-2 border-dashed border-zinc-200 pt-5 space-y-5 animate-scaleIn">
+      {/* Collapsible Importer/Exporter Panel */}
+      {showImporter && (
+        <div className="bg-white border-4 border-zinc-950 p-6 rounded-2xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] space-y-5 animate-scaleIn">
             
             {/* Embedded Subsistem Tab Bar Selector */}
             <div className="flex border-b-2 border-zinc-200 gap-1 overflow-x-auto pb-1.5 select-none">
               <button
                 type="button"
                 onClick={() => setImporterTab('classic')}
-                className={`px-4 py-2 border-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 ${
+                className={`px-4 py-2 border-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 flex items-center gap-1.5 ${
                   importerTab === 'classic'
-                    ? 'bg-zinc-90 w-auto bg-zinc-900 text-white border-zinc-950'
+                    ? 'bg-zinc-900 text-white border-zinc-950'
                     : 'bg-white text-zinc-700 hover:text-zinc-950 border-zinc-350'
                 }`}
               >
-                📁 Importador Clássico (CSV / Excel)
+                <Upload className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                <span>Importar</span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => setImporterTab('export')}
+                className={`px-4 py-2 border-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 flex items-center gap-1.5 ${
+                  importerTab === 'export'
+                    ? 'bg-zinc-900 text-white border-zinc-950'
+                    : 'bg-white text-zinc-700 hover:text-zinc-950 border-zinc-350'
+                }`}
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>Baixar Planilha</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setImporterTab('simulation')}
@@ -1299,13 +1304,13 @@ export default function LeadList({
                     : 'bg-zinc-50 text-indigo-700 hover:text-indigo-950 border-indigo-400'
                 }`}
               >
-                <Sparkles className="w-3.5 h-3.5 text-indigo-600 animate-pulse shrink-0" />
-                ⚡ Portabilidade de Simulações Cury/Caixa (Gateway Web)
+                <Sparkles className="w-3.5 h-3.5 text-indigo-400 animate-pulse shrink-0" />
+                <span>Portabilidade Cury/Caixa</span>
               </button>
             </div>
 
-            {importerTab === 'classic' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {importerTab === 'classic' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-scaleIn">
                 
                 {/* Drag n Drop Upload Area */}
                 <div 
@@ -1378,24 +1383,62 @@ export default function LeadList({
                       type="button"
                       onClick={handleParsePaste}
                       disabled={!rawPasteData.trim()}
-                      className="px-4 py-2 bg-zinc-900 hover:bg-zinc-950 text-white font-black uppercase font-mono text-[10px] rounded-lg border-2 border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] disabled:opacity-50"
+                      className="px-4 py-2 bg-zinc-900 hover:bg-zinc-950 text-white font-black uppercase font-mono text-[10px] rounded-lg border-2 border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] disabled:opacity-50 animate-pulse"
                     >
                       Analisar dados colados
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleExportLeadsCSV}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-zinc-50 border border-zinc-950 text-zinc-900 font-bold font-mono text-[10px] rounded-lg shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
-                    >
-                      <Download className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                      <span>Baixar Planilha Completa de Leads (.csv)</span>
                     </button>
                   </div>
                 </div>
               </div>
-            ) : (
-              <div className="space-y-4 animate-scaleIn">
+            )}
+
+            {importerTab === 'export' && (
+              <div className="space-y-4 animate-scaleIn bg-zinc-50 border-2 border-zinc-950 p-5 rounded-2xl">
+                <div className="flex items-center gap-2">
+                  <Download className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <h4 className="text-sm font-black uppercase text-zinc-950 font-mono">Exportar Tudo e Baixar Planilha</h4>
+                </div>
+                <p className="text-xs text-zinc-650 font-bold leading-relaxed max-w-2xl">
+                  Gere e faça o download instantâneo de um arquivo compactado <code className="bg-zinc-200 px-1 py-0.5 rounded text-zinc-800">.csv</code> contendo todos os contatos e propostas cadastrados na sua esteira de CRM do cicloCRED. Ideal para importar no Google Sheets, Excel ou realizar backups de segurança periódicos.
+                </p>
+                <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={handleExportLeadsCSV}
+                    className="flex items-center gap-2 px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black font-mono text-xs rounded-xl border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition cursor-pointer"
+                  >
+                    <Download className="w-4 h-4 shrink-0 stroke-[2.5]" />
+                    <span>Baixar Planilha Completa (.csv)</span>
+                  </button>
+                  {selectedLeadIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleBulkExportSelected}
+                      className="flex items-center gap-2 px-4 py-3 bg-zinc-900 hover:bg-zinc-950 text-white font-black font-mono text-xs rounded-xl border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition cursor-pointer"
+                    >
+                      <CheckCircle className="w-4 h-4 shrink-0 text-emerald-400 stroke-[2.5]" />
+                      <span>Baixar Selecionados ({selectedLeadIds.length}) (.csv)</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {importerTab === 'simulation' && (
+              <div className="space-y-5 animate-scaleIn">
+                {/* Visual Tutorial Box explains the exact purpose clearly */}
+                <div className="bg-gradient-to-r from-indigo-50 to-zinc-50 border-2 border-indigo-400 p-4 rounded-xl text-xs text-zinc-800 font-sans space-y-1.5 shadow-[2px_2px_0px_0px_rgba(99,102,241,0.1)]">
+                  <p className="font-mono font-black uppercase text-[10.5px] text-indigo-950 flex items-center gap-1.5">
+                    💡 O QUE É O GATEWAY DE PORTABILIDADE DE SIMULAÇÕES?
+                  </p>
+                  <p className="font-bold text-[11px] leading-relaxed text-zinc-600">
+                    Trabalhar com faturas ou PDFs da Caixa/Cury exige copiar e colar dezenas de campos manualmente. Com este Gateway, você <strong>arrasta um PDF ou Excel de simulação residencial</strong> emitido no banco e o sistema lê instantaneamente a Renda Bruta do cliente, o Valor de Compra e Contato. Em segundos, ele <strong>cria o Lead correspondente</strong> no CRM cicloCRED, poupando tempo na análise de crédito imediato!
+                  </p>
+                  <div className="p-2 bg-indigo-100/30 rounded border border-indigo-200 text-[10px] text-indigo-850 font-bold italic font-mono flex items-center gap-1">
+                    👉 Dica Operacional: Clique em qualquer um dos botões de exemplo rápido ("MCMV_Carmo.pdf", "Guarulhos.xlsx", etc.) para simular o processo em tempo real!
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                   
                   {/* Drag n Drop Upload Area for Simu files */}
@@ -1675,135 +1718,38 @@ export default function LeadList({
                 <p>Importação de Leads concluída! Os contatos foram inseridos como "Novos" na carteira do CRM.</p>
               </div>
             )}
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Query search input */}
-          <div className="relative">
-            <Search className="absolute left-3.5 top-3.5 w-4 h-4 text-zinc-500" />
-            <input
-              type="text"
-              id="lead-list-search"
-              placeholder="Pesquisar por nome, empresa, e-mail..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl pl-10 pr-4 py-2.5 text-sm text-zinc-900 focus:outline-none focus:bg-white font-bold placeholder-zinc-500"
-            />
-          </div>
-
-          {/* Status selector */}
-          <div>
-            <select
-              id="lead-list-filter-status"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl px-4 py-2.5 text-sm text-zinc-800 font-extrabold focus:outline-none"
-            >
-              <option value="todos">Filtrar por Status (Todos)</option>
-              {dynCols.map(col => (
-                <option key={col.id} value={col.id}>{col.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Origin selector */}
-          <div>
-            <select
-              id="lead-list-filter-origin"
-              value={originFilter}
-              onChange={(e) => setOriginFilter(e.target.value)}
-              className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl px-4 py-2.5 text-sm text-zinc-800 font-extrabold focus:outline-none"
-            >
-              <option value="todos">Filtrar por Origem (Todas)</option>
-              {origins.map(origin => (
-                <option key={origin} value={origin}>{origin}</option>
-              ))}
-            </select>
-          </div>
         </div>
+      )}
 
-        {/* Advanced Filters: Gender and Initial Letters */}
-        <div className="bg-zinc-50 border-2 border-zinc-950 p-4 rounded-xl space-y-3 shadow-inner">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-black uppercase tracking-wider text-zinc-700 font-mono">Filtro de Gênero:</span>
-              <div className="flex gap-1">
-                {(['todos', 'homens', 'mulheres'] as const).map(g => (
-                  <button
-                    key={g}
-                    type="button"
-                    onClick={() => setGenderFilter(g)}
-                    className={`px-3 py-1 text-[10px] font-black uppercase rounded-lg border-2 transition ${
-                      genderFilter === g
-                        ? 'bg-zinc-950 text-white border-zinc-950 shadow-sm'
-                        : 'bg-white text-zinc-650 border-zinc-200 hover:bg-zinc-100'
-                    }`}
-                  >
-                    {g === 'todos' ? 'Todos' : g === 'homens' ? 'Homens ♂' : 'Mulheres ♀'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-black uppercase tracking-wider text-zinc-700 font-mono">Letra Inicial:</span>
-              <select
-                value={initialLetterFilter}
-                onChange={(e) => setInitialLetterFilter(e.target.value)}
-                className="bg-white text-zinc-900 border-2 border-zinc-950 px-3 py-1 rounded-lg text-xs font-extrabold outline-none"
-              >
-                <option value="todos">Todas as Letras</option>
-                {Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)).map(l => (
-                  <option key={l} value={l}>{l}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Quick Letter Keycap Strip */}
-          <div className="flex flex-wrap gap-1 pt-1.5 border-t border-zinc-200 justify-start select-none">
-            <button
-              onClick={() => setInitialLetterFilter('todos')}
-              className={`px-1.5 py-1 text-[9px] font-black uppercase rounded border transition ${
-                initialLetterFilter === 'todos'
-                  ? 'bg-zinc-900 text-white border-zinc-900 shadow-sm'
-                  : 'bg-white text-zinc-600 border-zinc-250 hover:bg-zinc-100'
-              }`}
-            >
-              Todos
-            </button>
-            {Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)).map(letter => (
-              <button
-                key={letter}
-                onClick={() => setInitialLetterFilter(letter)}
-                className={`w-6 h-6 flex items-center justify-center text-[10px] font-mono font-black uppercase rounded border transition active:scale-90 ${
-                  initialLetterFilter === letter
-                    ? 'bg-zinc-900 text-white border-zinc-900 shadow'
-                    : 'bg-white text-zinc-600 border-zinc-250 hover:bg-zinc-100'
-                }`}
-              >
-                {letter}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Bulk actions Floating Toolbar */}
+      {/* Single Bulk Actions & Selection Toolbar */}
       {selectedLeadIds.length > 0 && (
-        <div className="bg-indigo-50 border-4 border-zinc-950 p-4 rounded-2xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-scaleIn font-mono text-xs">
-          <div className="flex items-center gap-2">
-            <span className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-600"></span>
-            </span>
-            <span className="font-black text-indigo-950 uppercase text-[10.5px]">
-              ⚡ Ações em massa: <span className="underline font-mono font-black">{selectedLeadIds.length}</span> selecionados
-            </span>
+        <div className="bg-indigo-50 border-4 border-zinc-950 p-4 rounded-xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-scaleIn font-mono text-xs mb-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-600"></span>
+              </span>
+              <span className="font-extrabold text-indigo-950 uppercase text-[11px]">
+                {selectedLeadIds.length} selecionados
+              </span>
+            </div>
+
+            {selectedLeadIds.length < processedLeads.length && (
+              <button
+                type="button"
+                onClick={() => setSelectedLeadIds(processedLeads.map(l => l.id))}
+                className="px-2.5 py-1 bg-white hover:bg-zinc-100 text-zinc-900 font-bold border-2 border-zinc-950 rounded-lg text-[9px] uppercase shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] cursor-pointer transition-all"
+              >
+                Selecionar todos os {processedLeads.length} leads
+              </button>
+            )}
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-[10px] font-black uppercase text-white">
-            <span className="text-zinc-600 font-bold font-sans normal-case">Mover Funil:</span>
+
+          <div className="flex flex-wrap items-center gap-2 text-[10px]">
+            <span className="text-zinc-600 font-bold font-sans">Ações:</span>
+            
+            {/* Status Select Option */}
             <select
               onChange={(e) => {
                 if (e.target.value) {
@@ -1811,65 +1757,50 @@ export default function LeadList({
                   e.target.value = '';
                 }
               }}
-              className="bg-white text-zinc-950 border-2 border-zinc-950 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase cursor-pointer focus:outline-none"
+              className="bg-white text-zinc-950 border-2 border-zinc-950 px-2 py-1 rounded-lg text-[9px] font-black uppercase cursor-pointer focus:outline-none"
             >
-              <option value="">-- Escolher --</option>
+              <option value="">-- Editar Status --</option>
               {dynCols.map(col => (
                 <option key={col.id} value={col.id}>{col.label}</option>
               ))}
             </select>
 
+            {/* Criar Fila Action */}
             <button
               onClick={() => {
                 setShowCampaignModal(true);
-                setCustomCampaignText('Olá {{nome}}, verificamos o seu interesse em simulação bancária no valor aproximado de {{valor}}. Entre em contato no WhatsApp para enviarmos sua ficha de simulação!');
+                setCustomCampaignText('Olá {{nome}}, verificamos o seu interesse em simulação bancária no valor aproximado de R$ {{valor}}. Entre em contato no WhatsApp para enviarmos sua ficha de simulação!');
               }}
-              className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-zinc-950 border-2 border-zinc-950 rounded-lg shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] flex items-center gap-1 transition-all hover:scale-[1.03] active:scale-95 text-[10px]"
+              className="px-2.5 py-1.5 bg-amber-400 hover:bg-amber-500 text-zinc-950 border-2 border-zinc-950 rounded-lg shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] flex items-center gap-1 transition-all hover:scale-[1.02] active:scale-95 font-bold cursor-pointer"
             >
-              <Zap className="w-3.5 h-3.5 fill-current text-zinc-950" />
-              <span>🚀 Campanhas / Roteiros</span>
+              <Zap className="w-3 h-3 fill-current text-zinc-950" />
+              <span>Criar Fila</span>
             </button>
 
+            {/* Exportar Leads Action */}
             <button
               onClick={handleBulkExportSelected}
-              className="px-2.5 py-1.5 bg-zinc-900 hover:bg-zinc-950 text-white border-2 border-zinc-950 rounded-lg shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition"
+              className="px-2.5 py-1.5 bg-zinc-900 hover:bg-zinc-950 text-white border-2 border-zinc-950 rounded-lg shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition font-bold cursor-pointer"
             >
-              📥 Exportar
+              Exportar Leads
             </button>
 
+            {/* Excluir Leads Action */}
             <button
               onClick={handleBulkDelete}
-              className="px-2.5 py-1.5 bg-red-600 hover:bg-red-700 text-white border-2 border-zinc-950 rounded-lg shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition"
+              className="px-2.5 py-1.5 bg-red-600 hover:bg-red-700 text-white border-2 border-zinc-950 rounded-lg shadow-[1px_1px_0px_0px_rgba(185,28,28,1)] transition font-bold cursor-pointer"
             >
-              🗑️ Excluir
+              Excluir Leads
             </button>
 
+            {/* Limpar Action */}
             <button
               onClick={() => setSelectedLeadIds([])}
-              className="px-2.5 py-1.5 bg-white hover:bg-zinc-100 text-zinc-800 border-2 border-zinc-350 rounded-lg shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] font-bold transition"
+              className="px-2.5 py-1.5 bg-white hover:bg-zinc-100 text-zinc-800 border-2 border-zinc-350 rounded-lg shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] font-bold transition cursor-pointer"
             >
               Limpar ✕
             </button>
           </div>
-        </div>
-      )}
-
-      {/* Gmail-style Master Selection Banner */}
-      {selectedLeadIds.length > 0 && selectedLeadIds.length < processedLeads.length && (
-        <div className="mb-4 bg-amber-50 border-4 border-zinc-950 p-3.5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 text-zinc-950 font-mono shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] text-[11px] animate-scaleIn">
-          <div className="flex items-center gap-2">
-            <Info className="w-4 h-4 text-amber-600 shrink-0" />
-            <span>
-              Você selecionou <strong>{selectedLeadIds.length} leads</strong> visíveis. Deseja selecionar todos os <strong>{processedLeads.length} leads</strong> que atendem aos filtros atuais?
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setSelectedLeadIds(processedLeads.map(l => l.id))}
-            className="p-1.5 px-3 bg-zinc-90 w-full sm:w-auto bg-zinc-900 border-2 border-zinc-950 text-white font-black rounded-lg hover:bg-zinc-950 transition uppercase text-[9px] shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] cursor-pointer"
-          >
-            Selecionar todos os {processedLeads.length} leads
-          </button>
         </div>
       )}
 

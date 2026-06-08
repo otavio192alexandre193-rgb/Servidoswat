@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Calculator, 
   DollarSign, 
@@ -2110,137 +2111,140 @@ Simulado via cicloCRED CRM Inteligente em ${new Date().toLocaleDateString('pt-BR
       {/* ========================================================================= */}
       {/* COMPONENTE EXCLUSIVO IMPRESSÃO NATIVA DO BROWSER (A4 ORIGINAL EM window.print) */}
       {/* ========================================================================= */}
-      <div id="print-sheet-ciclocred" className="hidden print:block absolute top-0 left-0 text-black bg-white select-none pointer-events-none p-4 font-sans w-[21cm] min-h-[29.7cm] text-[10.5px] leading-tight space-y-3">
-        
-        {/* Header */}
-        <div className="flex justify-between items-start border-b-2 border-zinc-900 pb-2">
-          <div>
-            <h1 className="text-base font-black uppercase text-zinc-950">SIMULAÇÃO CRÉDITO HABITACIONAL OFICIAL</h1>
-            <p className="text-[8px] text-zinc-500 font-mono font-bold uppercase">VIA DE ARQUIVO REGULAMENTAR • QUALIFICAÇÃO INTEGRANTE MCMV & FLUXO</p>
+      {createPortal(
+        <div id="print-sheet-ciclocred" className="hidden print:block absolute top-0 left-0 text-black bg-white select-none pointer-events-none p-4 font-sans w-[21cm] min-h-[29.7cm] text-[10.5px] leading-tight space-y-3">
+          
+          {/* Header */}
+          <div className="flex justify-between items-start border-b-2 border-zinc-900 pb-2">
+            <div>
+              <h1 className="text-base font-black uppercase text-zinc-950">SIMULAÇÃO CRÉDITO HABITACIONAL OFICIAL</h1>
+              <p className="text-[8px] text-zinc-500 font-mono font-bold uppercase">VIA DE ARQUIVO REGULAMENTAR • QUALIFICAÇÃO INTEGRANTE MCMV & FLUXO</p>
+            </div>
+            <div className="text-right text-[8px] font-mono font-bold text-zinc-650">
+              <p>Ficha: <span className="text-zinc-950 font-black">SIM-2026-{activeSim === 'financing' ? 'MCMV' : 'INC'}-{Math.floor(100000 + Math.random() * 900000)}</span></p>
+              <p>Abertura: <span className="text-zinc-950 font-black">{new Date().toLocaleString('pt-BR')}</span></p>
+            </div>
           </div>
-          <div className="text-right text-[8px] font-mono font-bold text-zinc-650">
-            <p>Ficha: <span className="text-zinc-950 font-black">SIM-2026-{activeSim === 'financing' ? 'MCMV' : 'INC'}-{Math.floor(100000 + Math.random() * 900000)}</span></p>
-            <p>Abertura: <span className="text-zinc-950 font-black">{new Date().toLocaleString('pt-BR')}</span></p>
-          </div>
-        </div>
 
 
-            {/* 1. Profile */}
-            <div className="space-y-1">
-              <h4 className="text-[9px] font-bold uppercase bg-zinc-100 p-0.5 rounded font-mono text-indigo-950">1. Identificação Geral do Cliente e Proponente</h4>
-              <div className="grid grid-cols-3 gap-1 p-1.5 border border-zinc-200 rounded text-[9px]">
-                <div>Cliente: <strong>{clientCustomName || 'Cliente Avulso'}</strong></div>
-                <div>Renda Declarada: <strong>R$ {(professionType === 'CLT' ? cltIncome : autonomoIncome).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div>
-                <div>Tipo Profissional: <strong>{professionType}</strong></div>
-                <div>Estado Civil: <strong>{isMarried ? 'Casado' : 'Solteiro'}</strong></div>
-                <div>Renda Cônjuge: <strong>R$ {isMarried ? spouseIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}</strong></div>
-                <div>Dependentes: <strong>{dependentsQty}</strong></div>
-                <div>Tempo FGTS (3+ anos): <strong>{hasFGTS ? '✓ Sim' : 'Não'}</strong></div>
-                <div>Idade: <strong>{applicantAge} anos</strong></div>
-                <div>RENDA INTEGRADA: <strong>R$ {grossIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div>
+              {/* 1. Profile */}
+              <div className="space-y-1">
+                <h4 className="text-[9px] font-bold uppercase bg-zinc-100 p-0.5 rounded font-mono text-indigo-950">1. Identificação Geral do Cliente e Proponente</h4>
+                <div className="grid grid-cols-3 gap-1 p-1.5 border border-zinc-200 rounded text-[9px]">
+                  <div>Cliente: <strong>{clientCustomName || 'Cliente Avulso'}</strong></div>
+                  <div>Renda Declarada: <strong>R$ {(professionType === 'CLT' ? cltIncome : autonomoIncome).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div>
+                  <div>Tipo Profissional: <strong>{professionType}</strong></div>
+                  <div>Estado Civil: <strong>{isMarried ? 'Casado' : 'Solteiro'}</strong></div>
+                  <div>Renda Cônjuge: <strong>R$ {isMarried ? spouseIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}</strong></div>
+                  <div>Dependentes: <strong>{dependentsQty}</strong></div>
+                  <div>Tempo FGTS (3+ anos): <strong>{hasFGTS ? '✓ Sim' : 'Não'}</strong></div>
+                  <div>Idade: <strong>{applicantAge} anos</strong></div>
+                  <div>RENDA INTEGRADA: <strong>R$ {grossIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div>
+                </div>
               </div>
-            </div>
 
-            {/* 2. Documents */}
-            <div className="space-y-0.5">
-              <h4 className="text-[9px] font-bold uppercase bg-zinc-100 p-0.5 rounded font-mono text-indigo-950">2. Documental de Dossiê Físico</h4>
-              <table className="w-full text-left text-[8.5px] border border-zinc-200 rounded">
-                <tbody className="divide-y divide-zinc-200">
-                  <tr>
-                    <td className="p-1 pl-2 font-bold">Documentos CPF e RG / CNH</td>
-                    <td className="p-1 text-right">{docCpfCnh ? '[✓] ENQUADRADO' : '[ ] PENDENTE'}</td>
-                  </tr>
-                  <tr>
-                    <td className="p-1 pl-2 font-bold">Comprovante de residência (&lt; 90 dias)</td>
-                    <td className="p-1 text-right">{docEndereco ? '[✓] ENQUADRADO' : '[ ] PENDENTE'}</td>
-                  </tr>
-                  <tr>
-                    <td className="p-1 pl-2 font-bold">Comprovantes de renda oficiais (Holerite/CTPS)</td>
-                    <td className="p-1 text-right">{docRenda ? '[✓] ENQUADRADO' : '[ ] PENDENTE'}</td>
-                  </tr>
-                  <tr>
-                    <td className="p-1 pl-2 font-bold">Extratos bancários consolidados com carimbos</td>
-                    <td className="p-1 text-right">{docExtratos ? '[✓] ENQUADRADO' : '[ ] PENDENTE'}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+              {/* 2. Documents */}
+              <div className="space-y-0.5">
+                <h4 className="text-[9px] font-bold uppercase bg-zinc-100 p-0.5 rounded font-mono text-indigo-950">2. Documental de Dossiê Físico</h4>
+                <table className="w-full text-left text-[8.5px] border border-zinc-200 rounded">
+                  <tbody className="divide-y divide-zinc-200">
+                    <tr>
+                      <td className="p-1 pl-2 font-bold">Documentos CPF e RG / CNH</td>
+                      <td className="p-1 text-right">{docCpfCnh ? '[✓] ENQUADRADO' : '[ ] PENDENTE'}</td>
+                    </tr>
+                    <tr>
+                      <td className="p-1 pl-2 font-bold">Comprovantes de residência (&lt; 90 dias)</td>
+                      <td className="p-1 text-right">{docEndereco ? '[✓] ENQUADRADO' : '[ ] PENDENTE'}</td>
+                    </tr>
+                    <tr>
+                      <td className="p-1 pl-2 font-bold">Comprovantes de renda oficiais (Holerite/CTPS)</td>
+                      <td className="p-1 text-right">{docRenda ? '[✓] ENQUADRADO' : '[ ] PENDENTE'}</td>
+                    </tr>
+                    <tr>
+                      <td className="p-1 pl-2 font-bold">Extratos bancários consolidados com carimbos</td>
+                      <td className="p-1 text-right">{docExtratos ? '[✓] ENQUADRADO' : '[ ] PENDENTE'}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
 
-            {/* 3. Financing results */}
-            <div className="space-y-0.5">
-              <h4 className="text-[9px] font-bold uppercase bg-zinc-100 p-0.5 rounded font-mono text-indigo-950">3. Resultado Habitacional Caixa</h4>
-              <table className="w-full text-left font-mono text-[8.5px] border border-zinc-200 rounded">
-                <tbody className="divide-y divide-zinc-200">
-                  <tr>
-                    <td className="p-1 pl-2">Faixa MCMV</td>
-                    <td className="p-1 font-bold">{mcmvBracketName}</td>
-                    <td className="p-1">Tabela de Amortização</td>
-                    <td className="p-1 font-bold">{amortizationSystem}</td>
-                  </tr>
-                  <tr>
-                    <td className="p-1 pl-2">Avaliado (R$)</td>
-                    <td className="p-1 font-bold">R$ {simulatedPropertyPrice.toLocaleString('pt-BR')}</td>
-                    <td className="p-1">Taxa Juros Nominal</td>
-                    <td className="p-1 font-bold">{applicableInterestRate}% a.a.</td>
-                  </tr>
-                  <tr>
-                    <td className="p-1 pl-2 text-emerald-800">Subsídio Caixa (Desconto)</td>
-                    <td className="p-1 font-bold text-emerald-700">R$ {calculatedSubsidy.toLocaleString('pt-BR')}</td>
-                    <td className="p-1">Prazo Contratado</td>
-                    <td className="p-1 font-bold">{loanMonths} meses</td>
-                  </tr>
-                  <tr className="bg-zinc-100 font-bold">
-                    <td className="p-1.5 pl-2 text-indigo-900">APROVADO CAIXA CEF</td>
-                    <td className="p-1.5 text-indigo-900 font-bold">R$ {financedAmount.toLocaleString('pt-BR')}</td>
-                    <td className="p-1.5 text-zinc-900">ENTRADA REQUERIDA</td>
-                    <td className="p-1.5 text-indigo-950 font-bold">R$ {requiredDownpayment.toLocaleString('pt-BR')}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+              {/* 3. Financing results */}
+              <div className="space-y-0.5">
+                <h4 className="text-[9px] font-bold uppercase bg-zinc-100 p-0.5 rounded font-mono text-indigo-950">3. Resultado Habitacional Caixa</h4>
+                <table className="w-full text-left font-mono text-[8.5px] border border-zinc-200 rounded">
+                  <tbody className="divide-y divide-zinc-200">
+                    <tr>
+                      <td className="p-1 pl-2">Faixa MCMV</td>
+                      <td className="p-1 font-bold">{mcmvBracketName}</td>
+                      <td className="p-1">Tabela de Amortização</td>
+                      <td className="p-1 font-bold">{amortizationSystem}</td>
+                    </tr>
+                    <tr>
+                      <td className="p-1 pl-2">Avaliado (R$)</td>
+                      <td className="p-1 font-bold">R$ {simulatedPropertyPrice.toLocaleString('pt-BR')}</td>
+                      <td className="p-1">Taxa Juros Nominal</td>
+                      <td className="p-1 font-bold">{applicableInterestRate}% a.a.</td>
+                    </tr>
+                    <tr>
+                      <td className="p-1 pl-2 text-emerald-800">Subsídio Caixa (Desconto)</td>
+                      <td className="p-1 font-bold text-emerald-700">R$ {calculatedSubsidy.toLocaleString('pt-BR')}</td>
+                      <td className="p-1">Prazo Contratado</td>
+                      <td className="p-1 font-bold">{loanMonths} meses</td>
+                    </tr>
+                    <tr className="bg-zinc-100 font-bold">
+                      <td className="p-1.5 pl-2 text-indigo-900">APROVADO CAIXA CEF</td>
+                      <td className="p-1.5 text-indigo-900 font-bold">R$ {financedAmount.toLocaleString('pt-BR')}</td>
+                      <td className="p-1.5 text-zinc-900">ENTRADA REQUERIDA</td>
+                      <td className="p-1.5 text-indigo-950 font-bold">R$ {requiredDownpayment.toLocaleString('pt-BR')}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
 
-            {/* 4. Installment plan */}
-            <div className="space-y-0.5">
-              <h4 className="text-[9px] font-bold uppercase bg-zinc-100 p-0.5 rounded font-mono text-indigo-950">4. Cronograma de Entrada Facilitada (Construtora)</h4>
-              <table className="w-full text-left font-mono text-[8.5px] border border-zinc-200 rounded">
-                <tbody className="divide-y divide-zinc-200">
-                  <tr>
-                    <td className="p-1 pl-2">Sinal de Ato (Imediato)</td>
-                    <td className="p-1 text-right pr-2">R$ {valorAto.toLocaleString('pt-BR')}</td>
-                  </tr>
-                  <tr>
-                    <td className="p-1 pl-2">Intermediárias Balões Anuais</td>
-                    <td className="p-1 text-right pr-2">2x de R$ {valorAnual.toLocaleString('pt-BR')} (Total R$ {(valorAnual*2).toLocaleString('pt-BR')})</td>
-                  </tr>
-                  <tr>
-                    <td className="p-1 pl-2">Parcela de Chaves</td>
-                    <td className="p-1 text-right pr-2">R$ {valorChaves.toLocaleString('pt-BR')}</td>
-                  </tr>
-                  {(() => {
-                    const totalFac = valorAto + (2 * valorAnual) + valorChaves;
-                    const difRestante = Math.max(0, requiredDownpayment - totalFac);
-                    const valMensalObra = tempoObra > 0 ? (difRestante / tempoObra) : 0;
-                    return (
-                      <>
-                        <tr className="bg-zinc-50">
-                          <td className="p-1 pl-2 text-indigo-900">Saldo Restante na Obra</td>
-                          <td className="p-1 text-right pr-2 text-indigo-900">R$ {difRestante.toLocaleString('pt-BR')}</td>
-                        </tr>
-                        <tr className="bg-indigo-50 font-black">
-                          <td className="p-1.5 pl-2 text-indigo-955">🧱 Mensalidade Período Obra</td>
-                          <td className="p-1.5 text-right pr-2 font-black text-indigo-900">
-                            {tempoObra} parcelas mensais de R$ {Math.round(valMensalObra).toLocaleString('pt-BR')} /mês
-                          </td>
-                        </tr>
-                      </>
-                    );
-                  })()}
-                </tbody>
-              </table>
-            </div>
+              {/* 4. Installment plan */}
+              <div className="space-y-0.5">
+                <h4 className="text-[9px] font-bold uppercase bg-zinc-100 p-0.5 rounded font-mono text-indigo-950">4. Cronograma de Entrada Facilitada (Construtora)</h4>
+                <table className="w-full text-left font-mono text-[8.5px] border border-zinc-200 rounded">
+                  <tbody className="divide-y divide-zinc-200">
+                    <tr>
+                      <td className="p-1 pl-2">Sinal de Ato (Imediato)</td>
+                      <td className="p-1 text-right pr-2">R$ {valorAto.toLocaleString('pt-BR')}</td>
+                    </tr>
+                    <tr>
+                      <td className="p-1 pl-2">Intermediárias Balões Anuais</td>
+                      <td className="p-1 text-right pr-2">2x de R$ {valorAnual.toLocaleString('pt-BR')} (Total R$ {(valorAnual*2).toLocaleString('pt-BR')})</td>
+                    </tr>
+                    <tr>
+                      <td className="p-1 pl-2">Parcela de Chaves</td>
+                      <td className="p-1 text-right pr-2">R$ {valorChaves.toLocaleString('pt-BR')}</td>
+                    </tr>
+                    {(() => {
+                      const totalFac = valorAto + (2 * valorAnual) + valorChaves;
+                      const difRestante = Math.max(0, requiredDownpayment - totalFac);
+                      const valMensalObra = tempoObra > 0 ? (difRestante / tempoObra) : 0;
+                      return (
+                        <>
+                          <tr className="bg-zinc-50">
+                            <td className="p-1 pl-2 text-indigo-900">Saldo Restante na Obra</td>
+                            <td className="p-1 text-right pr-2 text-indigo-900">R$ {difRestante.toLocaleString('pt-BR')}</td>
+                          </tr>
+                          <tr className="bg-indigo-50 font-black">
+                            <td className="p-1.5 pl-2 text-indigo-955">🧱 Mensalidade Período Obra</td>
+                            <td className="p-1.5 text-right pr-2 font-black text-indigo-900">
+                              {tempoObra} parcelas mensais de R$ {Math.round(valMensalObra).toLocaleString('pt-BR')} /mês
+                            </td>
+                          </tr>
+                        </>
+                      );
+                    })()}
+                  </tbody>
+                </table>
+              </div>
 
 
-      </div>
+          </div>,
+          document.body
+        )}
     </>
   );
 }

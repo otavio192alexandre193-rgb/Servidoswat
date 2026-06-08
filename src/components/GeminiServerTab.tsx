@@ -29,6 +29,10 @@ interface AIConfig {
   whatsapp_enabled: boolean;
   leads_auto_creation_enabled: boolean;
   autoresponder_url?: string;
+  response_mode?: 'ai' | 'hybrid' | 'manual';
+  company_name?: string;
+  system_name?: string;
+  answer_length?: 'short' | 'medium' | 'long';
 }
 
 interface WebhookLog {
@@ -38,7 +42,7 @@ interface WebhookLog {
   sender: string;
   message: string;
   reply: string;
-  status: 'sucesso' | 'erro';
+  status: 'sucesso' | 'erro' | 'manual_intercepted';
   model_used: string;
   latency_ms: number;
   error_message?: string;
@@ -48,12 +52,18 @@ interface GeminiServerTabProps {
   accSettings?: AccessibilitySettings;
   awardXP?: (amount: number, reason: string) => void;
   addNotification?: (title: string, message: string, type: 'info' | 'success' | 'warning' | 'alarm' | 'ai') => void;
+  leads?: any[];
+  setLeads?: React.Dispatch<React.SetStateAction<any[]>>;
+  templates?: any[];
 }
 
 export default function GeminiServerTab({ 
   accSettings,
   awardXP,
-  addNotification
+  addNotification,
+  leads = [],
+  setLeads,
+  templates = []
 }: GeminiServerTabProps) {
   // Config state
   const [config, setConfig] = useState<AIConfig>({
@@ -64,6 +74,10 @@ export default function GeminiServerTab({
     whatsapp_enabled: true,
     leads_auto_creation_enabled: true,
     autoresponder_url: '',
+    response_mode: 'hybrid',
+    company_name: 'cicloCRED',
+    system_name: 'CRM',
+    answer_length: 'short',
   });
 
   const [isLoadingConfig, setIsLoadingConfig] = useState(true);
@@ -92,10 +106,139 @@ export default function GeminiServerTab({
   const [testDirectResult, setTestDirectResult] = useState<any>(null);
 
   // Live Chat and WhatsApp Conversation states
-  const [activeRightPanelTab, setActiveRightPanelTab] = useState<'playground' | 'whatsapp_conversations'>('whatsapp_conversations');
+  const [activeRightPanelTab, setActiveRightPanelTab] = useState<'chatbot' | 'whatsapp_conversations' | 'playground'>('chatbot');
   const [selectedChatPhone, setSelectedChatPhone] = useState<string>('');
   const [customReplyText, setCustomReplyText] = useState<string>('');
   const [isSendingCustom, setIsSendingCustom] = useState<boolean>(false);
+
+  // Interactive Chatbot State
+  const [chatBotMessages, setChatBotMessages] = useState<Array<{ sender: 'user' | 'ai'; text: string; timestamp: string }>>([
+    {
+      sender: 'ai',
+      text: 'Olá! Sou o seu Assistente AI cicloCRED calibrado. Como posso te auxiliar nos testes de simulações, captações ou triagem operúrgica de crédito?',
+      timestamp: new Date().toLocaleTimeString('pt-BR')
+    }
+  ]);
+  const [typedChatBotMessage, setTypedChatBotMessage] = useState('');
+  const [isBotResponding, setIsBotResponding] = useState(false);
+
+  const handleSendChatBotMessage = async (textToSend: string) => {
+    const trimmed = textToSend.trim();
+    if (!trimmed) return;
+    if (triggerSensoryFeedback && accSettings) {
+      triggerSensoryFeedback('click', accSettings);
+    }
+    setTypedChatBotMessage('');
+    
+    // Add User Message
+    const userMsg = { sender: 'user' as const, text: trimmed, timestamp: new Date().toLocaleTimeString('pt-BR') };
+    setChatBotMessages(prev => [...prev, userMsg]);
+    setIsBotResponding(true);
+
+    // Auto scroll
+    setTimeout(() => {
+      const el = document.getElementById('chatbot-chat-viewport');
+      if (el) el.scrollTop = el.scrollHeight;
+    }, 50);
+
+    try {
+      const res = await fetch('/api/server/test-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: trimmed,
+          custom_prompt: config.system_instruction,
+          model_name: config.model_name,
+          temperature: config.temperature
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setChatBotMessages(prev => [...prev, {
+          sender: 'ai' as const,
+          text: data.reply || 'Desculpe, não consegui obter uma resposta válida do motor Gemini.',
+          timestamp: new Date().toLocaleTimeString('pt-BR')
+        }]);
+        if (awardXP) {
+          awardXP(15, 'Interagiu com o Chatbot do Assistente AI!');
+        }
+        if (addNotification) {
+          addNotification('Assistente AI Respondeu', 'Feedback de inteligência cognitiva processado pelo servidor com sucesso.', 'ai');
+        }
+        if (triggerSensoryFeedback && accSettings) {
+          triggerSensoryFeedback('complete', accSettings);
+        }
+      } else {
+        const errData = await res.json();
+        setChatBotMessages(prev => [...prev, {
+          sender: 'ai' as const,
+          text: `⚠️ Erro no servidor: ${errData.error || 'Não foi possível completar a chamada.'}`,
+          timestamp: new Date().toLocaleTimeString('pt-BR')
+        }]);
+        if (triggerSensoryFeedback && accSettings) {
+          triggerSensoryFeedback('warning', accSettings);
+        }
+      }
+    } catch (e: any) {
+      setChatBotMessages(prev => [...prev, {
+        sender: 'ai' as const,
+        text: `⚠️ Erro de rede: ${e.message}`,
+        timestamp: new Date().toLocaleTimeString('pt-BR')
+      }]);
+      if (triggerSensoryFeedback && accSettings) {
+        triggerSensoryFeedback('warning', accSettings);
+      }
+    } finally {
+      setIsBotResponding(false);
+      setTimeout(() => {
+        const el = document.getElementById('chatbot-chat-viewport');
+        if (el) el.scrollTop = el.scrollHeight;
+      }, 50);
+    }
+  };
+
+  const selectedLead = React.useMemo(() => {
+    if (!selectedChatPhone) return null;
+    const cleanSelPhone = selectedChatPhone.replace(/\D/g, "");
+    return leads.find((l: any) => {
+      const leadPhone = l.phone ? String(l.phone).replace(/\D/g, "") : "";
+      return leadPhone === cleanSelPhone || 
+             (leadPhone.length >= 8 && cleanSelPhone.endsWith(leadPhone)) || 
+             (cleanSelPhone.length >= 8 && leadPhone.endsWith(cleanSelPhone));
+    });
+  }, [leads, selectedChatPhone]);
+
+  const handleToggleLeadMute = async () => {
+    if (!selectedLead || !setLeads) return;
+    triggerSensoryFeedback('click', accSettings);
+    const newMuteStatus = !selectedLead.ai_muted;
+    
+    // Optimistic frontend update
+    setLeads(prevLeads => prevLeads.map((l: any) => {
+      if (l.id === selectedLead.id) {
+        return { ...l, ai_muted: newMuteStatus };
+      }
+      return l;
+    }));
+
+    try {
+      await fetch(`/api/server/leads/${selectedLead.id}/toggle-ai-mute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ai_muted: newMuteStatus })
+      });
+      if (addNotification) {
+        addNotification(
+          newMuteStatus ? 'Assistente Silenciado' : 'Assistente Ativo',
+          `Auto-respostas da IA silenciadas para o lead ${selectedLead.name}.`,
+          'info'
+        );
+      }
+    } catch (err) {
+      console.error("Erro ao sincronizar silenciador de contato:", err);
+    }
+  };
 
   // Logs state
   const [logs, setLogs] = useState<WebhookLog[]>([]);
@@ -513,6 +656,30 @@ export default function GeminiServerTab({
     }
   };
 
+  const handleApplyTemplate = (templateBody: string) => {
+    triggerSensoryFeedback('click', accSettings);
+    let filledText = templateBody;
+    
+    if (selectedLead) {
+      filledText = filledText
+        .replace(/\{\{nome\}\}/gi, selectedLead.name || '')
+        .replace(/\{\{empresa\}\}/gi, config.company_name || 'nossa empresa')
+        .replace(/\{\{origem\}\}/gi, selectedLead.origin || 'WhatsApp')
+        .replace(/\{\{valor\}\}/gi, selectedLead.value ? `R$ ${selectedLead.value.toLocaleString('pt-BR')}` : 'seu financiamento');
+    } else {
+      filledText = filledText
+        .replace(/\{\{nome\}\}/gi, 'amigo(a)')
+        .replace(/\{\{empresa\}\}/gi, config.company_name || 'nossa empresa')
+        .replace(/\{\{origem\}\}/gi, 'WhatsApp')
+        .replace(/\{\{valor\}\}/gi, 'financiamento');
+    }
+    
+    setCustomReplyText(filledText);
+    if (addNotification) {
+      addNotification("Script Carregado", "O roteiro do workspace foi formatado e colado no campo de digitação.", "success");
+    }
+  };
+
   const copyToClipboard = () => {
     triggerSensoryFeedback('click', accSettings);
     navigator.clipboard.writeText(webhookUrl);
@@ -661,7 +828,7 @@ export default function GeminiServerTab({
             <div className="p-4 bg-zinc-950/30 border-b-2 border-zinc-950 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Settings className="w-4 h-4 text-indigo-400" />
-                <span className="font-mono text-xs font-black uppercase text-zinc-300">Configurações Gerais do Servidor IA</span>
+                <span className="font-mono text-xs font-black uppercase text-zinc-300">Parâmetros de Produção do Assistente AI</span>
               </div>
             </div>
 
@@ -732,22 +899,91 @@ export default function GeminiServerTab({
                     </div>
                   </div>
 
-                  {/* Model Name & Temperature */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t-2 border-zinc-950 pt-6">
-                    <div>
-                      <label className="text-xs font-black text-zinc-300 uppercase tracking-wider block font-mono">Modelo Gemini Recomendado</label>
-                      <select
-                        value={config.model_name}
-                        onChange={(e) => {
-                          triggerSensoryFeedback('click', accSettings);
-                          setConfig(prev => ({ ...prev, model_name: e.target.value }));
-                        }}
-                        className="w-full mt-1.5 p-3 rounded-lg bg-zinc-950 text-white text-xs border-2 border-zinc-950 focus:border-indigo-500 focus:outline-none font-mono"
-                      >
-                        <option value="gemini-3.5-flash">Gemini 3.5 Flash (Veloz / Recomendado)</option>
-                        <option value="gemini-1.5-pro">Gemini 1.5 Pro (Ultra Raciocínio)</option>
-                      </select>
+                    {/* Brand Customization & Neutrality Options */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t-2 border-zinc-950 pt-6">
+                      <div>
+                        <label className="text-xs font-black text-zinc-300 uppercase tracking-wider block font-mono">Identidade da Empresa (Nome da Construtora / Imobiliária)</label>
+                        <input
+                          type="text"
+                          value={config.company_name || ''}
+                          onChange={(e) => {
+                            setConfig(prev => ({ ...prev, company_name: e.target.value }));
+                          }}
+                          placeholder="Ex: Construtora Real, Imobiliária Aliança"
+                          className="w-full mt-1.5 p-3 rounded-lg bg-zinc-950 text-white text-xs border-2 border-zinc-950 focus:border-indigo-500 focus:outline-none font-mono"
+                        />
+                        <p className="text-[9px] text-zinc-400 mt-1">A IA utilizará este nome para se apresentar e rejeitará herança dos termos cicloCRED.</p>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-black text-zinc-300 uppercase tracking-wider block font-mono">Nome da Central ou Sistema de Atendimento</label>
+                        <input
+                          type="text"
+                          value={config.system_name || ''}
+                          onChange={(e) => {
+                            setConfig(prev => ({ ...prev, system_name: e.target.value }));
+                          }}
+                          placeholder="Ex: Central de Vendas, assistente virtual"
+                          className="w-full mt-1.5 p-3 rounded-lg bg-zinc-950 text-white text-xs border-2 border-zinc-950 focus:border-indigo-500 focus:outline-none font-mono"
+                        />
+                        <p className="text-[9px] text-zinc-400 mt-1">Identificação do sistema nas respostas (Ex: Robô do Chat, Atendente Virtual).</p>
+                      </div>
                     </div>
+
+                    {/* Operating Mode & Response Length restrictions */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t-2 border-zinc-950 pt-6">
+                      <div>
+                        <label className="text-xs font-black text-zinc-300 uppercase tracking-wider block font-mono">Modo de Operação (Lógica do Assistente AI)</label>
+                        <select
+                          value={config.response_mode || 'hybrid'}
+                          onChange={(e) => {
+                            triggerSensoryFeedback('click', accSettings);
+                            setConfig(prev => ({ ...prev, response_mode: e.target.value as any }));
+                          }}
+                          className="w-full mt-1.5 p-3 rounded-lg bg-zinc-950 text-white text-xs border-2 border-zinc-950 focus:border-indigo-500 focus:outline-none font-mono"
+                        >
+                          <option value="ai">🤖 IA 100% Automática (Responde tudo via Gemini)</option>
+                          <option value="hybrid">🤝 Híbrido Inteligente (Primeiro busca Scripts do CRM, fallback na IA)</option>
+                          <option value="scripts">⚡ Autônomo via Scripts (Apenas triggers/scripts do CRM, SEM Gemini)</option>
+                          <option value="manual">👤 Manual de Atendimento (Quiet Mode, sem auto-resposta)</option>
+                        </select>
+                        <p className="text-[9px] text-zinc-400 mt-1">Defina Autônomo via Scripts para impedir que a IA (Gemini) intervenha ou gere custos.</p>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-black text-zinc-300 uppercase tracking-wider block font-mono">Restrição de Tamanho da Resposta (Gemini)</label>
+                        <select
+                          value={config.answer_length || 'short'}
+                          onChange={(e) => {
+                            triggerSensoryFeedback('click', accSettings);
+                            setConfig(prev => ({ ...prev, answer_length: e.target.value as any }));
+                          }}
+                          className="w-full mt-1.5 p-3 rounded-lg bg-zinc-950 text-white text-xs border-2 border-zinc-950 focus:border-indigo-500 focus:outline-none font-mono"
+                        >
+                          <option value="short">⚡ Resposta Curta (1 a 2 parágrafos pequenos, ideal para mobile)</option>
+                          <option value="medium">📏 Resposta Média (2 a 3 parágrafos equilibrados)</option>
+                          <option value="long">📖 Resposta Longa/Completa (Até 4 parágrafos bem explicados)</option>
+                        </select>
+                        <p className="text-[9px] text-zinc-400 mt-1">Evita textos excessivamente complexos ou extensos para chats móveis.</p>
+                      </div>
+                    </div>
+
+                    {/* Model Name & Temperature */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t-2 border-zinc-950 pt-6">
+                      <div>
+                        <label className="text-xs font-black text-zinc-300 uppercase tracking-wider block font-mono">Modelo Gemini Recomendado</label>
+                        <select
+                          value={config.model_name}
+                          onChange={(e) => {
+                            triggerSensoryFeedback('click', accSettings);
+                            setConfig(prev => ({ ...prev, model_name: e.target.value }));
+                          }}
+                          className="w-full mt-1.5 p-3 rounded-lg bg-zinc-950 text-white text-xs border-2 border-zinc-950 focus:border-indigo-500 focus:outline-none font-mono"
+                        >
+                          <option value="gemini-3.5-flash">Gemini 3.5 Flash (Veloz / Recomendado)</option>
+                          <option value="gemini-1.5-pro">Gemini 1.5 Pro (Ultra Raciocínio)</option>
+                        </select>
+                      </div>
 
                     <div>
                       <div className="flex justify-between items-center">
@@ -893,6 +1129,19 @@ export default function GeminiServerTab({
             <div className="flex border-b-4 border-zinc-950 bg-zinc-950">
               <button
                 type="button"
+                onClick={() => { triggerSensoryFeedback('click', accSettings); setActiveRightPanelTab('chatbot'); }}
+                className={`flex-1 py-4.5 px-4 text-center text-xs font-black uppercase font-mono tracking-wider transition-all flex items-center justify-center gap-2 border-r-2 border-zinc-850 ${
+                  activeRightPanelTab === 'chatbot'
+                    ? 'bg-zinc-900 text-indigo-400 border-b-4 border-b-indigo-500'
+                    : 'bg-zinc-950 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
+                }`}
+              >
+                <Sparkles className="w-4 h-4 text-indigo-400 animate-pulse" />
+                🤖 Chatbot do Assistente AI
+              </button>
+
+              <button
+                type="button"
                 onClick={() => { triggerSensoryFeedback('click', accSettings); setActiveRightPanelTab('whatsapp_conversations'); }}
                 className={`flex-1 py-4.5 px-4 text-center text-xs font-black uppercase font-mono tracking-wider transition-all flex items-center justify-center gap-2 border-r-2 border-zinc-850 ${
                   activeRightPanelTab === 'whatsapp_conversations'
@@ -901,7 +1150,7 @@ export default function GeminiServerTab({
                 }`}
               >
                 <MessageSquare className="w-4 h-4" />
-                💬 Central de Conversas do WhatsApp
+                💬 Central de Conversas WhatsApp
               </button>
               
               <button
@@ -909,7 +1158,7 @@ export default function GeminiServerTab({
                 onClick={() => { triggerSensoryFeedback('click', accSettings); setActiveRightPanelTab('playground'); }}
                 className={`flex-1 py-4.5 px-4 text-center text-xs font-black uppercase font-mono tracking-wider transition-all flex items-center justify-center gap-2 ${
                   activeRightPanelTab === 'playground'
-                    ? 'bg-zinc-900 text-indigo-400 border-b-4 border-b-indigo-500'
+                    ? 'bg-zinc-900 text-[#4E9F3D] border-b-4 border-b-[#4E9F3D]'
                     : 'bg-zinc-950 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
                 }`}
               >
@@ -917,6 +1166,119 @@ export default function GeminiServerTab({
                 📲 Simulador de Webhook
               </button>
             </div>
+
+            {/* TAB 0: Interactive Chatbot Module */}
+            {activeRightPanelTab === 'chatbot' && (
+              <div className="flex flex-col h-[580px] bg-zinc-950/40">
+                {/* Chat header area */}
+                <div className="p-4 bg-zinc-950 border-b-4 border-zinc-950 flex justify-between items-center select-none shrink-0">
+                  <div className="flex items-center gap-2.5">
+                    <div className="relative">
+                      <div className="w-8 h-8 rounded-full bg-indigo-600 border-2 border-zinc-900 flex items-center justify-center text-white font-extrabold text-sm">
+                        <Sparkles className="w-4 h-4 text-indigo-200 animate-spin-slow" />
+                      </div>
+                      <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 border-2 border-zinc-950 animate-pulse" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black uppercase text-white font-mono tracking-wider flex items-center gap-1.5">
+                        Assistente Virtual cicloCRED
+                      </h4>
+                      <p className="text-[9.5px] text-zinc-500 font-mono font-bold">MONITORAMENTO: {config.model_name.toUpperCase()} ENGINE</p>
+                    </div>
+                  </div>
+                  <div className="flex bg-zinc-900 p-0.5 border border-zinc-700/60 rounded-lg gap-0.5 select-none">
+                    <span className="text-[9px] px-2 py-0.5 text-zinc-400 font-black font-mono">TEMP: {config.temperature}</span>
+                    <span className="text-[9px] px-2 py-0.5 text-indigo-400 font-black font-mono bg-zinc-950 rounded">CHAT MOCK</span>
+                  </div>
+                </div>
+
+                {/* Message Log viewport */}
+                <div className="flex-grow overflow-y-auto p-4 space-y-3.5 flex flex-col justify-end min-h-0 bg-zinc-900/10">
+                  <div className="overflow-y-auto p-2 space-y-4 max-h-full" id="chatbot-chat-viewport">
+                    {chatBotMessages.map((msg, index) => {
+                      const isAI = msg.sender === 'ai';
+                      return (
+                        <div key={index} className={`flex max-w-[85%] flex-col ${isAI ? 'mr-auto items-start' : 'ml-auto items-end'}`}>
+                          {/* Sender identity */}
+                          <span className="text-[8px] font-black uppercase font-mono tracking-wider text-zinc-500 mb-1">
+                            {isAI ? '🤖 ASSISTENTE AI' : '👤 OPERADOR'} • {msg.timestamp}
+                          </span>
+                          {/* Message bubble */}
+                          <div className={`p-3.5 rounded-2xl border-2 text-xs font-semibold leading-relaxed shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${
+                            isAI 
+                              ? 'bg-zinc-900 text-zinc-100 border-zinc-950 rounded-tl-none' 
+                              : 'bg-indigo-600 text-white border-zinc-950 rounded-tr-none'
+                          }`}>
+                            <p className="whitespace-pre-line">{msg.text}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    
+                    {isBotResponding && (
+                      <div className="flex max-w-[80%] flex-col mr-auto items-start animate-pulse">
+                        <span className="text-[8px] font-black uppercase font-mono tracking-wider text-indigo-400 mb-1">
+                          🤖 Assistente está elaborando resposta...
+                        </span>
+                        <div className="p-3.5 bg-zinc-900 border-2 border-zinc-950 text-xs font-semibold rounded-2xl rounded-tl-none text-zinc-400 flex items-center gap-2">
+                          <div className="flex gap-1">
+                            <span className="h-1.5 w-1.5 bg-indigo-400 rounded-full animate-bounce delay-75" />
+                            <span className="h-1.5 w-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:0.2s]" />
+                            <span className="h-1.5 w-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:0.4s]" />
+                          </div>
+                          <span className="font-mono text-[10px] text-zinc-500 uppercase tracking-wide">Consultando motor Generativo...</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Preset Suggestions Row */}
+                <div className="px-4 py-2 bg-zinc-950/30 border-t-2 border-zinc-950 flex gap-2 overflow-x-auto select-none shrink-0 no-scrollbar">
+                  {[
+                    "Simular Financiamento MCMV",
+                    "Como funciona a esteira de financiamento?",
+                    "Como importar planilha de leads do Facebook?",
+                    "Fale um pitch comercial para consórcio imobiliário"
+                  ].map((preset, pIdx) => (
+                    <button
+                      key={pIdx}
+                      type="button"
+                      disabled={isBotResponding}
+                      onClick={() => handleSendChatBotMessage(preset)}
+                      className="px-3 py-1.5 border border-zinc-800 text-[10px] text-zinc-300 font-mono font-bold uppercase rounded-lg bg-zinc-900/60 hover:text-indigo-300 hover:border-indigo-500 whitespace-nowrap transition cursor-pointer disabled:opacity-50"
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Input action toolbar panel */}
+                <div className="p-4 bg-zinc-950 border-t-4 border-zinc-950 flex gap-2 items-center shrink-0">
+                  <input
+                    type="text"
+                    value={typedChatBotMessage}
+                    onChange={(e) => setTypedChatBotMessage(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && typedChatBotMessage.trim() && !isBotResponding) {
+                        handleSendChatBotMessage(typedChatBotMessage.trim());
+                      }
+                    }}
+                    placeholder={isBotResponding ? "Aguardando resposta do motor..." : "Fale com o seu Assistente AI cicloCRED calibrador..."}
+                    disabled={isBotResponding}
+                    className="flex-grow bg-zinc-900 border-2 border-zinc-700/60 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium placeholder-zinc-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleSendChatBotMessage(typedChatBotMessage)}
+                    disabled={!typedChatBotMessage.trim() || isBotResponding}
+                    className="p-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl border-2 border-zinc-950 hover:translate-y-[-1px] active:translate-y-px transition cursor-pointer disabled:opacity-50 flex items-center justify-center min-w-[50px] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                  >
+                    <Sparkles className="w-4 h-4 text-indigo-100" />
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* TAB 1: Real-Time WhatsApp CRM Conversation Center */}
             {activeRightPanelTab === 'whatsapp_conversations' && (
@@ -1029,9 +1391,36 @@ export default function GeminiServerTab({
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-1.5 bg-zinc-950/60 px-3 py-1.5 rounded-lg border border-zinc-850">
-                          <span className="text-[9px] font-mono text-zinc-400">Ativo</span>
-                          <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <div className="flex items-center gap-2">
+                          {selectedLead && (
+                            <button
+                              type="button"
+                              onClick={handleToggleLeadMute}
+                              className={`flex items-center gap-1.5 text-[9px] font-black uppercase font-mono tracking-wider px-2.5 py-1.5 rounded-lg border-2 border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition active:scale-95 ${
+                                selectedLead.ai_muted 
+                                  ? 'bg-rose-600 text-white hover:bg-rose-500' 
+                                  : 'bg-zinc-850 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                              }`}
+                              title={selectedLead.ai_muted ? "Habilitar auto-respostas da IA" : "Silenciar auto-respostas da IA para este contato específico"}
+                            >
+                              {selectedLead.ai_muted ? (
+                                <>
+                                  <AlertTriangle className="w-3.5 h-3.5 animate-pulse text-yellow-300 shrink-0" />
+                                  <span>Humano Ativo (IA Muda)</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Cpu className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                                  <span>IA Ativa</span>
+                                </>
+                              )}
+                            </button>
+                          )}
+
+                          <div className="flex items-center gap-1.5 bg-zinc-950/60 px-3 py-1.5 rounded-lg border border-zinc-850">
+                            <span className="text-[9px] font-mono text-zinc-400">Canal LIVE</span>
+                            <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                          </div>
                         </div>
                       </div>
 
@@ -1098,39 +1487,52 @@ export default function GeminiServerTab({
                         )}
                       </div>
 
-                      {/* Prompt Directive Quick Reply Suggestions */}
-                      <div className="px-3 py-2 bg-zinc-900 border-t border-zinc-950/80 z-10 flex gap-2 overflow-x-auto shrink-0 scrollbar-none select-none">
+                      {/* Prompt Directive Quick Reply Suggestions with Dynamic Workspace Script Templates */}
+                      <div className="px-3 py-2 bg-zinc-900/90 border-t border-zinc-950/80 z-10 flex gap-2 overflow-x-auto shrink-0 scrollbar-none select-none items-center">
+                        <span className="text-[10px] font-black font-mono text-zinc-500 uppercase tracking-widest shrink-0 border-r border-zinc-850 pr-2">Roteiros:</span>
+                        
                         <button
                           type="button"
                           onClick={handleAutofillAI}
                           disabled={isSendingCustom}
-                          className="text-[10px] font-mono font-black text-white shrink-0 bg-zinc-950 border border-indigo-500/30 py-1.5 px-3 rounded-full hover:bg-zinc-900 flex items-center gap-1.5 transition active:scale-95 disabled:opacity-40"
+                          className="text-[10px] font-mono font-black text-indigo-300 shrink-0 bg-zinc-950 border border-indigo-500/30 py-1.5 px-3.5 rounded-full hover:bg-zinc-900 flex items-center gap-1.5 transition active:scale-95 disabled:opacity-40 shadow-sm"
                         >
                           <Sparkles className="w-3.5 h-3.5 text-indigo-400 animate-pulse fill-indigo-400" />
-                          <span>✨ Gerar Resposta Recomendada por IA</span>
+                          <span>✨ Auto-Sugerir IA</span>
                         </button>
                         
-                        <button
-                          type="button"
-                          onClick={() => {
-                            triggerSensoryFeedback('click', accSettings);
-                            setCustomReplyText('Olá! Aqui é o seu especialista de crédito e imóveis. Verifiquei seu interesse e gostaria de montar sua simulação. Podemos começar?');
-                          }}
-                          className="text-[10px] font-mono text-zinc-400 shrink-0 bg-zinc-950/50 border border-zinc-850 py-1.5 px-3 rounded-full hover:bg-zinc-900 transition"
-                        >
-                          Apresentação Consultor
-                        </button>
-                        
-                        <button
-                          type="button"
-                          onClick={() => {
-                            triggerSensoryFeedback('click', accSettings);
-                            setCustomReplyText('Perfeito. Para gerar sua proposta de financiamento oficial CEF, qual sua renda bruta familiar e possui saldo FGTS para abater na entrada?');
-                          }}
-                          className="text-[10px] font-mono text-zinc-400 shrink-0 bg-zinc-950/50 border border-zinc-850 py-1.5 px-3 rounded-full hover:bg-zinc-900 transition"
-                        >
-                          Solicitar Renda & FGTS
-                        </button>
+                        {/* Dynamic Workspace Script Templates */}
+                        {templates.length === 0 ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleApplyTemplate('Olá {{nome}}! Aqui é o seu consultor da {{empresa}}. Verifiquei seu interesse no portal e gostaria de agendar uma ligação para alinhar seu financiamento. Qual o melhor horário?')}
+                              className="text-[10px] font-mono text-zinc-300 shrink-0 bg-zinc-950 border border-zinc-800 py-1.5 px-3.5 rounded-full hover:bg-zinc-900 transition"
+                            >
+                              📋 Apresentação Padrão
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleApplyTemplate('Excelente, {{nome}}. Para realizar sua simulação exata pela {{empresa}}, qual é a sua renda bruta mensal atual e você possui saldo de FGTS disponível?')}
+                              className="text-[10px] font-mono text-zinc-300 shrink-0 bg-zinc-950 border border-zinc-800 py-1.5 px-3.5 rounded-full hover:bg-zinc-900 transition"
+                            >
+                              📋 Solicitação de FGTS & Renda
+                            </button>
+                          </>
+                        ) : (
+                          templates.map((tpl: any) => (
+                            <button
+                              key={tpl.id}
+                              type="button"
+                              onClick={() => handleApplyTemplate(tpl.body)}
+                              className="text-[10px] font-mono text-zinc-300 shrink-0 bg-zinc-950 border border-zinc-800/80 py-1.5 px-3.5 rounded-full hover:bg-zinc-900 transition flex items-center gap-1 hover:border-zinc-750 hover:text-white"
+                              title={tpl.body}
+                            >
+                              <span className="text-zinc-500 font-bold">📋</span>
+                              <span>{tpl.name}</span>
+                            </button>
+                          ))
+                        )}
                       </div>
 
                       {/* Custom outbound input controller */}
@@ -1391,13 +1793,13 @@ export default function GeminiServerTab({
                               <div className="relative">
                                 <span className="absolute -left-[24px] top-0.5 w-[14px] h-[14px] rounded-full bg-indigo-600 flex items-center justify-center text-[8px] font-black text-white">3</span>
                                 <p className="text-[11px] font-mono text-zinc-300">
-                                  Servidor <span className="text-purple-400">Gemini IA</span> ativou a persona de atendimento e persistiu o histórico no CRM do Firestore.
+                                  Assistente <span className="text-purple-400">AI cicloCRED</span> ativou a persona de atendimento e persistiu o histórico no CRM do Firestore.
                                 </p>
                               </div>
                             </div>
 
                             <div className="bg-zinc-950 p-3 rounded-lg border border-zinc-900 space-y-1">
-                              <span className="text-[9px] font-black text-emerald-400 block font-mono uppercase tracking-widest">Retorno do Servidor via Replies:</span>
+                              <span className="text-[9px] font-black text-emerald-400 block font-mono uppercase tracking-widest">Retorno do Assistente AI via Replies:</span>
                               <p className="text-[11px] text-zinc-200 leading-relaxed font-mono whitespace-pre-line bg-zinc-950">{testReply}</p>
                             </div>
                           </div>

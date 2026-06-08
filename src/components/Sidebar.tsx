@@ -26,7 +26,8 @@ import {
   Gamepad2,
   Cpu,
   Cloud,
-  Sparkles
+  Sparkles,
+  Globe
 } from 'lucide-react';
 import { AccessibilitySettings, triggerSensoryFeedback, INITIAL_ACCESSIBILITY_SETTINGS } from '../utils/sensory';
 
@@ -38,6 +39,8 @@ interface SidebarProps {
   userEmail?: string;
   onLogout?: () => void;
   accSettings?: AccessibilitySettings;
+  forceLocalStorageMode?: boolean;
+  onToggleForceLocalMode?: (val: boolean) => void;
 }
 
 export default function Sidebar({ 
@@ -47,7 +50,9 @@ export default function Sidebar({
   userName = 'Operador CicloCred',
   userEmail = 'operador@ciclocred.com',
   onLogout,
-  accSettings = INITIAL_ACCESSIBILITY_SETTINGS
+  accSettings = INITIAL_ACCESSIBILITY_SETTINGS,
+  forceLocalStorageMode = false,
+  onToggleForceLocalMode
 }: SidebarProps) {
   const [showUserMenu, setShowUserMenu] = useState(false);
 
@@ -57,13 +62,9 @@ export default function Sidebar({
   const menuItems = [
     { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard },
     { id: 'leads', name: 'Leads', icon: Users, badge: leadsCount },
-    { id: 'follow-up', name: 'Follow-up', icon: MessageSquare },
-    { id: 'marketing-multinivel', name: 'Marketing Multinível', icon: Share2 },
-    { id: 'appointments', name: 'Agendamentos', icon: Calendar },
     { id: 'inventory', name: 'Estoque de Imóveis', icon: Package },
-    { id: 'simulador', name: 'Simulador Financeiro', icon: FileSpreadsheet },
-    { id: 'automation-flows', name: 'Fluxos & Scripts', icon: Cpu },
-    { id: 'gemini-server', name: 'Servidor Gemini IA', icon: Sparkles },
+    { id: 'automation-flows', name: 'Scripts e fluxos', icon: Cpu },
+    { id: 'gemini-server', name: 'Assistente AI', icon: Sparkles },
     { id: 'google-workspace', name: 'Google Workspace', icon: Cloud },
     { id: 'kids', name: 'Alavancagem & Finanças', icon: TrendingUp },
     { id: 'user-central', name: 'Painel do Usuário (Metas & Adm)', icon: Trophy },
@@ -124,7 +125,35 @@ export default function Sidebar({
       {/* User Profile Footer Card with Actionable Sign-out */}
       <div className="p-4 border-t-4 border-zinc-950 bg-zinc-950 relative">
         {showUserMenu && (
-          <div className="absolute bottom-16 left-4 right-4 bg-zinc-900 border-2 border-zinc-950 p-2 rounded-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] z-30 animate-scaleIn text-xs space-y-1">
+          <div className="absolute bottom-20 left-4 right-4 bg-zinc-900 border-2 border-zinc-950 p-2.5 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] z-30 animate-scaleIn text-xs space-y-2">
+            {/* Database Engine Operation Mode Selector Button in Footer/Sidebar */}
+            <button
+              type="button"
+              onClick={() => {
+                triggerSensoryFeedback('click', accSettings);
+                if (onToggleForceLocalMode) {
+                  onToggleForceLocalMode(!forceLocalStorageMode);
+                }
+              }}
+              className={`w-full flex items-center justify-center gap-2 p-2.5 rounded-lg border text-[9.5px] font-mono font-black uppercase tracking-wider transition-all duration-150 cursor-pointer ${
+                forceLocalStorageMode
+                  ? 'bg-amber-500/15 text-amber-400 border-amber-600/50 hover:bg-amber-500/25'
+                  : 'bg-emerald-500/10 text-emerald-400 border-emerald-950 hover:bg-emerald-500/20'
+              }`}
+              title={
+                forceLocalStorageMode 
+                  ? "Modo 100% Local Ativo para preservar cotas. Clique para reconectar a Nuvem." 
+                  : "Nuvem Firestore Ativa. Clique para forçar Operação Local Autônoma."
+              }
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                forceLocalStorageMode ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'
+              }`} />
+              <span>
+                {forceLocalStorageMode ? '📁 Usar Local' : '☁️ Usar Firestore'}
+              </span>
+            </button>
+
             {onLogout && (
               <button
                 onClick={() => {
@@ -132,7 +161,7 @@ export default function Sidebar({
                   setShowUserMenu(false);
                   onLogout();
                 }}
-                className="w-full flex items-center gap-2 text-rose-400 hover:text-white hover:bg-rose-950/40 p-2.5 rounded-lg transition-all font-mono font-black uppercase text-[10px]"
+                className="w-full flex items-center gap-2 text-rose-400 hover:text-white hover:bg-rose-950/40 p-2.5 rounded-lg transition-all border border-transparent hover:border-rose-900/30 font-mono font-black uppercase text-[10px]"
               >
                 <LogOut className="w-3.5 h-3.5 shrink-0" />
                 <span>Sair do Sistema</span>
@@ -164,6 +193,11 @@ export default function Sidebar({
             <div className="min-w-0">
               <h4 className="text-xs font-black text-white hover:text-indigo-400 uppercase tracking-wider font-mono truncate">{userName}</h4>
               <p className="text-[10px] text-zinc-400 font-bold font-mono truncate">{userEmail}</p>
+              {/* Compact cloud firestore connection indicator */}
+              <div className="mt-1 flex items-center gap-1 text-[8.5px] font-mono uppercase font-black tracking-wider text-zinc-400 select-none">
+                <span className={`w-1 h-1 rounded-full ${forceLocalStorageMode ? 'bg-amber-400' : 'bg-emerald-450 animate-pulse'}`} />
+                <span>{forceLocalStorageMode ? '📁 OFF-LINE' : '☁️ FIRESTORE'}</span>
+              </div>
             </div>
           </div>
           <ChevronUp className={`w-4 h-4 text-zinc-400 transition-transform shrink-0 ${showUserMenu ? 'rotate-180' : ''}`} />

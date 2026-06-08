@@ -39,7 +39,9 @@ service cloud.firestore {
         && (!('origin' in data) || data.origin == null || data.origin is string)
         && (!('createdAt' in data) || data.createdAt == null || data.createdAt is string)
         && (!('lastContactAt' in data) || data.lastContactAt == null || data.lastContactAt is string)
-        && (!('familyIncome' in data) || data.familyIncome == null || data.familyIncome is number);
+        && (!('familyIncome' in data) || data.familyIncome == null || data.familyIncome is number)
+        && (!('ai_muted' in data) || data.ai_muted == null || data.ai_muted is bool)
+        && (!('updatedAt' in data) || data.updatedAt == null || data.updatedAt is string);
     }
 
     // EMAIL TEMPLATE VALIDATION
@@ -170,6 +172,10 @@ service cloud.firestore {
         && (!('whatsapp_enabled' in data) || data.whatsapp_enabled is bool)
         && (!('leads_auto_creation_enabled' in data) || data.leads_auto_creation_enabled is bool)
         && (!('autoresponder_url' in data) || data.autoresponder_url is string && data.autoresponder_url.size() <= 2000)
+        && (!('response_mode' in data) || data.response_mode is string)
+        && (!('company_name' in data) || data.company_name is string)
+        && (!('system_name' in data) || data.system_name is string)
+        && (!('answer_length' in data) || data.answer_length is string)
         && (!('updatedAt' in data) || data.updatedAt is string && data.updatedAt.size() <= 100);
     }
 
@@ -181,7 +187,7 @@ service cloud.firestore {
         && data.sender is string && data.sender.size() <= 200
         && data.message is string && data.message.size() <= 15000
         && data.reply is string && data.reply.size() <= 15000
-        && data.status in ['sucesso', 'erro']
+        && data.status in ['sucesso', 'erro', 'manual_intercepted']
         && data.model_used is string && data.model_used.size() <= 100
         && data.latency_ms is number
         && (!('error_message' in data) || data.error_message is string && data.error_message.size() <= 15000);

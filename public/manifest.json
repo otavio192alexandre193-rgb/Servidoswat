@@ -1,0 +1,25 @@
+{
+  "name": "cicloCRED CRM",
+  "short_name": "cicloCRED",
+  "description": "Sistema integrado de CRM inteligente, Esteira de Crédito e Fomento Imobiliário.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#18181b",
+  "theme_color": "#4f46e5",
+  "orientation": "any",
+  "categories": ["business", "finance"],
+  "icons": [
+    {
+      "src": "data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%234f46e5%22/><text y=%22.9em%22 font-size=%2260%22 font-weight=%22bold%22 fill=%22%23ffffff%22 x=%2215%22>cC</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%234f46e5%22/><text y=%22.9em%22 font-size=%2260%22 font-weight=%22bold%22 fill=%22%23ffffff%22 x=%2215%22>cC</text></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

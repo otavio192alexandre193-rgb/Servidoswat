@@ -13,7 +13,7 @@ import {
   INITIAL_PROPERTIES
 } from './data/initialRecords';
 import { db, auth, handleFirestoreError, OperationType, disableFirestoreNetwork } from './firebase';
-import { collection, getDocs, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, onSnapshot, getDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 
 import Sidebar from './components/Sidebar';
@@ -42,9 +42,10 @@ import UserCentralModal from './components/UserCentralModal';
 import KidsTab from './components/KidsTab';
 import AutomationFlowsTab from './components/AutomationFlowsTab';
 import UserCentralTab from './components/UserCentralTab';
-import GoogleWorkspace, { getWorkspaceToken, syncCRMMovementToGoogleSheet } from './components/GoogleWorkspace';
+import GoogleWorkspace, { getWorkspaceToken, syncCRMMovementToGoogleSheet, autoSyncWorkspaceDatabase } from './components/GoogleWorkspace';
 import GeminiServerTab from './components/GeminiServerTab';
 import AnimatedCounter from './components/AnimatedCounter';
+import { getKanbanColumns } from './utils/kanban';
 import { AccessibilitySettings, triggerSensoryFeedback, INITIAL_ACCESSIBILITY_SETTINGS } from './utils/sensory';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
 
@@ -76,7 +77,10 @@ import {
   Trophy,
   Gift,
   Cloud,
-  LineChart
+  LineChart,
+  Search,
+  UserPlus,
+  Sliders
 } from 'lucide-react';
 
 export default function App() {
@@ -101,8 +105,9 @@ export default function App() {
   });
   const [isQuotaExceeded, setIsQuotaExceeded] = useState<boolean>(() => {
     const forced = localStorage.getItem('ciclocred_force_local_offline') === 'true';
+    if (forced) return false; // Force Local Mode ignores Firestore Quota warnings
     const quotaLogged = localStorage.getItem('firestore_quota_exceeded_status') === 'true';
-    return forced || quotaLogged || !!(window as any).isFirestoreQuotaExceeded;
+    return quotaLogged || !!(window as any).isFirestoreQuotaExceeded;
   });
 
   // Gracefully disable Firestore server communication if quota limit is exceeded
@@ -148,6 +153,7 @@ export default function App() {
   const isLocalPropertiesChangeRef = useRef<boolean>(false);
   const isLocalGoalsChangeRef = useRef<boolean>(false);
   const isLocalProjectsChangeRef = useRef<boolean>(false);
+  const isLocalProfileChangeRef = useRef<boolean>(false);
 
   // Core CRM States (Hydrated with LocalStorage or Seeded with defaults)
   const [leads, rawSetLeads] = useState<Lead[]>(() => {
@@ -380,8 +386,15 @@ export default function App() {
   }, []);
 
   const [activeTab, setActiveTab] = useState<string>('dashboard');
-  const [leadsViewMode, setLeadsViewMode] = useState<'kanban' | 'list'>('list');
+  const [leadsViewMode, setLeadsViewMode] = useState<'kanban' | 'list' | 'followup' | 'marketing' | 'appointments'>('list');
   const [hoveredStatusSlice, setHoveredStatusSlice] = useState<string | null>(null);
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('todos');
+  const [originFilter, setOriginFilter] = useState('todos');
+  const [initialLetterFilter, setInitialLetterFilter] = useState('todos');
+  const [isPlanilhasModalOpen, setIsPlanilhasModalOpen] = useState(false);
+  const [isConversaoModalOpen, setIsConversaoModalOpen] = useState(false);
 
   const [followUps, rawSetFollowUps] = useState<FollowUpUpdate[]>(() => {
     const saved = localStorage.getItem('ciclocred_crm_followups');
@@ -781,7 +794,7 @@ export default function App() {
     localStorage.setItem('ciclocred_force_local_offline', checked ? 'true' : 'false');
     setForceLocalStorageMode(checked);
     if (checked) {
-      setIsQuotaExceeded(true);
+      setIsQuotaExceeded(false); // Hide standard cloud quota warnings since we are operating locally
       disableFirestoreNetwork();
       addNotification('📁 CRM 100% LOCAL', 'Operando de forma independente no localStorage do navegador para evitar limites diários.', 'success');
     } else {
@@ -933,6 +946,20 @@ export default function App() {
     localStorage.setItem('ciclocred_crm_followups', JSON.stringify(followUps));
   }, [followUps]);
 
+  // Hybrid Workspace Real-time background replication backplane
+  useEffect(() => {
+    // Wait until db is loaded initially to avoid syncing before hydration
+    const isAutosync = localStorage.getItem('ciclocred_sheets_autosync_enabled') === 'true';
+    if (!isAutosync) return;
+
+    const timer = setTimeout(() => {
+      autoSyncWorkspaceDatabase(leads, appointments, emailLogs)
+        .catch(err => console.warn("Background auto sync to Google Workspace failed silently:", err));
+    }, 4500); // 4.5s debounce to keep REST requests healthy and non-blocking
+
+    return () => clearTimeout(timer);
+  }, [leads, appointments, emailLogs]);
+
   // One-time startup sweep to zero the lead list and fulfill user intent safely (offline/local mode)
   useEffect(() => {
     const hasWiped = localStorage.getItem('ciclocred_leads_wiped_zero_v3') === 'true';
@@ -987,7 +1014,15 @@ export default function App() {
 
         const forcedOffline = localStorage.getItem('ciclocred_force_local_offline') === 'true';
         const quotaExceededLogged = localStorage.getItem('firestore_quota_exceeded_status') === 'true';
-        let rawQuotaExceeded = forcedOffline || quotaExceededLogged || !!(window as any).isFirestoreQuotaExceeded;
+        let rawQuotaExceeded = quotaExceededLogged || !!(window as any).isFirestoreQuotaExceeded;
+
+        if (forcedOffline) {
+          console.log("CRM: Operando em modo 100% Local (escolha do operador).");
+          setIsQuotaExceeded(false);
+          setIsDbHydrated(true);
+          setIsSyncing(false);
+          return;
+        }
 
         if (!rawQuotaExceeded) {
           try {
@@ -1097,25 +1132,66 @@ export default function App() {
           await loadOrSeedCollection('gamificationProjects', gamificationProjects, rawSetGamificationProjects, lastProjectsIdsRef);
           await loadOrSeedCollection('followups', followUps, rawSetFollowUps, lastFollowupsIdsRef);
 
+          // Load or Seed userProfile
+          try {
+            const profileRef = doc(db, 'userProfiles', user.uid);
+            const profileSnap = await getDoc(profileRef);
+            if (profileSnap.exists()) {
+              const data = profileSnap.data();
+              const firestoreUpdatedAt = data.updatedAt || 0;
+              const localUpdatedAt = Number(localStorage.getItem('ciclocred_profile_updated_at') || '0');
+              
+              if (firestoreUpdatedAt >= localUpdatedAt) {
+                console.log("CRM: Carregando perfil mais recente do Firestore");
+                isLocalProfileChangeRef.current = false;
+                if (data.userName) setUserName(data.userName);
+                if (data.userEmail) setUserEmail(data.userEmail);
+                if (data.creciNumber) setCreciNumber(data.creciNumber);
+                if (data.userRole) setUserRole(data.userRole);
+                if (data.agencyName) setAgencyName(data.agencyName);
+                if (data.subscriptionPlan) setSubscriptionPlan(data.subscriptionPlan);
+                if (data.theme) setTheme(data.theme);
+                if (data.galaxyPreset) setGalaxyPreset(data.galaxyPreset);
+                if (data.userXP !== undefined) setUserXP(data.userXP);
+                if (data.userLevel !== undefined) setUserLevel(data.userLevel);
+                if (data.accSettings) setAccSettings(data.accSettings);
+                if (data.notifications) setNotifications(data.notifications);
+                localStorage.setItem('ciclocred_profile_updated_at', String(firestoreUpdatedAt));
+              } else {
+                console.log("CRM: Perfil local é mais recente. Irá sincronizar para o Firestore");
+                isLocalProfileChangeRef.current = true;
+              }
+            } else {
+              console.log("CRM: Criando perfil inicial no Firestore com os dados locais");
+              isLocalProfileChangeRef.current = true;
+            }
+          } catch (profileErr) {
+            console.warn("Could not sync user profile on login:", profileErr);
+          }
+
           setIsDbHydrated(true);
         } catch (err: any) {
           console.error("Hydration fault: ", err);
           const errMsg = err?.message || String(err);
           const errCode = err?.code || '';
-          if (
+          
+          const isQuota = 
             errCode === 'resource-exhausted' ||
             errMsg.toLowerCase().includes('quota') || 
             errMsg.toLowerCase().includes('exhausted') || 
-            errMsg.toLowerCase().includes('resource-exhausted')
-          ) {
+            errMsg.toLowerCase().includes('resource-exhausted');
+
+          if (isQuota) {
             localStorage.setItem('firestore_quota_exceeded_status', 'true');
             (window as any).isFirestoreQuotaExceeded = true;
             try {
               window.dispatchEvent(new CustomEvent('firestore-quota-exceeded'));
             } catch (_) {}
             setIsQuotaExceeded(true);
-            setIsDbHydrated(true); // Permit the app to proceed using clean localStorage fallback state
+          } else {
+            console.warn("CRM: Outra falha de conexão/CORS de sandbox detectada. Operando em modo seguro local.");
           }
+          setIsDbHydrated(true); // CRITICAL: Always hydrate so the CRM interface initializes with localStorage fallback states!
         } finally {
           setIsSyncing(false);
         }
@@ -1128,7 +1204,7 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Active Firestore Live synchronization for leads and followups
+  // Active Firestore Live synchronization for all CRM data matrices
   useEffect(() => {
     if (!isDbHydrated || !auth.currentUser || isQuotaExceeded) return;
     const unsubscribeLeads = onSnapshot(collection(db, 'leads'), (snapshot) => {
@@ -1179,9 +1255,130 @@ export default function App() {
       }
     });
 
+    const unsubscribeAppointments = onSnapshot(collection(db, 'appointments'), (snapshot) => {
+      if (isLocalApptsChangeRef.current) return;
+      const loaded: Appointment[] = [];
+      snapshot.forEach((docSnap) => {
+        loaded.push(sanitizeAppointmentRecord(docSnap.data()));
+      });
+      localStorage.setItem('ciclocred_crm_appointments', JSON.stringify(loaded));
+      rawSetAppointments(loaded);
+      lastApptsIdsRef.current = loaded.map(a => a.id);
+    }, (err) => {
+      console.warn("Appointments live listener failed:", err);
+    });
+
+    const unsubscribeTemplates = onSnapshot(collection(db, 'templates'), (snapshot) => {
+      if (isLocalTemplatesChangeRef.current) return;
+      const loaded: EmailTemplate[] = [];
+      snapshot.forEach((docSnap) => {
+        loaded.push(docSnap.data() as EmailTemplate);
+      });
+      localStorage.setItem('ciclocred_crm_templates', JSON.stringify(loaded));
+      rawSetTemplates(loaded);
+      lastTemplatesIdsRef.current = loaded.map(t => t.id);
+    }, (err) => {
+      console.warn("Templates live listener failed:", err);
+    });
+
+    const unsubscribeEmailLogs = onSnapshot(collection(db, 'emailLogs'), (snapshot) => {
+      if (isLocalEmailLogsChangeRef.current) return;
+      const loaded: EmailLog[] = [];
+      snapshot.forEach((docSnap) => {
+        loaded.push(docSnap.data() as EmailLog);
+      });
+      localStorage.setItem('ciclocred_crm_logs', JSON.stringify(loaded));
+      rawSetEmailLogs(loaded);
+      lastLogsIdsRef.current = loaded.map(l => l.id);
+    }, (err) => {
+      console.warn("EmailLogs live listener failed:", err);
+    });
+
+    const unsubscribeInventory = onSnapshot(collection(db, 'inventory'), (snapshot) => {
+      if (isLocalInventoryChangeRef.current) return;
+      const loaded: InventoryItem[] = [];
+      snapshot.forEach((docSnap) => {
+        loaded.push(docSnap.data() as InventoryItem);
+      });
+      localStorage.setItem('ciclocred_crm_inventory', JSON.stringify(loaded));
+      rawSetInventory(loaded);
+      lastInventoryIdsRef.current = loaded.map(i => i.id);
+    }, (err) => {
+      console.warn("Inventory live listener failed:", err);
+    });
+
+    const unsubscribeProperties = onSnapshot(collection(db, 'properties'), (snapshot) => {
+      if (isLocalPropertiesChangeRef.current) return;
+      const loaded: RealEstateProperty[] = [];
+      snapshot.forEach((docSnap) => {
+        loaded.push(docSnap.data() as RealEstateProperty);
+      });
+      localStorage.setItem('ciclocred_crm_properties', JSON.stringify(loaded));
+      rawSetProperties(loaded);
+      lastPropertiesIdsRef.current = loaded.map(p => p.id);
+    }, (err) => {
+      console.warn("Properties live listener failed:", err);
+    });
+
+    const unsubscribeGoals = onSnapshot(collection(db, 'gamificationGoals'), (snapshot) => {
+      if (isLocalGoalsChangeRef.current) return;
+      const loaded: Goal[] = [];
+      snapshot.forEach((docSnap) => {
+        loaded.push(docSnap.data() as Goal);
+      });
+      localStorage.setItem('ciclocred_gamification_goals', JSON.stringify(loaded));
+      rawSetGamificationGoals(loaded);
+      lastGoalsIdsRef.current = loaded.map(g => g.id);
+    }, (err) => {
+      console.warn("Goals live listener failed:", err);
+    });
+
+    const unsubscribeProjects = onSnapshot(collection(db, 'gamificationProjects'), (snapshot) => {
+      if (isLocalProjectsChangeRef.current) return;
+      const loaded: Project[] = [];
+      snapshot.forEach((docSnap) => {
+        loaded.push(docSnap.data() as Project);
+      });
+      localStorage.setItem('ciclocred_gamification_projects', JSON.stringify(loaded));
+      rawSetGamificationProjects(loaded);
+      lastProjectsIdsRef.current = loaded.map(p => p.id);
+    }, (err) => {
+      console.warn("Projects live listener failed:", err);
+    });
+
+    const unsubscribeProfile = onSnapshot(doc(db, 'userProfiles', auth.currentUser.uid), (docSnap) => {
+      if (isLocalProfileChangeRef.current) return;
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.userName) setUserName(data.userName);
+        if (data.userEmail) setUserEmail(data.userEmail);
+        if (data.creciNumber) setCreciNumber(data.creciNumber);
+        if (data.userRole) setUserRole(data.userRole);
+        if (data.agencyName) setAgencyName(data.agencyName);
+        if (data.subscriptionPlan) setSubscriptionPlan(data.subscriptionPlan);
+        if (data.theme) setTheme(data.theme);
+        if (data.galaxyPreset) setGalaxyPreset(data.galaxyPreset);
+        if (data.userXP !== undefined) setUserXP(data.userXP);
+        if (data.userLevel !== undefined) setUserLevel(data.userLevel);
+        if (data.accSettings) setAccSettings(data.accSettings);
+        if (data.notifications) setNotifications(data.notifications);
+        localStorage.setItem('ciclocred_profile_updated_at', String(data.updatedAt || Date.now()));
+      }
+    }, (err) => {
+      console.warn("UserProfile snapshot error:", err);
+    });
+
     return () => {
       unsubscribeLeads();
       unsubscribeFollowups();
+      unsubscribeAppointments();
+      unsubscribeTemplates();
+      unsubscribeEmailLogs();
+      unsubscribeInventory();
+      unsubscribeProperties();
+      unsubscribeGoals();
+      unsubscribeProjects();
+      unsubscribeProfile();
     };
   }, [isDbHydrated, isQuotaExceeded]);
 
@@ -1409,6 +1606,54 @@ export default function App() {
     };
     syncFollowUps();
   }, [followUps, isDbHydrated, isQuotaExceeded]);
+
+  // Enable local tracking 5 seconds after hydration is complete to prevent initial load overwrite loops
+  useEffect(() => {
+    if (isDbHydrated) {
+      const timer = setTimeout(() => {
+        isLocalProfileChangeRef.current = true;
+      }, 5000);
+      return () => clearTimeout(timer);
+    } else {
+      isLocalProfileChangeRef.current = false;
+    }
+  }, [isDbHydrated]);
+
+  // Synchronize userProfile state changes to Firestore
+  useEffect(() => {
+    if (!isDbHydrated || !auth.currentUser || isQuotaExceeded) return;
+    if (!isLocalProfileChangeRef.current) return;
+
+    const syncProfile = async () => {
+      try {
+        const profileDoc = {
+          userName,
+          userEmail,
+          creciNumber,
+          userRole,
+          agencyName,
+          subscriptionPlan,
+          theme,
+          galaxyPreset,
+          userXP,
+          userLevel,
+          accSettings,
+          notifications,
+          updatedAt: Date.now()
+        };
+        await setDoc(doc(db, 'userProfiles', auth.currentUser!.uid), profileDoc);
+        localStorage.setItem('ciclocred_profile_updated_at', String(profileDoc.updatedAt));
+      } catch (err) {
+        console.warn("Failed to sync userProfile to Firestore:", err);
+      }
+    };
+    
+    // Debounce uploads by 1200ms to avoid flooding on keystrokes/XP rewards
+    const timer = setTimeout(() => {
+      syncProfile();
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [userName, userEmail, creciNumber, userRole, agencyName, subscriptionPlan, theme, galaxyPreset, userXP, userLevel, accSettings, notifications, isDbHydrated, isQuotaExceeded]);
 
   // Lead transition handler
   const handleMoveLead = (leadId: string, newStatus: LeadStatus) => {
@@ -1853,6 +2098,8 @@ export default function App() {
           setIsDbHydrated(false);
         }}
         accSettings={accSettings}
+        forceLocalStorageMode={forceLocalStorageMode}
+        onToggleForceLocalMode={handleToggleForceLocalMode}
       />
 
       {/* Mobile Drawer Slide and Trigger Button */}
@@ -1886,35 +2133,12 @@ export default function App() {
               >
                 Leads
               </button>
-              <button
-                onClick={() => { setActiveTab('follow-up'); setMobileMenuOpen(false); }}
-                className={`w-full text-left p-3 rounded-lg text-xs font-black uppercase tracking-wider font-mono ${activeTab === 'follow-up' ? 'bg-indigo-600 text-white border border-zinc-950' : 'text-zinc-400'}`}
-              >
-                Follow-up
-              </button>
-              <button
-                onClick={() => { setActiveTab('marketing-multinivel'); setMobileMenuOpen(false); }}
-                className={`w-full text-left p-3 rounded-lg text-xs font-black uppercase tracking-wider font-mono ${activeTab === 'marketing-multinivel' ? 'bg-indigo-600 text-white border border-zinc-950' : 'text-zinc-400'}`}
-              >
-                Marketing Multinível
-              </button>
-              <button
-                onClick={() => { setActiveTab('appointments'); setMobileMenuOpen(false); }}
-                className={`w-full text-left p-3 rounded-lg text-xs font-black uppercase tracking-wider font-mono ${activeTab === 'appointments' ? 'bg-indigo-600 text-white border border-zinc-950' : 'text-zinc-400'}`}
-              >
-                Agendamentos
-              </button>
+
               <button
                 onClick={() => { setActiveTab('inventory'); setMobileMenuOpen(false); }}
                 className={`w-full text-left p-3 rounded-lg text-xs font-black uppercase tracking-wider font-mono ${activeTab === 'inventory' ? 'bg-indigo-600 text-white border border-zinc-950' : 'text-zinc-400'}`}
               >
                 Estoque de Imóveis
-              </button>
-              <button
-                onClick={() => { setActiveTab('simulador'); setMobileMenuOpen(false); }}
-                className={`w-full text-left p-3 rounded-lg text-xs font-black uppercase tracking-wider font-mono ${activeTab === 'simulador' ? 'bg-indigo-600 text-white border border-zinc-950' : 'text-zinc-400'}`}
-              >
-                Simulador Financeiro
               </button>
               <button
                 onClick={() => { setActiveTab('reports'); setMobileMenuOpen(false); }}
@@ -1926,13 +2150,13 @@ export default function App() {
                 onClick={() => { setActiveTab('automation-flows'); setMobileMenuOpen(false); }}
                 className={`w-full text-left p-3 rounded-lg text-xs font-black uppercase tracking-wider font-mono ${activeTab === 'automation-flows' ? 'bg-indigo-600 text-white border border-zinc-950' : 'text-zinc-400'}`}
               >
-                Fluxos & Scripts
+                Scripts e fluxos
               </button>
               <button
                 onClick={() => { setActiveTab('gemini-server'); setMobileMenuOpen(false); }}
                 className={`w-full text-left p-3 rounded-lg text-xs font-black uppercase tracking-wider font-mono ${activeTab === 'gemini-server' ? 'bg-indigo-600 text-white border border-zinc-950' : 'text-zinc-400'}`}
               >
-                Servidor Gemini IA
+                Assistente AI
               </button>
               <button
                 onClick={() => { setActiveTab('kids'); setMobileMenuOpen(false); }}
@@ -1986,32 +2210,36 @@ export default function App() {
             </div>
 
             {/* Header Greeting, Local Time, Temperature and Location */}
-            <div className="hidden lg:flex items-center gap-4">
-              <div className="border-r border-zinc-800 pr-4 leading-none text-left">
-                <span className="text-[13px] font-black text-white block">
-                  {(() => {
-                    const hrs = currentDateTime.getHours();
-                    if (hrs < 12) return '🌤️ Bom dia';
-                    if (hrs < 18) return '☀️ Boa tarde';
-                    return '🌙 Boa noite';
-                  })()}, Corretor <span className="text-indigo-400 font-extrabold">{userName.split(' ')[0]}</span>!
-                </span>
-                <span className="text-[9px] font-mono text-zinc-400 uppercase font-black tracking-wider mt-0.5 block">
-                  Creci Ativo: {creciNumber || 'Não Configurado'}
+            <div className="hidden lg:flex flex-col text-left select-none border-l-2 border-zinc-850 pl-4 py-0.5">
+              {/* Título do CRM */}
+              <h1 className="font-sans font-black tracking-tight text-sm text-white uppercase italic leading-none">
+                cicloCRED <span className="text-indigo-400">CRM</span>
+              </h1>
+              
+              {/* Saudação abaixo do título do CRM */}
+              <div className="mt-1 text-[11px] font-semibold text-zinc-350 leading-none">
+                {(() => {
+                  const hrs = currentDateTime.getHours();
+                  if (hrs < 12) return '🌤️ Bom dia';
+                  if (hrs < 18) return '☀️ Boa tarde';
+                  return '🌙 Boa noite';
+                })()}, Corretor <span className="text-indigo-400 font-extrabold">{userName.split(' ')[0]}</span>!
+                <span className="text-[8.5px] font-mono text-zinc-500 uppercase font-bold tracking-wider ml-2.5">
+                  Creci F: {creciNumber || 'Não Integrado'}
                 </span>
               </div>
 
-              {/* Local Clock, Temperature & Location Pill */}
-              <div className="flex items-center gap-3 bg-zinc-900 p-2 py-1.5 rounded-xl border border-zinc-800 font-mono text-[9.5px] font-black uppercase tracking-wider text-zinc-350 bg-zinc-950 select-none">
-                <div className="flex items-center gap-1.5 text-indigo-400">
-                  <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              {/* Temperatura e horário e localização abaixo da saudação (dentro do mesmo escopo) */}
+              <div className="mt-2.5 flex items-center gap-2 font-mono text-[9px] font-extrabold uppercase tracking-wider text-zinc-400">
+                <div className="flex items-center gap-1 text-indigo-400">
+                  <Clock className="w-3 h-3 text-indigo-400 shrink-0" />
                   <span>
                     {currentDateTime.toLocaleDateString('pt-BR', { weekday: 'short' })} •{' '}
                     {currentDateTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
-                <span className="text-zinc-650 font-normal">|</span>
-                <div className="flex items-center gap-1.5 text-emerald-400">
+                <span className="text-zinc-800">•</span>
+                <div className="flex items-center gap-1 text-emerald-400">
                   <span>🌡️ 24°C • SÃO PAULO, SP</span>
                 </div>
               </div>
@@ -2019,38 +2247,6 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Database Engine Operation Mode Selector Button */}
-            <button
-              type="button"
-              onClick={() => {
-                triggerSensoryFeedback('click', accSettings);
-                handleToggleForceLocalMode(!forceLocalStorageMode);
-              }}
-              className={`rounded-full px-3 py-1.5 text-[10px] font-mono font-black uppercase flex items-center gap-1.5 transition-all duration-300 border hover:scale-105 active:scale-95 shrink-0 cursor-pointer ${
-                forceLocalStorageMode
-                  ? 'bg-amber-500/15 text-amber-400 border-amber-600/70 hover:bg-amber-500/25 shadow-[0_0_8px_rgba(245,158,11,0.15)]'
-                  : !!(window as any).isFirestoreQuotaExceeded
-                  ? 'bg-rose-500/15 text-rose-400 border-rose-600/70 hover:bg-rose-500/25 shadow-[0_0_8px_rgba(239,68,68,0.15)] animate-pulse'
-                  : 'bg-emerald-500/10 text-emerald-400 border-emerald-950 hover:bg-emerald-500/20'
-              }`}
-              title={
-                forceLocalStorageMode 
-                  ? "Modo 100% Local Ativo para preservar cotas. Clique para reconectar a Nuvem." 
-                  : "Nuvem Firestore Ativa. Clique para forçar Operação Local Autônoma."
-              }
-            >
-              <span className={`w-1.5 h-1.5 rounded-full ${
-                forceLocalStorageMode ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'
-              }`} />
-              <span>
-                {forceLocalStorageMode 
-                  ? '📁 Modo 100% Local' 
-                  : !!(window as any).isFirestoreQuotaExceeded
-                  ? '⚠️ Cota Ativa (Offline Auto)'
-                  : '☁️ Cloud Firestore'}
-              </span>
-            </button>
-
             {/* Real-time Game level indicator pill */}
             <div className="rounded-full px-3 py-1.5 text-[10px] font-mono font-black uppercase text-indigo-400 bg-indigo-950 bg-opacity-80 border border-indigo-900/65 hidden sm:flex items-center gap-2.5">
               <span>GALAXY NÍVEL {userLevel}</span>
@@ -2119,17 +2315,48 @@ export default function App() {
               </div>
             </button>
 
-            {/* Real leads diagnostic scan */}
-            <button
-              onClick={() => {
-                triggerSensoryFeedback('click', accSettings);
-                simulateCRMAction();
-              }}
-              className="text-[10px] font-mono font-black text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-2 rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase transition-all flex items-center gap-1.5"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-indigo-200 shrink-0" />
-              <span>Análise de Leads 💡</span>
-            </button>
+            {/* Shortcuts (Requested: "aplique no canto superior direito de onde foi retirado o cadastro rápido") */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {/* Shortcut to Agendamentos */}
+              <button
+                type="button"
+                onClick={() => {
+                  triggerSensoryFeedback('click', accSettings);
+                  setActiveTab('leads');
+                  setLeadsViewMode('appointments');
+                  setIsPlanilhasModalOpen(false);
+                }}
+                className={`text-[9.5px] font-mono font-black border-2 border-zinc-950 px-2.5 py-1.5 rounded-xl shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] uppercase transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
+                  activeTab === 'leads' && leadsViewMode === 'appointments'
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-zinc-850 hover:bg-zinc-800 text-zinc-300'
+                }`}
+                title="Acessar Painel de Agendamentos no Funil de Leads"
+              >
+                <Calendar className="w-3.5 h-3.5 shrink-0 text-indigo-400" />
+                <span className="hidden lg:inline">Agendamentos</span>
+              </button>
+
+              {/* Shortcut to Marketing */}
+              <button
+                type="button"
+                onClick={() => {
+                  triggerSensoryFeedback('click', accSettings);
+                  setActiveTab('leads');
+                  setLeadsViewMode('marketing');
+                  setIsPlanilhasModalOpen(false);
+                }}
+                className={`text-[9.5px] font-mono font-black border-2 border-zinc-950 px-2.5 py-1.5 rounded-xl shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] uppercase transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
+                  activeTab === 'leads' && leadsViewMode === 'marketing'
+                    ? 'bg-pink-650 text-white'
+                    : 'bg-zinc-850 hover:bg-zinc-800 text-zinc-300'
+                }`}
+                title="Acessar Ferramentas de Marketing no Funil de Leads"
+              >
+                <Mail className="w-3.5 h-3.5 shrink-0 text-pink-400" />
+                <span className="hidden lg:inline">Marketing</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -2192,15 +2419,12 @@ export default function App() {
                 {activeTab === 'dashboard' && 'Dashboard Operacional'}
                 {activeTab === 'leads' && 'Leads & Funil de Vendas'}
                 {activeTab === 'follow-up' && 'Acompanhamento & Follow-up'}
-                {activeTab === 'marketing-multinivel' && 'Marketing Multinível Integrado'}
-                {activeTab === 'appointments' && 'Agendamentos e Visitas'}
                 {activeTab === 'inventory' && 'Portfólio de Imóveis'}
-                {activeTab === 'simulador' && 'Simulador Financeiro Inteligente'}
                 {activeTab === 'ciclocred-inform' && 'Portal cicloCRED Inform'}
                 {activeTab === 'reports' && 'Relatórios de Performance'}
                 {activeTab === 'settings' && 'Administração & Ajustes'}
-                {activeTab === 'automation-flows' && 'Fluxos & Scripts de Automação'}
-                {activeTab === 'gemini-server' && 'Servidor de Inteligência Artificial Gemini'}
+                {activeTab === 'automation-flows' && 'Scripts e fluxos de Automação'}
+                {activeTab === 'gemini-server' && 'Assistente AI cicloCRED'}
                 {activeTab === 'kids' && 'Acelerador de Alavancagem & Finanças'}
                 {activeTab === 'user-central' && 'Painel do Usuário (Metas & Adm)'}
                 {activeTab === 'google-workspace' && 'Conectores Google Workspace'}
@@ -2211,14 +2435,11 @@ export default function App() {
                 {activeTab === 'dashboard' && 'Visão analítica instantânea do seu funil e contatos mais recentes.'}
                 {activeTab === 'leads' && 'Gerencie seus clientes através do funil Kanban integrado ou da tabela operacional completa.'}
                 {activeTab === 'follow-up' && 'Acompanhe contatos históricos, registre conversas e agende compromissos de retorno estrategicamente.'}
-                {activeTab === 'marketing-multinivel' && 'Central unificada de mídias e disparos inteligentes multicanais para captação.'}
-                {activeTab === 'appointments' && 'Painel responsivo de agendamento de reuniões, telefonemas e negociações.'}
                 {activeTab === 'inventory' && 'Cadastro de estoque imobiliário, tabela inteligente de captação e importador de planilhas.'}
-                {activeTab === 'simulador' && 'Tabela financeira inteligente para simular entrada, parcelas de obras, 2 parcelas anuais e chaves.'}
                 {activeTab === 'reports' && 'KPIs, saúde de canais de aquisição corporativa, e taxas de conversões integradas.'}
                 {activeTab === 'settings' && 'Gerencie seu perfil de credenciamento CRECI, paleta de cores, bipes e configurações do CRM.'}
                 {activeTab === 'automation-flows' && 'Crie e envie templates de e-mail automatizados e scripts de copywriting estruturados.'}
-                {activeTab === 'gemini-server' && 'Administre o motor de auto-respostas do WhatsApp (Whatauto), simulações automáticas e configurações do modelo.'}
+                {activeTab === 'gemini-server' && 'Interaja diretamente com o seu Assistente AI, teste seu comportamento e configure parâmetros e auto-respostas.'}
                 {activeTab === 'kids' && 'Cálculo de juros compostos a 1% real ao mês, alocação de comissões, montagem de ferramentas e simulados de marketing.'}
                 {activeTab === 'user-central' && 'Configure suas metas comerciais, gerencie o nível de gamificação e controle suas tarefas diárias.'}
                 {activeTab === 'google-workspace' && 'Painel de sincronismo avançado com Google Calendar, Drive, Sheets e API do Gmail.'}
@@ -2226,17 +2447,37 @@ export default function App() {
             </div>
             
             {activeTab === 'dashboard' && (
-              <button
-                onClick={() => {
-                  setSelectedLeadForEdit(null);
-                  setDefaultStatusForCreate('novo');
-                  setIsLeadModalOpen(true);
-                }}
-                className="flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-xs tracking-wider border-2 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-2px] transition-all"
-              >
-                <Plus className="w-4 h-4" />
-                <span>RÁPIDO CADASTRAR</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Agendamentos Quick Shortcut button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerSensoryFeedback('click', accSettings);
+                    setActiveTab('leads');
+                    setLeadsViewMode('appointments');
+                    setIsPlanilhasModalOpen(false);
+                  }}
+                  className="flex items-center gap-2 px-4.5 py-3 bg-indigo-600 hover:bg-indigo-750 text-white font-black rounded-xl text-xs tracking-wider border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-2px] transition-all cursor-pointer whitespace-nowrap"
+                >
+                  <Calendar className="w-4 h-4 text-indigo-200" />
+                  <span>🗓️ Agendamentos</span>
+                </button>
+
+                {/* Marketing Email / Campaign Quick Shortcut button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerSensoryFeedback('click', accSettings);
+                    setActiveTab('leads');
+                    setLeadsViewMode('marketing');
+                    setIsPlanilhasModalOpen(false);
+                  }}
+                  className="flex items-center gap-2 px-4.5 py-3 bg-pink-600 hover:bg-pink-700 text-white font-black rounded-xl text-xs tracking-wider border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-2px] transition-all cursor-pointer whitespace-nowrap"
+                >
+                  <Mail className="w-4 h-4 text-pink-200" />
+                  <span>📢 Marketing</span>
+                </button>
+              </div>
             )}
           </div>
 
@@ -3034,7 +3275,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {/* 2 & 3. UNIFIED GESTÃO DE LEADS (LIST / KANBAN DUAL MODE) */}
+          {/* 2 & 3. UNIFIED GESTÃO DE LEADS (TABELA / STATUS / FOLLOW-UP MULTI-MODE) */}
           {activeTab === 'leads' && (
             <motion.div
               initial={{ opacity: 0, y: 15 }}
@@ -3042,39 +3283,166 @@ export default function App() {
               transition={{ duration: 0.22 }}
               className="w-full space-y-5"
             >
-              {/* Dual Mode Switcher Bar */}
-              <div className="flex flex-col sm:flex-row items-center justify-between bg-zinc-900 border-4 border-zinc-950 p-4.5 rounded-2xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] gap-4">
+              {/* TRÊS BLOCOS FIXOS EM TODOS OS MODOS: 1. Modo Operacional, 2. Filtros Avançados, 3. Gestão de Leads */}
+
+              {/* BLOCO 1: PAINEL OPERACIONAL DETALHADO DO CRM (VISTAS & OPERAÇÕES UNIFICADAS) */}
+              <div className="bg-zinc-900 border-4 border-zinc-950 p-5 rounded-2xl shadow-[6px_6px_0px_0px_rgba(24,24,27,1)] flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-5 select-none animate-fadeIn">
                 <div className="flex items-center gap-2">
-                  <span className="text-white font-sans font-black uppercase text-xs tracking-wider italic">📺 Modo de Exibição da Carteira:</span>
+                  <Briefcase className="w-4.5 h-4.5 text-indigo-400 shrink-0" />
+                  <span className="text-white font-mono font-black text-xs uppercase tracking-wider italic">VISTA OPERACIONAL:</span>
                 </div>
-                <div className="flex bg-zinc-950 p-1 border-2 border-zinc-700/60 rounded-xl w-full sm:w-auto">
+                
+                <div className="grid grid-cols-2 md:grid-cols-4 bg-zinc-950 p-1.5 border-2 border-zinc-800 rounded-2xl gap-2 w-full xl:w-auto">
+                  {/* 1. Tabela */}
                   <button
                     type="button"
                     onClick={() => {
                       setLeadsViewMode('list');
+                      setIsPlanilhasModalOpen(false);
                       triggerSensoryFeedback('click', accSettings);
                     }}
-                    className={`flex-1 sm:flex-initial px-4.5 py-2 rounded-lg text-[10px] font-black uppercase font-mono tracking-wider transition-all duration-150 flex items-center justify-center gap-2 ${
-                      leadsViewMode === 'list'
-                        ? 'bg-indigo-600 text-white border-2 border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'
-                        : 'text-zinc-400 hover:text-white hover:bg-zinc-800/40'
+                    className={`px-4 py-3 rounded-xl text-[10.5px] font-mono font-black uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
+                      leadsViewMode === 'list' && !isPlanilhasModalOpen
+                        ? 'bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900 border-transparent'
                     }`}
                   >
-                    <span>📋 Lista Operacional</span>
+                    <FileSpreadsheet className="w-3.5 h-3.5 shrink-0 text-indigo-400" />
+                    <span>Tabela</span>
                   </button>
+
+                  {/* 2. Status (Kanban) */}
                   <button
                     type="button"
                     onClick={() => {
                       setLeadsViewMode('kanban');
+                      setIsPlanilhasModalOpen(false);
                       triggerSensoryFeedback('click', accSettings);
                     }}
-                    className={`flex-1 sm:flex-initial px-4.5 py-2 rounded-lg text-[10px] font-black uppercase font-mono tracking-wider transition-all duration-150 flex items-center justify-center gap-2 ${
+                    className={`px-4 py-3 rounded-xl text-[10.5px] font-mono font-black uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
                       leadsViewMode === 'kanban'
-                        ? 'bg-indigo-600 text-white border-2 border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'
-                        : 'text-zinc-400 hover:text-white hover:bg-zinc-800/40'
+                        ? 'bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900 border-transparent'
                     }`}
                   >
-                    <span>🗂️ Funil Kanban</span>
+                    <Sliders className="w-3.5 h-3.5 shrink-0 text-pink-400" />
+                    <span>Kanban</span>
+                  </button>
+
+                  {/* 3. Follow-up */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLeadsViewMode('followup');
+                      setIsPlanilhasModalOpen(false);
+                      triggerSensoryFeedback('click', accSettings);
+                    }}
+                    className={`px-4 py-3 rounded-xl text-[10.5px] font-mono font-black uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
+                      leadsViewMode === 'followup'
+                        ? 'bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900 border-transparent'
+                    }`}
+                  >
+                    <Users className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+                    <span>Follow-ups</span>
+                  </button>
+
+                  {/* 4. Planilha (Importar & Exportar) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLeadsViewMode('list');
+                      setIsPlanilhasModalOpen(!isPlanilhasModalOpen);
+                      triggerSensoryFeedback('click', accSettings);
+                    }}
+                    className={`px-4 py-3 rounded-xl text-[10.5px] font-mono font-black uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
+                      isPlanilhasModalOpen
+                        ? 'bg-amber-400 text-zinc-950 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900 border-transparent'
+                    }`}
+                  >
+                    <Plus className="w-3.5 h-3.5 shrink-0 text-amber-400 animate-pulse" />
+                    <span>Planilha</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* BLOCO 2: DESTAQUE PARA BARRA DE PESQUISA & FILTROS AVANÇADOS (ALTÍSSIMO CONTRASTE) */}
+              <div className="bg-white border-4 border-zinc-950 p-5 rounded-2xl shadow-[6px_6px_0px_0px_rgba(24,24,27,1)] flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-5 animate-fadeIn">
+                
+                {/* MASSIVO DESTAQUE PARA BARRA DE PESQUISA */}
+                <div className="relative flex-grow max-w-xl group">
+                  <div className="absolute inset-0 bg-indigo-500/10 rounded-2xl blur-md group-hover:bg-indigo-500/15 transition duration-300"></div>
+                  <div className="relative flex items-center">
+                    <Search className="absolute left-4 top-4.5 w-4.5 h-4.5 text-indigo-600 animate-pulse stroke-[2.5]" />
+                    <input
+                      type="text"
+                      placeholder="PESQUISAR CLIENTES POR NOME, CONTRATO OU TELEFONE..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full bg-zinc-50 border-4 border-zinc-950 rounded-2xl pl-12 pr-4 py-3.5 text-xs text-zinc-950 focus:outline-none focus:bg-white focus:ring-4 focus:ring-indigo-100 font-extrabold placeholder-zinc-500 tracking-wider uppercase font-mono transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* DROPDOWNS E FILTROS COMPLEMENTARES */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Status */}
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => {
+                      setStatusFilter(e.target.value);
+                      triggerSensoryFeedback('click', accSettings);
+                    }}
+                    className="bg-white border-2 border-zinc-950 rounded-xl px-4 py-3.5 text-[10.5px] font-black text-zinc-950 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 uppercase font-mono cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-zinc-50"
+                  >
+                    <option value="todos">Status: Todos</option>
+                    {getKanbanColumns().map(col => (
+                      <option key={col.id} value={col.id}>{col.label}</option>
+                    ))}
+                  </select>
+
+                  {/* Origem */}
+                  <select
+                    value={originFilter}
+                    onChange={(e) => {
+                      setOriginFilter(e.target.value);
+                      triggerSensoryFeedback('click', accSettings);
+                    }}
+                    className="bg-white border-2 border-zinc-950 rounded-xl px-4 py-3.5 text-[10.5px] font-black text-zinc-950 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 uppercase font-mono cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-zinc-50"
+                  >
+                    <option value="todos">Origem: Todas</option>
+                    {Array.from(new Set(leads.map(l => l.origin || 'outros'))).filter(Boolean).map(origin => (
+                      <option key={origin} value={origin}>{origin}</option>
+                    ))}
+                  </select>
+
+                  {/* Alfabeto */}
+                  <select
+                    value={initialLetterFilter}
+                    onChange={(e) => {
+                      setInitialLetterFilter(e.target.value);
+                      triggerSensoryFeedback('click', accSettings);
+                    }}
+                    className="bg-white border-2 border-zinc-950 rounded-xl px-4 py-3.5 text-[10.5px] font-black text-zinc-950 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 uppercase font-mono cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-zinc-50"
+                  >
+                    <option value="todos">Letra Inicial: Todas</option>
+                    {Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)).map(letter => (
+                      <option key={letter} value={letter}>{letter}</option>
+                    ))}
+                  </select>
+
+                  {/* Diagnostic IA button */}
+                  <button
+                    onClick={() => {
+                      triggerSensoryFeedback('click', accSettings);
+                      simulateCRMAction();
+                    }}
+                    className="text-[10px] font-mono font-black text-white bg-indigo-600 hover:bg-indigo-700 px-4 py-3.5 rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase transition-all flex items-center gap-1.5 shrink-0 cursor-pointer hover:translate-y-[-1px] active:translate-y-0.5"
+                     title="Executar análise inteligente de propensão do funil"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-200 shrink-0" />
+                    <span>Diagnóstico IA</span>
                   </button>
                 </div>
               </div>
@@ -3082,6 +3450,18 @@ export default function App() {
               {leadsViewMode === 'list' ? (
                 <LeadList 
                   leads={leads}
+                  searchTerm={searchTerm}
+                  setSearchTerm={setSearchTerm}
+                  statusFilter={statusFilter}
+                  setStatusFilter={setStatusFilter}
+                  originFilter={originFilter}
+                  setOriginFilter={setOriginFilter}
+                  initialLetterFilter={initialLetterFilter}
+                  setInitialLetterFilter={setInitialLetterFilter}
+                  externalShowImporter={isPlanilhasModalOpen}
+                  setExternalShowImporter={setIsPlanilhasModalOpen}
+                  externalShowPlanner={isConversaoModalOpen}
+                  setExternalShowPlanner={setIsConversaoModalOpen}
                   onOpenLeadDetails={(lead) => {
                     setSelectedLeadForDetails(lead);
                     setIsDetailsModalOpen(true);
@@ -3126,9 +3506,21 @@ export default function App() {
                   appointments={appointments}
                   setAppointments={setAppointments}
                 />
-              ) : (
+              ) : leadsViewMode === 'kanban' ? (
                 <KanbanBoard 
-                  leads={leads}
+                  leads={leads.filter(lead => {
+                    const matchesSearch = 
+                      lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      lead.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      lead.phone.includes(searchTerm) ||
+                      (lead.company || '').toLowerCase().includes(searchTerm.toLowerCase());
+                    const matchesStatus = statusFilter === 'todos' || lead.status === statusFilter;
+                    const matchesOrigin = originFilter === 'todos' || lead.origin === originFilter;
+                    const matchesInitial = 
+                      initialLetterFilter === 'todos' ||
+                      lead.name.trim().charAt(0).toUpperCase() === initialLetterFilter.toUpperCase();
+                    return matchesSearch && matchesStatus && matchesOrigin && matchesInitial;
+                  })}
                   onMoveLead={handleMoveLead}
                   onOpenLeadDetails={(lead) => {
                     setSelectedLeadForDetails(lead);
@@ -3144,69 +3536,40 @@ export default function App() {
                     setIsLeadModalOpen(true);
                   }}
                 />
+              ) : leadsViewMode === 'followup' ? (
+                <FollowUpManager
+                  leads={leads}
+                  followUps={followUps}
+                  onAddFollowUp={handleAddFollowUp}
+                  onDeleteFollowUp={handleDeleteFollowUp}
+                  accSettings={accSettings}
+                />
+              ) : leadsViewMode === 'appointments' ? (
+                <Appointments
+                  leads={leads}
+                  appointments={appointments}
+                  onAddAppointment={handleAddAppointment}
+                  onUpdateAppointmentStatus={handleUpdateAppointmentStatus}
+                  onDeleteAppointment={handleDeleteAppointment}
+                  accSettings={accSettings}
+                />
+              ) : (
+                <MultiLevelMarketingTab
+                  leads={leads}
+                  templates={templates}
+                  logs={emailLogs}
+                  onAddTemplate={handleAddTemplate}
+                  onEditTemplate={handleEditTemplate}
+                  onDeleteTemplate={handleDeleteTemplate}
+                  onSendEmailSimulated={handleSendEmailSimulated}
+                  properties={properties}
+                  theme={theme}
+                  accSettings={accSettings}
+                  awardXP={(xp, cause) => awardXP(xp)}
+                  addNotification={addNotification}
+                  onTriggerConversao={() => setIsConversaoModalOpen(true)}
+                />
               )}
-            </motion.div>
-          )}
-
-          {/* 3.5. FOLLOW-UP MODULE */}
-          {activeTab === 'follow-up' && (
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.22 }}
-              className="w-full"
-            >
-              <FollowUpManager
-                leads={leads}
-                followUps={followUps}
-                onAddFollowUp={handleAddFollowUp}
-                onDeleteFollowUp={handleDeleteFollowUp}
-                accSettings={accSettings}
-              />
-            </motion.div>
-          )}
-
-          {/* 4. INTEGRATED MULTI-LEVEL MARKETING MODULE */}
-          {activeTab === 'marketing-multinivel' && (
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.22 }}
-              className="w-full"
-            >
-              <MultiLevelMarketingTab
-                leads={leads}
-                templates={templates}
-                logs={emailLogs}
-                onAddTemplate={handleAddTemplate}
-                onEditTemplate={handleEditTemplate}
-                onDeleteTemplate={handleDeleteTemplate}
-                onSendEmailSimulated={handleSendEmailSimulated}
-                properties={properties}
-                theme={theme}
-                accSettings={accSettings}
-                awardXP={(xp, cause) => awardXP(xp)}
-                addNotification={addNotification}
-              />
-            </motion.div>
-          )}
-
-          {/* 4.5. APPOINTMENTS MODULE */}
-          {activeTab === 'appointments' && (
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.22 }}
-              className="w-full"
-            >
-              <Appointments
-              leads={leads}
-              appointments={appointments}
-              onAddAppointment={handleAddAppointment}
-              onUpdateAppointmentStatus={handleUpdateAppointmentStatus}
-              onDeleteAppointment={handleDeleteAppointment}
-              accSettings={accSettings}
-            />
             </motion.div>
           )}
 
@@ -3219,15 +3582,19 @@ export default function App() {
               className="w-full"
             >
               <RealEstateInventory
-              leads={leads}
-              properties={properties}
-              onAddProperty={handleAddProperty}
-              onAddBulkProperties={handleAddBulkProperties}
-              onAddBulkLeads={handleAddBulkLeads}
-              onDeleteProperty={handleDeleteProperty}
-              onUpdatePropertyStatus={handleUpdatePropertyStatus}
-              onUpdateProperty={handleUpdateProperty}
-            />
+                leads={leads}
+                properties={properties}
+                onAddProperty={handleAddProperty}
+                onAddBulkProperties={handleAddBulkProperties}
+                onAddBulkLeads={handleAddBulkLeads}
+                onDeleteProperty={handleDeleteProperty}
+                onUpdatePropertyStatus={handleUpdatePropertyStatus}
+                onUpdateProperty={handleUpdateProperty}
+                theme={theme}
+                accSettings={accSettings}
+                addNotification={addNotification}
+                awardXP={(xp, cause) => awardXP(xp)}
+              />
             </motion.div>
           )}
 
@@ -3331,6 +3698,9 @@ export default function App() {
                 accSettings={accSettings}
                 awardXP={awardXP}
                 addNotification={addNotification}
+                leads={leads}
+                setLeads={setLeads}
+                templates={templates}
               />
             </motion.div>
           )}
@@ -3599,6 +3969,8 @@ export default function App() {
                     onWipeLeads={handleWipeLeads}
                     onWipeEstoque={handleWipeProperties}
                     onRequestConfirm={requestConfirmation}
+                    forceLocalStorageMode={forceLocalStorageMode}
+                    onToggleForceLocalMode={handleToggleForceLocalMode}
                   />
                 ) : (
                   <BackupManager

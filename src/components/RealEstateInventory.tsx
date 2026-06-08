@@ -4,9 +4,11 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Lead, RealEstateProperty } from '../types';
 import { pdfProperties } from '../data/pdfInventory';
+import FinanceSimulatorTab from './FinanceSimulatorTab';
 import { 
   Building2, 
   Plus, 
@@ -48,6 +50,10 @@ interface RealEstateInventoryProps {
   onDeleteProperty: (id: string) => void;
   onUpdatePropertyStatus: (id: string, status: 'disponivel' | 'reservado' | 'vendido') => void;
   onUpdateProperty?: (prop: RealEstateProperty) => void;
+  theme?: 'claro' | 'escuro' | 'galatico';
+  accSettings?: any;
+  addNotification?: (title: string, msg: string, type: 'success' | 'warning' | 'info') => void;
+  awardXP?: (xp: number, cause?: string) => void;
 }
 
 export default function RealEstateInventory({
@@ -58,9 +64,13 @@ export default function RealEstateInventory({
   onAddBulkLeads,
   onDeleteProperty,
   onUpdatePropertyStatus,
-  onUpdateProperty
+  onUpdateProperty,
+  theme,
+  accSettings,
+  addNotification,
+  awardXP
 }: RealEstateInventoryProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'estoque' | 'estoque-tabela' | 'importador'>('estoque');
+  const [activeSubTab, setActiveSubTab] = useState<'estoque' | 'estoque-tabela' | 'importador' | 'simulador'>('estoque');
 
   // Properties filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -1201,6 +1211,12 @@ export default function RealEstateInventory({
           className={`flex-1 py-3 text-xs font-black uppercase tracking-wider font-mono rounded-xl transition ${activeSubTab === 'importador' ? 'bg-indigo-600 text-white border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-zinc-500 hover:bg-zinc-50'}`}
         >
           📋 Importador Lote
+        </button>
+        <button
+          onClick={() => setActiveSubTab('simulador')}
+          className={`flex-1 py-3 text-xs font-black uppercase tracking-wider font-mono rounded-xl transition ${activeSubTab === 'simulador' ? 'bg-indigo-600 text-white border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-zinc-500 hover:bg-zinc-50'}`}
+        >
+          🧾 Simulador Integrado
         </button>
       </div>
 
@@ -2432,6 +2448,18 @@ export default function RealEstateInventory({
       )}
 
       {/* RENDER TAB 4: CONNECTIVITY PORTAL (CURY METROPOLITAN SP & CAIXA INTEGRATOR) */}
+      {activeSubTab === 'simulador' && (
+        <div className="space-y-6">
+          <FinanceSimulatorTab
+            leads={leads}
+            theme={theme}
+            accSettings={accSettings}
+            addNotification={addNotification}
+            awardXP={awardXP}
+          />
+        </div>
+      )}
+
       {activeSubTab === 'conectividade-disabled' && (
         <div className="space-y-6">
           <div className="bg-white border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] text-zinc-900 space-y-6 animate-fadeIn">
@@ -2774,21 +2802,21 @@ export default function RealEstateInventory({
 
       {/* 5. PDF EXPORT PROPOSAL MODAL */}
       <AnimatePresence>
-        {isPdfModalOpen && (
+        {isPdfModalOpen && createPortal(
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto print:p-0 print:bg-white print:static print:block"
           >
             <motion.div
               initial={{ scale: 0.95, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 20 }}
-              className="bg-zinc-100 border-4 border-zinc-950 p-6 rounded-3xl max-w-4xl w-full shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] flex flex-col gap-4 text-zinc-900"
+              className="bg-zinc-100 border-4 border-zinc-950 p-6 rounded-3xl max-w-4xl w-full shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] flex flex-col gap-4 text-zinc-900 print:p-0 print:border-none print:shadow-none print:bg-white print:max-w-none"
             >
               {/* Controls Header */}
-              <div className="flex justify-between items-center pb-3 border-b-2 border-zinc-200">
+              <div className="flex justify-between items-center pb-3 border-b-2 border-zinc-200 print:hidden">
                 <div className="flex items-center gap-2">
                   <span className="p-1 px-2 bg-emerald-100 border-2 border-zinc-950 text-emerald-800 text-[10px] font-black uppercase rounded shadow font-mono">PDF PRONTO</span>
                   <h3 className="text-sm font-black uppercase tracking-tight text-zinc-950 font-mono">Visualização da Proposta cicloCRED</h3>
@@ -2940,7 +2968,7 @@ export default function RealEstateInventory({
                     1. Esta ficha de simulação representa uma estimativa calculada dinamicamente pelo CRM cicloCRED e não confere promessa implícita de crédito imobiliário definitivo por parte das instituições financeiras parceiras citadas. 
                   </p>
                   <p>
-                    2. A concessão definitiva está vinculada à avaliação cadastral, validação de restrições em bureaus de crédito (SPC/Serasa) e laudo de avaliação física do imóvel a ser adquirido, em estrita conformidade com a regulamentação do Banco Central do Brasil.
+                    2. A concessão definitiva está vinculada à avaliação cadastral, validação de restrições em bureaus de crédito (SPC/Serasa) e laudo de avaliação física do imóvel a ser adquirido, in estrita conformidade com a regulamentação do Banco Central do Brasil.
                   </p>
                 </div>
 
@@ -2960,7 +2988,8 @@ export default function RealEstateInventory({
 
               </div>
             </motion.div>
-          </motion.div>
+          </motion.div>,
+          document.body
         )}
       </AnimatePresence>
 

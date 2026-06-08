@@ -73,8 +73,6 @@ export default function KanbanBoard({
   onOpenEditModal, 
   onOpenCreateModal 
 }: KanbanBoardProps) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [originFilter, setOriginFilter] = useState('');
   const [activeDragCol, setActiveDragCol] = useState<string | null>(null);
 
   // Load columns from LocalStorage helper and put into state for dynamic rendering
@@ -167,17 +165,8 @@ export default function KanbanBoard({
     window.dispatchEvent(new Event('kanban-columns-updated'));
   };
 
-  // Map origins for filters
-  const origins = Array.from(new Set(leads.map(l => l.origin)));
-
   // Filtered leads
-  const filteredLeads = leads.filter(lead => {
-    const matchesSearch = lead.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          (lead.company || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          lead.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesOrigin = originFilter === '' || lead.origin === originFilter;
-    return matchesSearch && matchesOrigin;
-  });
+  const filteredLeads = leads;
 
   // Calculate sum of values for a column
   const getColumnTotal = (status: string) => {
@@ -188,25 +177,25 @@ export default function KanbanBoard({
 
   return (
     <div className="space-y-8">
-      {/* Abas Dynamic Controller Toolbar */}
+      {/* Abas Dynamic Controller Toolbar - Rebranded to Personalizar */}
       <div className="bg-white p-5 rounded-2xl border-4 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h2 className="text-md font-sans font-black uppercase text-zinc-950 flex items-center gap-2">
               <span className="bg-indigo-600 text-white rounded px-2 py-0.5 tracking-tighter uppercase font-mono italic text-xs">SWAT</span>
-              Painel de Abas ({columns.length}/10)
+              Personalizar ({columns.length}/10)
             </h2>
             <p className="text-xs text-zinc-500 font-bold mt-1">
-              Personalize o fluxo de atendimento. Altere os nomes das abas ou seccione seus contatos em até 10 fases sob medida.
+              Configure o fluxo de atendimento. Insira novos status de CRM e use os recursos de Zoom e Organização abaixo.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2.5">
             {columns.length < 10 ? (
               <div className="flex items-center gap-2 bg-zinc-50 p-1.5 border-2 border-zinc-950 rounded-xl w-full sm:w-auto">
                 <input
                   type="text"
-                  placeholder="Nome do status..."
+                  placeholder="Novo status..."
                   value={newAbaName}
                   onChange={(e) => setNewAbaName(e.target.value)}
                   className="bg-white border-2 border-zinc-950 text-xs px-2.5 py-1.5 rounded-lg focus:outline-none font-bold shrink-0 placeholder-zinc-400 w-32"
@@ -239,66 +228,26 @@ export default function KanbanBoard({
                 ⚠️ Limite de 10 abas atingido !
               </span>
             )}
-          </div>
-        </div>
-      </div>
 
-      {/* Kanban Filter Toolbar */}
-      <div className="flex flex-col xl:flex-row gap-4 items-center justify-between bg-white p-5 rounded-2xl border-4 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)]">
-        <div className="flex flex-col md:flex-row flex-1 w-full gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3.5 top-3.5 w-4 h-4 text-zinc-500" />
-            <input
-              type="text"
-              id="kanban-search"
-              placeholder="Buscar por nome, e-mail, empresa..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl pl-10 pr-4 py-2.5 text-sm text-zinc-900 focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500 font-bold placeholder-zinc-500"
-            />
-          </div>
-          
-          <div className="flex gap-2 shrink-0">
-            <select
-              id="kanban-filter-origin"
-              value={originFilter}
-              onChange={(e) => setOriginFilter(e.target.value)}
-              className="bg-zinc-50 border-2 border-zinc-950 rounded-xl px-3 py-2 text-xs text-zinc-800 font-extrabold focus:outline-none focus:bg-white"
+            {/* Combined Zoom Cycle Button */}
+            <button
+              type="button"
+              onClick={() => {
+                if (zoomMode === 'normal') {
+                  setZoomMode('compact');
+                } else if (zoomMode === 'compact') {
+                  setZoomMode('overview');
+                } else {
+                  setZoomMode('normal');
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 bg-zinc-100 hover:bg-zinc-200 border-2 border-zinc-950 rounded-xl text-xs font-black uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition cursor-pointer"
+              title="Modo de Zoom"
             >
-              <option value="">Origem (Todas)</option>
-              {origins.map(org => (
-                <option key={org} value={org}>{org}</option>
-              ))}
-            </select>
+              <span>🔍 Zoom: {zoomMode === 'normal' ? 'Normal' : zoomMode === 'compact' ? 'Compacto' : 'Total'}</span>
+            </button>
 
-            {/* Premium Zoom Selector Controls */}
-            <div className="flex bg-zinc-150 border-2 border-zinc-950 rounded-xl p-0.5 font-mono select-none">
-              {(['normal', 'compact', 'overview'] as const).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => setZoomMode(mode)}
-                  className={`px-2 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${
-                    zoomMode === mode 
-                      ? 'bg-zinc-950 text-indigo-400' 
-                      : 'text-zinc-600 hover:text-zinc-950'
-                  }`}
-                  title={
-                    mode === 'normal' 
-                      ? 'Zoom normal' 
-                      : mode === 'compact' 
-                        ? 'Visualização compacta para mais colunas' 
-                        : 'Overview ajustado (Enxergar todas as fases na tela)'
-                  }
-                >
-                  {mode === 'normal' && 'Normal'}
-                  {mode === 'compact' && 'Compacto'}
-                  {mode === 'overview' && 'Zoom Total'}
-                </button>
-              ))}
-            </div>
-
-            {/* Abas lateral reordering pull drawer trigger */}
+            {/* Organizar status button (reordered/renamed) */}
             <button
               onClick={() => setShowAbaOrganizer(!showAbaOrganizer)}
               className={`flex items-center gap-1.5 px-3 py-2 border-2 rounded-xl text-xs font-black uppercase transition-all ${
@@ -306,21 +255,13 @@ export default function KanbanBoard({
                   ? 'bg-zinc-950 text-indigo-400 border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]' 
                   : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-800 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
               }`}
-              title="Organizador Lateral de Abas"
+              title="Organizador Lateral de Status/Abas"
             >
               <ArrowRightLeft className="w-3.5 h-3.5 text-indigo-500 stroke-[3px]" />
-              <span className="font-sans">Organizar Abas</span>
+              <span className="font-sans">Organizar status</span>
             </button>
           </div>
         </div>
-
-        <button
-          onClick={() => onOpenCreateModal(columns.length > 0 ? columns[0].id : 'novo')}
-          className="w-full xl:w-auto flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black px-5 py-3 rounded-xl border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition-all"
-        >
-          <Plus className="w-4 h-4" />
-          <span>NOVO LEAD</span>
-        </button>
       </div>
 
       {/* Grid containing Columns and Sidebar Drawer */}
@@ -582,14 +523,14 @@ export default function KanbanBoard({
       </div>
     </div>
 
-    {/* SWATS Sidebar Drawer: "Gerador & Organizador Premium de Abas" */}
+    {/* SWATS Sidebar Drawer: "Gerador & Organizador Premium de Status" */}
     {showAbaOrganizer && (
       <div className="w-full xl:w-80 shrink-0 bg-white border-4 border-zinc-950 p-5 rounded-2xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] space-y-4 animate-fadeIn sticky top-4 z-10 self-start">
         {/* Sidebar Header */}
         <div className="flex items-center justify-between border-b-2 border-zinc-950 pb-2.5">
           <span className="text-xs font-black font-mono text-zinc-950 uppercase flex items-center gap-1.5">
             <Sliders className="w-4 h-4 text-indigo-600" />
-            <span>Ordem das Abas ({columns.length}/10)</span>
+            <span>Ordem dos Status ({columns.length}/10)</span>
           </span>
           <button
             onClick={() => setShowAbaOrganizer(false)}
@@ -600,7 +541,7 @@ export default function KanbanBoard({
         </div>
         
         <p className="text-[10px] text-zinc-500 font-bold leading-tight">
-          Puxe ou empurre as abas clicando nas setas organizadoras. Qualquer modificação atualizará a esteira de CRM em tempo real.
+          Puxe ou empurre os status clicando nas setas organizadoras. Qualquer modificação atualizará a esteira de CRM em tempo real.
         </p>
 
         {/* List of current Abas with ordering triggers */}
@@ -636,7 +577,7 @@ export default function KanbanBoard({
         </div>
 
         <div className="bg-[#fcf8e3] border border-[#faebcc] text-[#8a6d3b] p-3 rounded-xl text-[10px] leading-relaxed font-semibold">
-          💡 Dica: O CRM SWAT foi otimizado para comportar de forma premium até 10 abas ativas simultaneamente.
+          💡 Dica: O CRM SWAT foi otimizado para comportar de forma premium até 10 status ativos simultaneamente.
         </div>
       </div>
     )}

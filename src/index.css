@@ -28,40 +28,51 @@
 
 /* Print Layout rules for clean PDF exports */
 @media print {
-  body {
+  /* Completely hide the entire application UI layout and sidebar to prevent cluttering or leaking */
+  #root {
+    display: none !important;
+  }
+
+  /* Set html and body to clean white background and make sure they fit clean A4 sizes */
+  html, body {
     background: white !important;
     color: black !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
   }
-  /* Hide overall CRM UI components: sidebar, page header, tabs, modal overlay controls */
-  #root > *,
-  .fixed.inset-0.bg-black\/60,
-  button,
-  select,
-  nav,
-  aside,
-  header {
-    display: none !important;
-    visibility: hidden !important;
-  }
-  
-  /* Make sure our printable proposal container is visible, full width and starts at top-left */
-  #printable-proposal,
-  #printable-proposal * {
-    visibility: visible !important;
-    display: block !important;
-  }
+
+  /* Style portal-mounted print sheets to align at (0,0) with precise margins for A4 papers */
+  #print-sheet-ciclocred,
   #printable-proposal {
+    display: block !important;
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;
-    width: 100% !important;
+    width: 21cm !important;
+    min-height: 29.7cm !important;
+    background: white !important;
+    color: black !important;
+    padding: 1.5cm !important;
+    margin: 0 !important;
     border: none !important;
     box-shadow: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
+    z-index: 9999999 !important;
   }
+
+  /* Ensure deep nested content within print sheets is fully visible */
+  #print-sheet-ciclocred *,
+  #printable-proposal * {
+    visibility: visible !important;
+  }
+
+  /* Preserve grid and flexbox structural layouts on PDF engines */
   .grid {
     display: grid !important;
+  }
+  .flex {
+    display: flex !important;
   }
 }
 

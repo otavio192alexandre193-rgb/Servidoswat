@@ -18,6 +18,7 @@ export interface Lead {
   createdAt: string;
   lastContactAt?: string;
   familyIncome?: number;
+  ai_muted?: boolean;
 }
 
 export interface EmailTemplate {

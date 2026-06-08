@@ -24,6 +24,7 @@ interface MultiLevelMarketingTabProps {
   addNotification?: (title: string, msg: string, type: 'success' | 'warning' | 'info') => void;
   initialTargetLeadIds?: string[];
   onClearInitialTargets?: () => void;
+  onTriggerConversao?: () => void;
 }
 
 export default function MultiLevelMarketingTab({
@@ -40,7 +41,8 @@ export default function MultiLevelMarketingTab({
   awardXP,
   addNotification,
   initialTargetLeadIds = [],
-  onClearInitialTargets
+  onClearInitialTargets,
+  onTriggerConversao
 }: MultiLevelMarketingTabProps) {
   const [activeSubTab, setActiveSubTab] = useState<'disparos' | 'midia'>('disparos');
 
@@ -48,12 +50,12 @@ export default function MultiLevelMarketingTab({
     <div className="space-y-6">
       
       {/* Sub-routing Navigation header buttons */}
-      <div className="bg-zinc-900 border-4 border-zinc-950 p-2.5 rounded-2xl flex gap-2 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] select-none">
+      <div className="bg-zinc-900 border-4 border-zinc-950 p-2.5 rounded-2xl flex flex-wrap md:flex-nowrap gap-2 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] select-none">
         <button
           onClick={() => setActiveSubTab('disparos')}
           className={`flex-1 py-3 text-xs font-black uppercase tracking-wider font-mono rounded-xl transition flex items-center justify-center gap-2 cursor-pointer ${
             activeSubTab === 'disparos'
-              ? 'bg-indigo-600 text-white border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+              ? 'bg-indigo-600 text-white border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] font-extrabold'
               : 'text-zinc-450 hover:text-white hover:bg-zinc-800'
           }`}
         >
@@ -64,13 +66,24 @@ export default function MultiLevelMarketingTab({
           onClick={() => setActiveSubTab('midia')}
           className={`flex-1 py-3 text-xs font-black uppercase tracking-wider font-mono rounded-xl transition flex items-center justify-center gap-2 cursor-pointer ${
             activeSubTab === 'midia'
-              ? 'bg-indigo-600 text-white border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+              ? 'bg-indigo-600 text-white border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] font-extrabold'
               : 'text-zinc-450 hover:text-white hover:bg-zinc-800'
           }`}
         >
           <Image className="w-4 h-4 text-pink-400" />
           <span>Central de Mídia Integrada</span>
         </button>
+        {onTriggerConversao && (
+          <button
+            onClick={() => {
+              onTriggerConversao();
+            }}
+            className="flex-1 py-3 text-xs font-black uppercase tracking-wider font-mono rounded-xl transition flex items-center justify-center gap-2 cursor-pointer text-emerald-400 border border-zinc-700 hover:border-emerald-400 hover:bg-indigo-950/20 active:translate-y-px"
+          >
+            <Sparkles className="w-4 h-4 text-emerald-400 animate-pulse" />
+            <span>Portabilidade & Conversão</span>
+          </button>
+        )}
       </div>
 
       {activeSubTab === 'disparos' && (

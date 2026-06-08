@@ -246,11 +246,11 @@ export default function Appointments({
         </div>
       </div>
 
-      {/* THE LIVE RESPONSIVE CALENDAR & NEON ALERTS CONTROLLER */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* THE LIVE RESPONSIVE CALENDAR */}
+      <div className="w-full">
         
         {/* Living Month Selector Grid */}
-        <div id="living-calendar-grid" className="lg:col-span-2 bg-white border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] space-y-4">
+        <div id="living-calendar-grid" className="w-full bg-white border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] space-y-4">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4">
             <div>
               <span className="text-[9px] uppercase font-mono font-black text-indigo-600 block">Calendário Geral de Atividades</span>
@@ -385,90 +385,6 @@ export default function Appointments({
                 Mostrar Todos os Dias ✕
               </button>
             )}
-          </div>
-        </div>
-
-        {/* SIREN SOUND AND VIBRATION DECK */}
-        <div 
-          id="alarm-indicator-card"
-          className={`bg-zinc-950 text-zinc-100 border-4 rounded-3xl p-6 shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] space-y-4 relative overflow-hidden transition-all ${
-            isVibrating ? 'border-rose-500 ring-4 ring-rose-950 animate-shake bg-zinc-900' : 'border-zinc-950'
-          }`}
-        >
-          {isVibrating && (
-            <div className="absolute top-0 left-0 w-full h-1.5 bg-rose-500 animate-pulse z-10" />
-          )}
-
-          <div className="border-b border-zinc-800 pb-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <BellRing className={`w-5 h-5 ${isVibrating ? 'text-rose-400 rotate-12' : 'text-amber-400'}`} />
-              <div>
-                <h4 className="text-xs font-black uppercase text-white font-mono">Central de Alarmes</h4>
-                <p className="text-[10px] text-zinc-400">Vibração, Pager & Áudio</p>
-              </div>
-            </div>
-
-            {/* Switch Toggle */}
-            <label className="relative inline-flex items-center cursor-pointer select-none">
-              <input 
-                type="checkbox" 
-                checked={isAlarmEnabling}
-                onChange={() => setIsAlarmEnabling(!isAlarmEnabling)} 
-                className="sr-only peer"
-              />
-              <div className="w-9 h-5 bg-zinc-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600 border border-zinc-700"></div>
-              <span className="ml-1.5 text-[8px] font-mono font-black text-zinc-400 uppercase">
-                {isAlarmEnabling ? 'ATIVO' : 'MUTADO'}
-              </span>
-            </label>
-          </div>
-
-          {/* Action Trigger test buttons */}
-          <div className="space-y-2 select-none">
-            <button
-              type="button"
-              onClick={() => triggerSynthesizedNotification()}
-              disabled={!isAlarmEnabling}
-              className="w-full flex items-center justify-between p-2.5 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-850 hover:border-zinc-500 transition text-left cursor-pointer disabled:opacity-50"
-            >
-              <div className="flex items-center gap-2">
-                <Volume2 className="w-3.5 h-3.5 text-indigo-400" />
-                <span className="text-[10px] font-mono uppercase font-black text-zinc-200">Disparar Alarme Sonoro</span>
-              </div>
-              <span className="text-[8px] font-mono text-indigo-400 font-bold bg-indigo-950/80 px-1.5 py-0.5 rounded uppercase">Testar 880Hz</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                const randomLeads = ["Carlos Ferreira", "Amanda Rocha", "Gisele Santos", "Felipe Neves"];
-                const leadPicked = randomLeads[Math.floor(Math.random() * randomLeads.length)];
-                triggerSynthesizedNotification(`Simula: Visita urgente com o lead ${leadPicked} em 5 minutos!`);
-              }}
-              disabled={!isAlarmEnabling}
-              className="w-full flex items-center justify-between p-2.5 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-850 hover:border-zinc-500 transition text-left cursor-pointer disabled:opacity-50"
-            >
-              <div className="flex items-center gap-2">
-                <Smartphone className="w-3.5 h-3.5 text-rose-400" />
-                <span className="text-[10px] font-mono uppercase font-black text-zinc-200">Testar Vibração Mecânica</span>
-              </div>
-              <span className="text-[8px] font-mono text-rose-400 font-bold bg-rose-950/80 px-1.5 py-0.5 rounded uppercase">Navigator API</span>
-            </button>
-          </div>
-
-          {/* Real-time neon logs terminal output block */}
-          <div className="space-y-1.5">
-            <div className="flex justify-between items-center text-[8px] font-mono font-black uppercase text-zinc-500">
-              <span>Termógrafo dos Sensores</span>
-              <span>May 2026 UTC</span>
-            </div>
-            <div className="bg-black text-emerald-400 font-mono text-[9px] p-2.5 rounded-xl border border-zinc-800 h-[85px] overflow-y-auto space-y-1 select-text scrollbar-thin">
-              {alarmLogs.map((log, lidx) => (
-                <div key={lidx} className="leading-tight truncate">
-                  <span className="text-zinc-500">&gt;</span> {log}
-                </div>
-              ))}
-            </div>
           </div>
         </div>
       </div>

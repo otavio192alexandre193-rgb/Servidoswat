@@ -35,9 +35,12 @@ import {
   Trash,
   PlusCircle,
   Save,
-  X
+  X,
+  BellRing
 } from 'lucide-react';
 import { AccessibilitySettings, triggerSensoryFeedback, SensoryAction } from '../utils/sensory';
+import { db } from '../firebase';
+import { collection, doc, setDoc, deleteDoc, getDocs } from 'firebase/firestore';
 
 interface SettingsProps {
   theme: 'claro' | 'escuro' | 'galatico';
@@ -72,6 +75,8 @@ interface SettingsProps {
   onWipeLeads: () => void;
   onWipeEstoque: () => void;
   onRequestConfirm?: (title: string, desc: string, onConfirm: () => void, type?: 'danger' | 'warning') => void;
+  forceLocalStorageMode?: boolean;
+  onToggleForceLocalMode?: (val: boolean) => void;
 }
 
 export default function SettingsView({
@@ -106,10 +111,80 @@ export default function SettingsView({
   inventoryCount,
   onWipeLeads,
   onWipeEstoque,
-  onRequestConfirm
+  onRequestConfirm,
+  forceLocalStorageMode = false,
+  onToggleForceLocalMode
 }: SettingsProps) {
   const [copiedScriptId, setCopiedScriptId] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // CENTRAL DE ALARMES STATE & FEEDBACKS
+  const [isVibrating, setIsVibrating] = useState(false);
+  const [isAlarmEnabling, setIsAlarmEnabling] = useState(() => {
+    return localStorage.getItem('ciclocred_alarm_enabled') !== 'false';
+  });
+  const [alarmLogs, setAlarmLogs] = useState<string[]>([
+    "Sincronização de clock ativa na Central de Alarmes.",
+    "Bateria do CRM e sensores virtuais em 100%.",
+    "Pronto para emitir vibração e alarmes."
+  ]);
+  const [isSoundPlaying, setIsSoundPlaying] = useState(false);
+
+  const triggerSynthesizedNotification = (customText?: string) => {
+    try {
+      if (!isAlarmEnabling) return;
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+
+      const audioCtx = new AudioContextClass();
+      setIsSoundPlaying(true);
+
+      const playBeepAt = (timeDelay: number, frequencyTone: number, beepLen: number) => {
+        setTimeout(() => {
+          const oscillator = audioCtx.createOscillator();
+          const gainNode = audioCtx.createGain();
+
+          oscillator.type = "sine";
+          oscillator.frequency.setValueAtTime(frequencyTone, audioCtx.currentTime);
+
+          gainNode.gain.setValueAtTime(0.12, audioCtx.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + beepLen);
+
+          oscillator.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
+
+          oscillator.start();
+          oscillator.stop(audioCtx.currentTime + beepLen);
+        }, timeDelay);
+      };
+
+      playBeepAt(0, 880, 0.12);
+      playBeepAt(160, 880, 0.12);
+      playBeepAt(320, 1100, 0.20);
+
+      setTimeout(() => {
+        setIsSoundPlaying(false);
+      }, 700);
+
+    } catch (e) {
+      console.warn("AudioContext blocked or unavailable inside preview frame", e);
+    }
+
+    if (navigator.vibrate) {
+      navigator.vibrate([100, 50, 100, 50, 150]);
+    }
+
+    setIsVibrating(true);
+    setTimeout(() => {
+      setIsVibrating(false);
+    }, 1500);
+
+    const logMsg = customText || `🔔 ALARME DE REUNIÃO COMERCIAL DISPARADO ÀS ${new Date().toLocaleTimeString('pt-BR')}`;
+    setAlarmLogs(prev => [
+      `[${new Date().toLocaleTimeString('pt-BR')}] ${logMsg}`,
+      ...prev
+    ]);
+  };
 
   // GALAXY LABELS & GRAPHICS FOR THE "LINEACK" MULTIPLE GALAXY PRESENTS
   const galaxyClusters = [
@@ -120,7 +195,7 @@ export default function SettingsView({
   ];
 
   // COPYWRITING SCRIPTS STATE FOR SALES & CREDITS
-  const [copywritingScripts, setCopywritingScripts] = useState<{ id: string; title: string; category: string; text: string; }[]>(() => {
+  const [copywritingScripts, setCopywritingScripts] = useState<{ id: string; title: string; category: string; text: string; trigger_keywords?: string; }[]>(() => {
     try {
       const saved = localStorage.getItem('ciclocred_copywriting_scripts');
       if (saved) {
@@ -145,63 +220,127 @@ export default function SettingsView({
         id: 'script-1',
         title: 'Abordagem Comercial - WhatsApp',
         category: 'Prospecção Fria',
-        text: `Olá [Nome do Lead], tudo bem? Me chamo ${userName}, sou especialista de crédito credenciado com CRECI ${creciNumber} na ${agencyName}.\n\nVi que você simulou as taxas para ampliação Patrimonial Imobiliária. Conseguimos liberar uma linha especial com aprovação rápida e taxas de financiamento abaixo da inflação.\n\nVocê teria 5 minutos para entendermos seu projeto?`
+        text: `Olá [Nome do Lead], tudo bem? Me chamo ${userName}, sou especialista de crédito credenciado com CRECI ${creciNumber} na ${agencyName}.\n\nVi que você simulou as taxas para ampliação Patrimonial Imobiliária. Conseguimos liberar uma linha especial com aprovação rápida e taxas de financiamento abaixo da inflação.\n\nVocê teria 5 minutos para entendermos seu projeto?`,
+        trigger_keywords: 'oi, ola, olá, bom dia, boa tarde, boa noite, tudo bem'
       },
       {
         id: 'script-2',
         title: 'Apresentação de Imóvel com Financiamento Integrado',
         category: 'Real Estate Broker',
-        text: `Olá [Nome do Lead], excelente dia!\n\nSelecionei um imóvel do portfólio da ${agencyName} que se enquadra perfeitamente no perfil que conversamos.\n\nO melhor de tudo: Conseguimos subsidiar o financiamento para você quitar o saldo devedor de forma facilitada. Parcelamento de obras que cabe no bolso!\n\nPodemos marcar uma reunião?`
+        text: `Olá [Nome do Lead], excelente dia!\n\nSelecionei um imóvel do portfólio da ${agencyName} que se enquadra perfeitamente no perfil que conversamos.\n\nO melhor de tudo: Conseguimos subsidiar o financiamento para você quitar o saldo devedor de forma facilitada. Parcelamento de obras que cabe no bolso!\n\nPodemos marcar uma reunião?`,
+        trigger_keywords: 'simular, simulação, simulacao, credito, crédito, financiamento, financiar'
       },
       {
         id: 'script-3',
         title: 'Quebra de Objeções: "A taxa está alta"',
         category: 'Contorno de Objeções',
-        text: `Entendo perfeitamente sua preocupação com custos, [Nome do Lead].\n\nNo entanto, na ${agencyName} operamos com tabelas de subsídios MCMV e simulações com amortização facilitada, reduzindo sensivelmente os juros acumulados.\n\nPodemos simular sua renda familiar para ver os subsídios operantes?`
+        text: `Entendo perfeitamente sua preocupação com custos, [Nome do Lead].\n\nNo entanto, na ${agencyName} operamos com tabelas de subsídios MCMV e simulações com amortização facilitada, reduzindo sensivelmente os juros acumulados.\n\nPodemos simular sua renda familiar para ver os subsídios operantes?`,
+        trigger_keywords: 'taxa, juros, caro, alto, preço, preco, juro, taxas'
       }
     ];
   });
+
+  // Sync with Firestore on mount
+  useEffect(() => {
+    const fetchFirestoreScripts = async () => {
+      if (!db || (window as any).isFirestoreQuotaExceeded) return;
+      try {
+        const snap = await getDocs(collection(db, "copywriting_scripts"));
+        const fetched: any[] = [];
+        snap.forEach(docSnap => {
+          fetched.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        if (fetched.length > 0) {
+          setCopywritingScripts(fetched);
+          localStorage.setItem('ciclocred_copywriting_scripts', JSON.stringify(fetched));
+        }
+      } catch (err) {
+        console.warn("Falha ao recuperar scripts do Firestore na SettingsView:", err);
+      }
+    };
+    fetchFirestoreScripts();
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('ciclocred_copywriting_scripts', JSON.stringify(copywritingScripts));
   }, [copywritingScripts, userName, creciNumber, agencyName]);
 
   const [editingScriptId, setEditingScriptId] = useState<string | null>(null);
-  const [editingScriptForm, setEditingScriptForm] = useState({ title: '', category: '', text: '' });
+  const [editingScriptForm, setEditingScriptForm] = useState({ title: '', category: '', text: '', trigger_keywords: '' });
   const [isAddingScript, setIsAddingScript] = useState(false);
-  const [addScriptForm, setAddScriptForm] = useState({ title: '', category: '', text: '' });
+  const [addScriptForm, setAddScriptForm] = useState({ title: '', category: '', text: '', trigger_keywords: '' });
 
-  const handleStartEditScript = (script: typeof copywritingScripts[0]) => {
+  const handleStartEditScript = (script: any) => {
     setEditingScriptId(script.id);
-    setEditingScriptForm({ title: script.title, category: script.category, text: script.text });
+    setEditingScriptForm({ 
+      title: script.title, 
+      category: script.category, 
+      text: script.text,
+      trigger_keywords: script.trigger_keywords || '' 
+    });
     setIsAddingScript(false);
   };
 
-  const handleSaveEditScript = () => {
+  const handleSaveEditScript = async () => {
     if (!editingScriptForm.title.trim() || !editingScriptForm.text.trim()) return;
-    setCopywritingScripts(prev => prev.map(s => s.id === editingScriptId ? { ...s, ...editingScriptForm } : s));
+    const updatedForm = { ...editingScriptForm };
+    setCopywritingScripts(prev => prev.map(s => s.id === editingScriptId ? { ...s, ...updatedForm } : s));
+    
+    if (db && !(window as any).isFirestoreQuotaExceeded && editingScriptId) {
+      try {
+        await setDoc(doc(db, "copywriting_scripts", editingScriptId), {
+          id: editingScriptId,
+          ...updatedForm,
+          updatedAt: new Date().toISOString()
+        });
+      } catch (err) {
+        console.error("Erro ao salvar script editado no Firestore:", err);
+      }
+    }
+    
     setEditingScriptId(null);
     triggerSensoryFeedback('success', accSettings);
   };
 
-  const handleDeleteScript = (id: string) => {
+  const handleDeleteScript = async (id: string) => {
     if (confirm("Deseja realmente excluir este script?")) {
       setCopywritingScripts(prev => prev.filter(s => s.id !== id));
+      
+      if (db && !(window as any).isFirestoreQuotaExceeded) {
+        try {
+          await deleteDoc(doc(db, "copywriting_scripts", id));
+        } catch (err) {
+          console.error("Erro ao apagar script do Firestore:", err);
+        }
+      }
+
       triggerSensoryFeedback('alarm', accSettings);
     }
   };
 
-  const handleCreateScript = () => {
+  const handleCreateScript = async () => {
     if (!addScriptForm.title.trim() || !addScriptForm.text.trim()) return;
+    const newId = `script-${Date.now()}`;
     const newScript = {
-      id: `script-${Date.now()}`,
+      id: newId,
       title: addScriptForm.title,
       category: addScriptForm.category || 'Atendimento Geral',
-      text: addScriptForm.text
+      text: addScriptForm.text,
+      trigger_keywords: addScriptForm.trigger_keywords || ''
     };
+    
     setCopywritingScripts(prev => [...prev, newScript]);
+    
+    if (db && !(window as any).isFirestoreQuotaExceeded) {
+      try {
+        await setDoc(doc(db, "copywriting_scripts", newId), newScript);
+      } catch (err) {
+        console.error("Erro ao criar script no Firestore:", err);
+      }
+    }
+
     setIsAddingScript(false);
-    setAddScriptForm({ title: '', category: '', text: '' });
+    setAddScriptForm({ title: '', category: '', text: '', trigger_keywords: '' });
     triggerSensoryFeedback('success', accSettings);
   };
 
@@ -450,6 +589,41 @@ export default function SettingsView({
               )}
             </div>
           </div>
+
+          {/* Cloud Firebase / Firestore Toggle Card (Requested: "Essa opção do firebase tem que ficar junto a configuração") */}
+          <div className="bg-white border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] space-y-4">
+            <div className="border-b pb-3 flex items-center gap-2 text-zinc-950">
+              <Globe className="w-5 h-5 text-indigo-600" />
+              <h3 className="text-xs font-black uppercase tracking-wider font-mono">3. Sincronização Firebase</h3>
+            </div>
+
+            <div className="space-y-3 font-sans text-xs text-left">
+              <p className="text-[11px] text-zinc-500 font-medium">
+                Alterne entre sincronismo em nuvem Firestore e o Modo Local Autônomo para gerenciamento inteligente de cotas de rede.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => {
+                  triggerSensoryFeedback('click', accSettings);
+                  if (onToggleForceLocalMode) {
+                    onToggleForceLocalMode(!forceLocalStorageMode);
+                  }
+                }}
+                className={`w-full py-3 border-2 border-zinc-950 rounded-xl font-mono font-black uppercase text-[10px] text-center flex items-center justify-center gap-2 transition duration-150 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-px cursor-pointer ${
+                  forceLocalStorageMode
+                    ? 'bg-amber-400 text-zinc-950 hover:bg-amber-500/90 border-amber-500'
+                    : 'bg-emerald-500 text-white hover:bg-emerald-600/90 border-emerald-600'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${forceLocalStorageMode ? 'bg-zinc-950 animate-pulse' : 'bg-white'}`} />
+                <span>
+                  {forceLocalStorageMode ? '📁 OFF-LINE (Usando Local)' : '☁️ ONLINE SINC (Firestore)'}
+                </span>
+              </button>
+            </div>
+          </div>
+
         </div>
 
         {/* COLUMN 2: SENSORY ACCESSIBILITY & CRITICAL SETTINGS */}
@@ -565,6 +739,95 @@ export default function SettingsView({
               </div>
             </div>
           </div>
+
+          {/* Central de Alarmes Panel */}
+          <div 
+            id="alarm-indicator-card-settings"
+            className={`bg-zinc-950 text-zinc-100 border-4 rounded-3xl p-6 shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] space-y-4 relative overflow-hidden transition-all ${
+              isVibrating ? 'border-rose-500 ring-4 ring-rose-950 animate-shake bg-zinc-900' : 'border-zinc-950'
+            }`}
+          >
+            {isVibrating && (
+              <div className="absolute top-0 left-0 w-full h-1.5 bg-rose-500 animate-pulse z-10" />
+            )}
+
+            <div className="border-b border-zinc-800 pb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <BellRing className={`w-5 h-5 ${isVibrating ? 'text-rose-400 rotate-12' : 'text-amber-400'}`} />
+                <div>
+                  <h4 className="text-xs font-black uppercase text-white font-mono">Central de Alarmes</h4>
+                  <p className="text-[10px] text-zinc-400">Vibração, Pager & Áudio do CRM</p>
+                </div>
+              </div>
+
+              {/* Switch Toggle */}
+              <label className="relative inline-flex items-center cursor-pointer select-none">
+                <input 
+                  type="checkbox" 
+                  checked={isAlarmEnabling}
+                  onChange={() => {
+                    const next = !isAlarmEnabling;
+                    setIsAlarmEnabling(next);
+                    localStorage.setItem('ciclocred_alarm_enabled', String(next));
+                    triggerSensoryFeedback('click', accSettings);
+                  }} 
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-zinc-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600 border border-zinc-700"></div>
+                <span className="ml-1.5 text-[8px] font-mono font-black text-zinc-400 uppercase">
+                  {isAlarmEnabling ? 'ATIVO' : 'MUTADO'}
+                </span>
+              </label>
+            </div>
+
+            {/* Action Trigger test buttons */}
+            <div className="space-y-2 select-none">
+              <button
+                type="button"
+                onClick={() => triggerSynthesizedNotification()}
+                disabled={!isAlarmEnabling}
+                className="w-full flex items-center justify-between p-2.5 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-850 hover:border-zinc-500 transition text-left cursor-pointer disabled:opacity-50 text-white"
+              >
+                <div className="flex items-center gap-2">
+                  <Volume2 className="w-3.5 h-3.5 text-indigo-400" />
+                  <span className="text-[10px] font-mono uppercase font-black text-zinc-200">Disparar Alarme Sonoro</span>
+                </div>
+                <span className="text-[8px] font-mono text-indigo-400 font-bold bg-indigo-950/80 px-1.5 py-0.5 rounded uppercase">Testar 880Hz</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const randomLeads = ["Carlos Ferreira", "Amanda Rocha", "Gisele Santos", "Felipe Neves"];
+                  const leadPicked = randomLeads[Math.floor(Math.random() * randomLeads.length)];
+                  triggerSynthesizedNotification(`Simula: Visita urgente com o lead ${leadPicked} em 5 minutos!`);
+                }}
+                disabled={!isAlarmEnabling}
+                className="w-full flex items-center justify-between p-2.5 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-850 hover:border-zinc-500 transition text-left cursor-pointer disabled:opacity-50 text-white"
+              >
+                <div className="flex items-center gap-2">
+                  <Smartphone className="w-3.5 h-3.5 text-rose-400" />
+                  <span className="text-[10px] font-mono uppercase font-black text-zinc-200">Testar Vibração Mecânica</span>
+                </div>
+                <span className="text-[8px] font-mono text-rose-400 font-bold bg-rose-950/80 px-1.5 py-0.5 rounded uppercase">Navigator API</span>
+              </button>
+            </div>
+
+            {/* Real-time neon logs terminal output block */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center text-[8px] font-mono font-black uppercase text-zinc-500">
+                <span>Termógrafo dos Sensores</span>
+                <span>Active UTC Logs</span>
+              </div>
+              <div className="bg-black text-emerald-400 font-mono text-[9px] p-2.5 rounded-xl border border-zinc-800 h-[85px] overflow-y-auto space-y-1 select-text scrollbar-thin">
+                {alarmLogs.map((log, lidx) => (
+                  <div key={lidx} className="leading-tight truncate">
+                    <span className="text-zinc-500">&gt;</span> {log}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* COLUMN 3: OPERATIONAL METRICS & SALES COPY SCRIPTS */}
@@ -652,6 +915,17 @@ export default function SettingsView({
                   </div>
                 </div>
                 <div>
+                  <label className="text-[8px] font-mono font-black uppercase text-zinc-600 block mb-0.5">🔑 Gatilhos por Palavras-chave (separadas por vírgula)</label>
+                  <input
+                    type="text"
+                    value={addScriptForm.trigger_keywords}
+                    onChange={e => setAddScriptForm(prev => ({ ...prev, trigger_keywords: e.target.value }))}
+                    placeholder="Ex: oi, ola, simular, taxa, valor, falar com corretor"
+                    className="w-full bg-white border border-zinc-950 p-1 rounded font-sans text-xs outline-none"
+                  />
+                  <p className="text-[7.5px] text-zinc-400 mt-0.5">Se o cliente enviar estas palavras pelo WhatsApp, este script responderá de forma autônoma.</p>
+                </div>
+                <div>
                   <label className="text-[8px] font-mono font-black uppercase text-zinc-600 block mb-0.5">Redação do Script</label>
                   <textarea
                     rows={3}
@@ -704,6 +978,15 @@ export default function SettingsView({
                   </div>
                 </div>
                 <div>
+                  <label className="text-[8px] font-mono font-black uppercase text-zinc-600 block mb-0.5">🔑 Editar Palavras-chave Gatilho (separadas por vírgula)</label>
+                  <input
+                    type="text"
+                    value={editingScriptForm.trigger_keywords}
+                    onChange={e => setEditingScriptForm(prev => ({ ...prev, trigger_keywords: e.target.value }))}
+                    className="w-full bg-white border border-zinc-950 p-1 rounded font-sans text-xs outline-none"
+                  />
+                </div>
+                <div>
                   <label className="text-[8px] font-mono font-black uppercase text-zinc-600 block mb-0.5">Redação do Script</label>
                   <textarea
                     rows={3}
@@ -736,9 +1019,16 @@ export default function SettingsView({
                 <div key={script.id} className="p-3 bg-zinc-50 border-2 border-zinc-950 rounded-xl relative space-y-1 text-left">
                   <div className="flex justify-between items-start gap-1">
                     <div>
-                      <span className="text-[7px] font-mono font-black uppercase text-indigo-700 bg-indigo-50 px-1 rounded border border-indigo-200">
-                        {script.category}
-                      </span>
+                      <div className="flex gap-1 items-center flex-wrap">
+                        <span className="text-[7px] font-mono font-black uppercase text-indigo-700 bg-indigo-50 px-1 rounded border border-indigo-200">
+                          {script.category}
+                        </span>
+                        {script.trigger_keywords && (
+                          <span className="text-[7px] font-mono font-black uppercase text-amber-700 bg-amber-50 px-1 rounded border border-amber-200" title="Gatilhos de Auto-resposta">
+                            🔑 Gatilhos: {script.trigger_keywords}
+                          </span>
+                        )}
+                      </div>
                       <h4 className="text-[10px] font-black text-zinc-950 uppercase font-mono mt-1">{script.title}</h4>
                     </div>
 

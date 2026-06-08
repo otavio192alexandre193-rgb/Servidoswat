@@ -2348,7 +2348,7 @@ export default function App() {
                 }}
                 className={`text-[9.5px] font-mono font-black border-2 border-zinc-950 px-2.5 py-1.5 rounded-xl shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] uppercase transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
                   activeTab === 'leads' && leadsViewMode === 'marketing'
-                    ? 'bg-pink-650 text-white'
+                    ? 'bg-pink-600 text-white'
                     : 'bg-zinc-850 hover:bg-zinc-800 text-zinc-300'
                 }`}
                 title="Acessar Ferramentas de Marketing no Funil de Leads"

@@ -1184,58 +1184,57 @@ Escreva uma resposta comercial de impacto em português, respondendo especificam
 
   // Handle root route (/) safely for both browser users and WhatsApp autoresponders
   app.get("/", (req, res, next) => {
-    const secFetchDest = String(req.headers['sec-fetch-dest'] || '').toLowerCase();
-    const secFetchMode = String(req.headers['sec-fetch-mode'] || '').toLowerCase();
     const acceptHeader = String(req.headers['accept'] || '').toLowerCase();
     const userAgent = String(req.headers['user-agent'] || '').toLowerCase();
+    
+    // If the browser accepts HTML, we MUST always serve the React SPA frontend.
+    // This is the absolute safest way to guarantee browser users see the app and never a JSON webhook response,
+    // especially since AI Studio previews or standard proxying might send parameters like ?query or specific headers.
+    if (acceptHeader.includes("text/html")) {
+      console.log(`[ROOT GET DETECTED] Serving CRM React app. UA: ${userAgent}, Accept: ${acceptHeader}`);
+      return next();
+    }
+
     const contentType = String(req.headers['content-type'] || '').toLowerCase();
+    const secFetchDest = String(req.headers['sec-fetch-dest'] || '').toLowerCase();
+    const secFetchMode = String(req.headers['sec-fetch-mode'] || '').toLowerCase();
     
     // Autoresponder requests often contain webhooks query parameters or specific headers
     const hasWebhookQueryParams = !!(req.query.message || req.query.text || req.query.phone || req.query.sender || req.query.query || req.query.msg || req.query.num || req.query.contact);
     
-    // If the content-type is JSON or we have webhook query params, it is NEVER a real browser
+    // If the content-type is JSON or we have webhook query params, it is NEVER a real browser navigating. Route directly to processWhatauto
     if (contentType.includes("json") || hasWebhookQueryParams) {
       console.log(`[ROOT GET DETECTED] Explicit JSON header or webhook query parameters present. Routing directly to processWhatauto...`);
       return processWhatauto(req, res);
     }
 
-    // Check if it is explicitly a browser loading the CRM frontend document
-    let isRealBrowser = false;
-    
-    // Modern browsers always specify sec-fetch-dest = 'document' and sec-fetch-mode = 'navigate' on standard main page navigation loads
-    if (secFetchDest === 'document' && secFetchMode === 'navigate') {
-      isRealBrowser = true;
-    } else if (acceptHeader.includes("text/html")) {
-      // Fallback detection model for older, customized, or proxy-driven user-agents
-      const isAutomatedAgent = 
-        userAgent.includes("okhttp") || 
-        userAgent.includes("autoresponder") || 
-        userAgent.includes("whatauto") || 
-        userAgent.includes("dalvik") || 
-        userAgent.includes("apache-httpclient") || 
-        userAgent.includes("retrofit") || 
-        userAgent.includes("volley") || 
-        userAgent.includes("axios") || 
-        userAgent.includes("node-fetch") || 
-        userAgent.includes("curl") ||
-        userAgent.includes("postman") ||
-        userAgent.includes("insomnia") ||
-        userAgent.includes("http-client") ||
-        userAgent.includes("libcurl") ||
-        userAgent.includes("google-apps-script");
-        
-      if (!isAutomatedAgent) {
-        isRealBrowser = true;
-      }
+    // Determine if it is explicitly a known non-browser automated agent making an API request
+    const isAutomatedAgent = 
+      userAgent.includes("okhttp") || 
+      userAgent.includes("autoresponder") || 
+      userAgent.includes("whatauto") || 
+      userAgent.includes("dalvik") || 
+      userAgent.includes("apache-httpclient") || 
+      userAgent.includes("retrofit") || 
+      userAgent.includes("volley") || 
+      userAgent.includes("axios") || 
+      userAgent.includes("node-fetch") || 
+      userAgent.includes("curl") ||
+      userAgent.includes("postman") ||
+      userAgent.includes("insomnia") ||
+      userAgent.includes("http-client") ||
+      userAgent.includes("libcurl") ||
+      userAgent.includes("google-apps-script");
+
+    // If it's a known automated agent, route to webhook handler
+    if (isAutomatedAgent) {
+      console.log(`[ROOT GET DETECTED] Machine/Webhook ping detected on root path. UA: ${userAgent}, Sec-Fetch-Dest: ${secFetchDest}. Routing to processWhatauto...`);
+      return processWhatauto(req, res);
     }
 
-    if (isRealBrowser) {
-      return next();
-    }
-    
-    // Otherwise, treat as an active API request/webhook connection probe and run processWhatauto
-    console.log(`[ROOT GET DETECTED] Machine/Webhook ping detected on root path. UA: ${userAgent}, Sec-Fetch-Dest: ${secFetchDest}. Routing to processWhatauto...`);
-    return processWhatauto(req, res);
+    // Fallback: If in doubt, serve the browser document
+    console.log(`[ROOT GET DETECTED] Fallback to next(). UA: ${userAgent}, Accept: ${acceptHeader}`);
+    return next();
   });
   
   app.post("/", processWhatauto);

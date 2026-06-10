@@ -1182,37 +1182,15 @@ Escreva uma resposta comercial de impacto em português, respondendo especificam
   ];
   app.all(whatautoRoutes, processWhatauto);
 
-  // Handle root route (/) safely for both browser users and WhatsApp autoresponders
+  // Handle root route (/) safely to always serve the React SPA for standard browsers and viewports
   app.get("/", (req, res, next) => {
-    const userAgent = String(req.headers['user-agent'] || '').toLowerCase();
+    // Explicitly prevent browser/CDN caching of the root document so users always fetch the live SPA bundle
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     
-    // Determine if it is explicitly a known non-browser automated agent making an API request
-    const isAutomatedAgent = 
-      userAgent.includes("okhttp") || 
-      userAgent.includes("autoresponder") || 
-      userAgent.includes("whatauto") || 
-      userAgent.includes("dalvik") || 
-      userAgent.includes("apache-httpclient") || 
-      userAgent.includes("retrofit") || 
-      userAgent.includes("volley") || 
-      userAgent.includes("axios") || 
-      userAgent.includes("node-fetch") || 
-      userAgent.includes("curl") ||
-      userAgent.includes("postman") ||
-      userAgent.includes("insomnia") ||
-      userAgent.includes("http-client") ||
-      userAgent.includes("libcurl") ||
-      userAgent.includes("google-apps-script");
-
-    // If it's a known automated agent (Webhook client, OkHttp, terminal curl, etc.), route to webhook handler
-    if (isAutomatedAgent) {
-      console.log(`[ROOT GET DETECTED] Machine/Webhook ping detected on root path. UA: ${userAgent}. Routing to processWhatauto...`);
-      return processWhatauto(req, res);
-    }
-
-    // For ALL regular browsers, mobile browsers, and iframe preview environments inside Google AI Studio, 
-    // we ALWAYS serve the React SPA frontend immediately. This ensures standard users never see a JSON webhook page.
-    console.log(`[ROOT GET DETECTED] Serving CRM React app for user browser. UA: ${userAgent}`);
+    // We always delegate to next() to guarantee that the React SPA frontend's index.html or assets are served
+    // successfully in any browser, mobile frame, or Google AI Studio iframe environment.
     return next();
   });
   
@@ -1220,24 +1198,6 @@ Escreva uma resposta comercial de impacto em português, respondendo especificam
 
   // REST API Endpoints for Admin and Configure Server AI Controls
   app.get("/api/server/status", async (req, res) => {
-    if (db && !isServerQuotaExceeded) {
-      try {
-        await setDoc(doc(db, "test-cycles-conn", "probe-write"), {
-          testedAt: new Date().toISOString(),
-          platform: "server"
-        });
-      } catch (e: any) {
-        const errMsg = e?.message || String(e);
-        if (
-          errMsg.toLowerCase().includes('quota') ||
-          errMsg.toLowerCase().includes('exhausted') ||
-          errMsg.toLowerCase().includes('resource-exhausted')
-        ) {
-          isServerQuotaExceeded = true;
-          console.warn("⚠️ Server detected Firestore quota is exhausted during status probe.");
-        }
-      }
-    }
     res.json({
       dbConnected: !!db,
       isQuotaExceeded: isServerQuotaExceeded

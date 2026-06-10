@@ -19,6 +19,9 @@ export interface Lead {
   lastContactAt?: string;
   familyIncome?: number;
   ai_muted?: boolean;
+  propertyInterest?: string;
+  tags?: string[];
+  funnelPageId?: string;
 }
 
 export interface EmailTemplate {

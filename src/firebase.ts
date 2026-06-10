@@ -125,7 +125,10 @@ async function testConnection() {
 
     try {
       // Proactively check backend server status first to see if database quota is exhausted
-      const res = await fetch('/api/server/status');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1800);
+      const res = await fetch('/api/server/status', { signal: controller.signal });
+      clearTimeout(timeoutId);
       if (res.ok) {
         const status = await res.json();
         if (status.isQuotaExceeded) {

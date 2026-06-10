@@ -5,10 +5,11 @@
 
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Trophy, Settings, Sliders, Shield } from 'lucide-react';
+import { Trophy, Settings, Sliders, Shield, TrendingUp } from 'lucide-react';
 import { AccessibilitySettings, triggerSensoryFeedback, INITIAL_ACCESSIBILITY_SETTINGS } from '../utils/sensory';
 import GamificationView from './Gamification';
 import SettingsView from './Settings';
+import KidsTab from './KidsTab';
 import { Goal, Project, Lead } from '../types';
 
 interface UserCentralTabProps {
@@ -53,6 +54,9 @@ interface UserCentralTabProps {
   setIsAutonomyActive: (active: boolean) => void;
   autonomyIntervalSec: number;
   setAutonomyIntervalSec: (sec: number) => void;
+  consolidatedCrmInfo?: string;
+  setConsolidatedCrmInfo?: (value: string) => void;
+  awardXP?: (xp: number) => void;
 }
 
 export default function UserCentralTab({
@@ -92,9 +96,12 @@ export default function UserCentralTab({
   isAutonomyActive,
   setIsAutonomyActive,
   autonomyIntervalSec,
-  setAutonomyIntervalSec
+  setAutonomyIntervalSec,
+  consolidatedCrmInfo,
+  setConsolidatedCrmInfo,
+  awardXP
 }: UserCentralTabProps) {
-  const [innerTab, setInnerTab] = useState<'gamification' | 'settings'>('gamification');
+  const [innerTab, setInnerTab] = useState<'gamification' | 'leveraging' | 'settings'>('gamification');
 
   const dealsClosed = leads.filter(l => l.status === 'fechado').length;
 
@@ -102,7 +109,7 @@ export default function UserCentralTab({
     <div className="space-y-6">
       
       {/* Tab Switcher Headers */}
-      <div className="flex bg-zinc-900 p-1.5 border-4 border-zinc-950 rounded-2xl w-full sm:w-max select-none text-left">
+      <div className="flex flex-wrap bg-zinc-900 p-1.5 border-4 border-zinc-950 rounded-2xl w-full sm:w-max select-none text-left gap-2">
         <button
           id="user-central-tab-gaming"
           type="button"
@@ -110,14 +117,31 @@ export default function UserCentralTab({
             triggerSensoryFeedback('click', accSettings);
             setInnerTab('gamification');
           }}
-          className={`px-6 py-3 rounded-lg text-xs font-black uppercase font-mono tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer ${
+          className={`px-6 py-3 rounded-lg text-xs font-black uppercase font-mono tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
             innerTab === 'gamification'
-              ? 'bg-indigo-650 text-white border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
-              : 'text-zinc-400 hover:text-white'
+              ? 'bg-indigo-650 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800 border-transparent'
           }`}
         >
           <Trophy className="w-4 h-4 shrink-0" />
           <span>Troféus & Metas Reais (Gamificação)</span>
+        </button>
+
+        <button
+          id="user-central-tab-leveraging"
+          type="button"
+          onClick={() => {
+            triggerSensoryFeedback('click', accSettings);
+            setInnerTab('leveraging');
+          }}
+          className={`px-6 py-3 rounded-lg text-xs font-black uppercase font-mono tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
+            innerTab === 'leveraging'
+              ? 'bg-indigo-650 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800 border-transparent'
+          }`}
+        >
+          <TrendingUp className="w-4 h-4 shrink-0 text-emerald-400" />
+          <span>Alavancagem & Finanças</span>
         </button>
 
         <button
@@ -127,10 +151,10 @@ export default function UserCentralTab({
             triggerSensoryFeedback('click', accSettings);
             setInnerTab('settings');
           }}
-          className={`px-6 py-3 rounded-lg text-xs font-black uppercase font-mono tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer ${
+          className={`px-6 py-3 rounded-lg text-xs font-black uppercase font-mono tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
             innerTab === 'settings'
-              ? 'bg-indigo-650 text-white border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
-              : 'text-zinc-400 hover:text-white'
+              ? 'bg-indigo-650 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800 border-transparent'
           }`}
         >
           <Settings className="w-4 h-4 shrink-0" />
@@ -138,7 +162,7 @@ export default function UserCentralTab({
         </button>
       </div>
 
-      <div className="pt-2">
+      <div className="pt-2 border-t-2 border-zinc-950/20 mt-4">
         {innerTab === 'gamification' ? (
           <GamificationView
             accSettings={accSettings}
@@ -156,6 +180,11 @@ export default function UserCentralTab({
             userEmail={userEmail}
             dealsClosedCount={dealsClosed}
             actionsCount={followUpsCount}
+          />
+        ) : innerTab === 'leveraging' ? (
+          <KidsTab
+            awardXP={awardXP || (() => {})}
+            accSettings={accSettings}
           />
         ) : (
           <SettingsView
@@ -191,6 +220,8 @@ export default function UserCentralTab({
             onWipeLeads={onWipeLeads}
             onWipeEstoque={onWipeEstoque}
             onRequestConfirm={onRequestConfirm}
+            consolidatedCrmInfo={consolidatedCrmInfo}
+            setConsolidatedCrmInfo={setConsolidatedCrmInfo}
           />
         )}
       </div>

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Lead, EmailTemplate, EmailLog, LeadStatus, Appointment, InventoryItem, RealEstateProperty, Goal, Project, CRMNotification, FollowUpUpdate } from './types';
 import { 
@@ -15,6 +15,7 @@ import {
 import { db, auth, handleFirestoreError, OperationType, disableFirestoreNetwork } from './firebase';
 import { collection, getDocs, doc, setDoc, deleteDoc, onSnapshot, getDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
+import { getKanbanColumns } from './utils/kanban';
 
 import Sidebar from './components/Sidebar';
 import KanbanBoard from './components/KanbanBoard';
@@ -26,7 +27,6 @@ import Appointments from './components/Appointments';
 import RealEstateInventory from './components/RealEstateInventory';
 import LeadModal from './components/LeadModal';
 import LeadDetailsModal from './components/LeadDetailsModal';
-import MediaCenter from './components/MediaCenter';
 import MultiLevelMarketingTab from './components/MultiLevelMarketingTab';
 import FinanceSimulatorTab from './components/FinanceSimulatorTab';
 import CicloCredInformTab from './components/CicloCredInformTab';
@@ -45,9 +45,8 @@ import UserCentralTab from './components/UserCentralTab';
 import GoogleWorkspace, { getWorkspaceToken, syncCRMMovementToGoogleSheet, autoSyncWorkspaceDatabase } from './components/GoogleWorkspace';
 import GeminiServerTab from './components/GeminiServerTab';
 import AnimatedCounter from './components/AnimatedCounter';
-import { getKanbanColumns } from './utils/kanban';
 import { AccessibilitySettings, triggerSensoryFeedback, INITIAL_ACCESSIBILITY_SETTINGS } from './utils/sensory';
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
+import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis } from 'recharts';
 
 import { 
   Briefcase, 
@@ -80,12 +79,44 @@ import {
   LineChart,
   Search,
   UserPlus,
-  Sliders
+  Sliders,
+  MoreHorizontal,
+  Home,
+  Calculator,
+  BarChart2,
+  User,
+  Download,
+  Upload
 } from 'lucide-react';
 
 export default function App() {
-  // Mobile responsive Navigation drawer state
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  // Mounting Diagnostic logs & Telemetry
+  useEffect(() => {
+    console.log('[App.tsx] cicloCRED CRM App Component has successfully MOUNTED in viewport DOM.');
+    console.log('[App.tsx] Navigator User Agent:', navigator.userAgent);
+    console.log('[App.tsx] System datetime:', new Date().toISOString());
+    let loggedLeadsCount = 0;
+    try {
+      const savedLeads = localStorage.getItem('ciclocred_crm_leads');
+      if (savedLeads) {
+        loggedLeadsCount = JSON.parse(savedLeads).length || 0;
+      }
+    } catch (_) {}
+    console.log('[App.tsx] Local storage status - leads count:', loggedLeadsCount);
+    
+    const handleGlobalError = (event: ErrorEvent) => {
+      console.error('[App.tsx] Silent/Unhandled runtime error intercepted:', event.message, 'at', event.filename, ':', event.lineno);
+    };
+    window.addEventListener('error', handleGlobalError);
+    return () => {
+      window.removeEventListener('error', handleGlobalError);
+    };
+  }, []);
+
+  console.log('[App.tsx] App rendering lifecycle tick.');
+
+  // Universal Collapsible Side Drawer state
+  const [isMenuDrawerOpen, setIsMenuDrawerOpen] = useState(false);
 
   // Real-time Dynamic Header Clock, Temperature & Location
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
@@ -158,7 +189,13 @@ export default function App() {
   // Core CRM States (Hydrated with LocalStorage or Seeded with defaults)
   const [leads, rawSetLeads] = useState<Lead[]>(() => {
     const saved = localStorage.getItem('ciclocred_crm_leads');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
+    return [];
   });
 
   const setLeads = React.useCallback((val: React.SetStateAction<Lead[]>) => {
@@ -168,7 +205,13 @@ export default function App() {
 
   const [templates, rawSetTemplates] = useState<EmailTemplate[]>(() => {
     const saved = localStorage.getItem('ciclocred_crm_templates');
-    return saved ? JSON.parse(saved) : INITIAL_TEMPLATES;
+    try {
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
+    return INITIAL_TEMPLATES;
   });
 
   const setTemplates = React.useCallback((val: React.SetStateAction<EmailTemplate[]>) => {
@@ -178,7 +221,13 @@ export default function App() {
 
   const [emailLogs, rawSetEmailLogs] = useState<EmailLog[]>(() => {
     const saved = localStorage.getItem('ciclocred_crm_logs');
-    return saved ? JSON.parse(saved) : INITIAL_EMAIL_LOGS;
+    try {
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
+    return INITIAL_EMAIL_LOGS;
   });
 
   const setEmailLogs = React.useCallback((val: React.SetStateAction<EmailLog[]>) => {
@@ -321,7 +370,12 @@ export default function App() {
 
   const [inventory, rawSetInventory] = useState<InventoryItem[]>(() => {
     const saved = localStorage.getItem('ciclocred_crm_inventory');
-    if (saved) return JSON.parse(saved);
+    try {
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
 
     return [
       {
@@ -367,7 +421,15 @@ export default function App() {
 
   const [properties, rawSetProperties] = useState<RealEstateProperty[]>(() => {
     const saved = localStorage.getItem('ciclocred_crm_properties');
-    const raw = saved ? JSON.parse(saved) : INITIAL_PROPERTIES;
+    let raw = INITIAL_PROPERTIES;
+    try {
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          raw = parsed;
+        }
+      }
+    } catch (_) {}
     if (Array.isArray(raw)) {
       const seen = new Set<string>();
       return raw.filter((p: any) => {
@@ -385,8 +447,12 @@ export default function App() {
     rawSetProperties(val);
   }, []);
 
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
-  const [leadsViewMode, setLeadsViewMode] = useState<'kanban' | 'list' | 'followup' | 'marketing' | 'appointments'>('list');
+  const [activeTab, rawSetActiveTab] = useState<string>('leads');
+  const [leadsViewMode, setLeadsViewMode] = useState<'kanban' | 'list' | 'followup' | 'automation-flows' | 'marketing'>('list');
+
+  const setActiveTab = React.useCallback((tab: string) => {
+    rawSetActiveTab(tab);
+  }, []);
   const [hoveredStatusSlice, setHoveredStatusSlice] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -394,11 +460,36 @@ export default function App() {
   const [originFilter, setOriginFilter] = useState('todos');
   const [initialLetterFilter, setInitialLetterFilter] = useState('todos');
   const [isPlanilhasModalOpen, setIsPlanilhasModalOpen] = useState(false);
+  const [isPremiumActionsOpen, setIsPremiumActionsOpen] = useState(false);
   const [isConversaoModalOpen, setIsConversaoModalOpen] = useState(false);
+  
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+
+  const unifiedFilteredLeads = useMemo(() => {
+    return leads.filter(lead => {
+      const matchesSearch = 
+        lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (lead.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        lead.phone.includes(searchTerm) ||
+        (lead.company || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = statusFilter === 'todos' || lead.status === statusFilter;
+      const matchesOrigin = originFilter === 'todos' || lead.origin === originFilter;
+      const matchesInitial = 
+        initialLetterFilter === 'todos' ||
+        lead.name.trim().charAt(0).toUpperCase() === initialLetterFilter.toUpperCase();
+      return matchesSearch && matchesStatus && matchesOrigin && matchesInitial;
+    });
+  }, [leads, searchTerm, statusFilter, originFilter, initialLetterFilter]);
 
   const [followUps, rawSetFollowUps] = useState<FollowUpUpdate[]>(() => {
     const saved = localStorage.getItem('ciclocred_crm_followups');
-    if (saved) return JSON.parse(saved);
+    try {
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
     return [
       {
         id: 'fup-1',
@@ -443,7 +534,10 @@ export default function App() {
 
   const [accSettings, setAccSettings] = useState<AccessibilitySettings>(() => {
     const saved = localStorage.getItem('ciclocred_sensory_config');
-    return saved ? JSON.parse(saved) : INITIAL_ACCESSIBILITY_SETTINGS;
+    try {
+      if (saved) return JSON.parse(saved);
+    } catch (_) {}
+    return INITIAL_ACCESSIBILITY_SETTINGS;
   });
 
   // CUSTOM STYLED CONFIRMATION DIALOG STATE
@@ -506,6 +600,9 @@ export default function App() {
   const [agencyName, setAgencyName] = useState<string>(() => {
     return localStorage.getItem('ciclocred_agency_name') || 'cicloCRED Empreendimentos Comerciais';
   });
+  const [consolidatedCrmInfo, setConsolidatedCrmInfo] = useState<string>(() => {
+    return localStorage.getItem('ciclocred_consolidated_crm_info') || 'Operando com performance máxima. Metas comerciais alinhadas e integradas cycleCRED.';
+  });
   const [subscriptionPlan, setSubscriptionPlan] = useState<string>(() => {
     return localStorage.getItem('ciclocred_subscription_plan') || 'Premium VIP';
   });
@@ -552,7 +649,12 @@ export default function App() {
 
   const [gamificationGoals, rawSetGamificationGoals] = useState<Goal[]>(() => {
     const saved = localStorage.getItem('ciclocred_gamification_goals');
-    if (saved) return JSON.parse(saved);
+    try {
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
     return [
       { id: 'goal-1', title: 'Carregar 5 Novos Leads na Carteira', targetCount: 5, currentCount: 0, xpReward: 350, frequency: 'diaria', category: 'prospecção', completed: false },
       { id: 'goal-2', title: 'Agendar 3 Visitas Imobiliárias', targetCount: 3, currentCount: 0, xpReward: 500, frequency: 'semanal', category: 'visita', completed: false },
@@ -568,7 +670,12 @@ export default function App() {
 
   const [gamificationProjects, rawSetGamificationProjects] = useState<Project[]>(() => {
     const saved = localStorage.getItem('ciclocred_gamification_projects');
-    if (saved) return JSON.parse(saved);
+    try {
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
     return [
       { id: 'proj-1', name: 'Expansão de Lotes Urbanos Virgem', description: 'Metodologia ativa recomendando ofertas exclusivas de terrenos planos da CicloCred.', status: 'ativo', progress: 0, xpReward: 1500, assignedToGoalId: 'goal-2' },
       { id: 'proj-2', name: 'Automação Massiva de Whatsapp', description: 'Enviar scripts de copywriting para leads frios contidos nas planilhas integradas.', status: 'em_planejamento', progress: 0, xpReward: 900, assignedToGoalId: 'goal-3' }
@@ -592,6 +699,22 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('ciclocred_user_email', userEmail);
   }, [userEmail]);
+
+  useEffect(() => {
+    localStorage.setItem('ciclocred_creci_number', creciNumber);
+  }, [creciNumber]);
+
+  useEffect(() => {
+    localStorage.setItem('ciclocred_user_role', userRole);
+  }, [userRole]);
+
+  useEffect(() => {
+    localStorage.setItem('ciclocred_agency_name', agencyName);
+  }, [agencyName]);
+
+  useEffect(() => {
+    localStorage.setItem('ciclocred_consolidated_crm_info', consolidatedCrmInfo);
+  }, [consolidatedCrmInfo]);
 
   useEffect(() => {
     localStorage.setItem('ciclocred_theme', theme);
@@ -710,7 +833,12 @@ export default function App() {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<CRMNotification[]>(() => {
     const saved = localStorage.getItem('ciclocred_notifications');
-    if (saved) return JSON.parse(saved);
+    try {
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
     return [
       {
         id: 'notify-1',
@@ -1026,7 +1154,10 @@ export default function App() {
 
         if (!rawQuotaExceeded) {
           try {
-            const res = await fetch('/api/server/status');
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 1800);
+            const res = await fetch('/api/server/status', { signal: controller.signal });
+            clearTimeout(timeoutId);
             if (res.ok) {
               const status = await res.json();
               if (status.isQuotaExceeded) {
@@ -1040,7 +1171,7 @@ export default function App() {
               }
             }
           } catch (fetchErr) {
-            console.warn("Could not retrieve server status:", fetchErr);
+            console.warn("Could not retrieve server status within timeout:", fetchErr);
           }
         }
 
@@ -1632,6 +1763,7 @@ export default function App() {
           creciNumber,
           userRole,
           agencyName,
+          consolidatedCrmInfo,
           subscriptionPlan,
           theme,
           galaxyPreset,
@@ -1653,15 +1785,32 @@ export default function App() {
       syncProfile();
     }, 1200);
     return () => clearTimeout(timer);
-  }, [userName, userEmail, creciNumber, userRole, agencyName, subscriptionPlan, theme, galaxyPreset, userXP, userLevel, accSettings, notifications, isDbHydrated, isQuotaExceeded]);
+  }, [userName, userEmail, creciNumber, userRole, agencyName, consolidatedCrmInfo, subscriptionPlan, theme, galaxyPreset, userXP, userLevel, accSettings, notifications, isDbHydrated, isQuotaExceeded]);
 
   // Lead transition handler
-  const handleMoveLead = (leadId: string, newStatus: LeadStatus) => {
+  const handleMoveLead = (leadId: string, newStatus: LeadStatus, newPageId?: string) => {
     let previousStatus: LeadStatus | undefined;
+    
+    // Get columns to automatically tag the lead based on matching stage label
+    const cols = getKanbanColumns();
+    const targetCol = cols.find(c => c.id === newStatus);
+    const stageLabel = targetCol ? targetCol.label : String(newStatus);
+
     setLeads(prevLeads => {
-      const lead = prevLeads.find(l => l.id === leadId);
-      if (lead) previousStatus = lead.status;
-      return prevLeads.map(l => l.id === leadId ? { ...l, status: newStatus } : l);
+      return prevLeads.map(l => {
+        if (l.id === leadId) {
+          previousStatus = l.status;
+          const currentTags = l.tags || [];
+          const newTags = currentTags.includes(stageLabel) ? currentTags : [...currentTags, stageLabel];
+          return { 
+            ...l, 
+            status: newStatus, 
+            tags: newTags,
+            funnelPageId: newPageId !== undefined ? newPageId : (l.funnelPageId || 'principal')
+          };
+        }
+        return l;
+      });
     });
     
     // Sync current details modal if matches
@@ -2081,179 +2230,32 @@ export default function App() {
 
   return (
     <div className={rootClass} style={fontStyle}>
-      {/* Structural Desktop Sidebar */}
-      <Sidebar 
-        activeTab={activeTab} 
-        setActiveTab={(tab) => { setActiveTab(tab); setMobileMenuOpen(false); }} 
-        leadsCount={leads.length} 
-        userName={userName}
-        userEmail={userEmail}
-        onLogout={async () => {
-          try {
-            await signOut(auth);
-          } catch (err) {
-            console.error("SignOut error", err);
-          }
-          setIsAuthenticated(false);
-          setIsDbHydrated(false);
-        }}
-        accSettings={accSettings}
-        forceLocalStorageMode={forceLocalStorageMode}
-        onToggleForceLocalMode={handleToggleForceLocalMode}
-      />
-
-      {/* Mobile Drawer Slide and Trigger Button */}
-      {mobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 z-40 flex">
-          <div className="fixed inset-0 bg-zinc-950/70 backdrop-blur-xs" onClick={() => setMobileMenuOpen(false)}></div>
-          <div className="relative flex flex-col w-64 max-w-xs bg-zinc-900 border-r-4 border-zinc-950 p-6 z-50 text-white">
-            <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center gap-2">
-                <Briefcase className="w-5 h-5 text-indigo-400" />
-                <span className="font-sans font-black tracking-tighter uppercase italic text-white text-md">SWAT</span>
-              </div>
-              <button 
-                onClick={() => setMobileMenuOpen(false)}
-                className="text-zinc-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <nav className="space-y-3">
-              <button
-                onClick={() => { setActiveTab('dashboard'); setMobileMenuOpen(false); }}
-                className={`w-full text-left p-3 rounded-lg text-xs font-black uppercase tracking-wider font-mono ${activeTab === 'dashboard' ? 'bg-indigo-600 text-white border border-zinc-950' : 'text-zinc-400'}`}
-              >
-                Dashboard
-              </button>
-              <button
-                onClick={() => { setActiveTab('leads'); setMobileMenuOpen(false); }}
-                className={`w-full text-left p-3 rounded-lg text-xs font-black uppercase tracking-wider font-mono ${activeTab === 'leads' ? 'bg-indigo-600 text-white border border-zinc-950' : 'text-zinc-400'}`}
-              >
-                Leads
-              </button>
-
-              <button
-                onClick={() => { setActiveTab('inventory'); setMobileMenuOpen(false); }}
-                className={`w-full text-left p-3 rounded-lg text-xs font-black uppercase tracking-wider font-mono ${activeTab === 'inventory' ? 'bg-indigo-600 text-white border border-zinc-950' : 'text-zinc-400'}`}
-              >
-                Estoque de Imóveis
-              </button>
-              <button
-                onClick={() => { setActiveTab('reports'); setMobileMenuOpen(false); }}
-                className={`w-full text-left p-3 rounded-lg text-xs font-black uppercase tracking-wider font-mono ${activeTab === 'reports' ? 'bg-indigo-600 text-white border border-zinc-950' : 'text-zinc-400'}`}
-              >
-                Relatórios Integrados
-              </button>
-              <button
-                onClick={() => { setActiveTab('automation-flows'); setMobileMenuOpen(false); }}
-                className={`w-full text-left p-3 rounded-lg text-xs font-black uppercase tracking-wider font-mono ${activeTab === 'automation-flows' ? 'bg-indigo-600 text-white border border-zinc-950' : 'text-zinc-400'}`}
-              >
-                Scripts e fluxos
-              </button>
-              <button
-                onClick={() => { setActiveTab('gemini-server'); setMobileMenuOpen(false); }}
-                className={`w-full text-left p-3 rounded-lg text-xs font-black uppercase tracking-wider font-mono ${activeTab === 'gemini-server' ? 'bg-indigo-600 text-white border border-zinc-950' : 'text-zinc-400'}`}
-              >
-                Assistente AI
-              </button>
-              <button
-                onClick={() => { setActiveTab('kids'); setMobileMenuOpen(false); }}
-                className={`w-full text-left p-3 rounded-lg text-xs font-black uppercase tracking-wider font-mono ${activeTab === 'kids' ? 'bg-indigo-600 text-white border border-zinc-950' : 'text-zinc-400'}`}
-              >
-                Alavancagem & Finanças
-              </button>
-              <button
-                onClick={() => { setActiveTab('user-central'); setMobileMenuOpen(false); }}
-                className={`w-full text-left p-3 rounded-lg text-xs font-black uppercase tracking-wider font-mono ${activeTab === 'user-central' ? 'bg-indigo-600 text-white border border-zinc-950' : 'text-zinc-400'}`}
-              >
-                Painel do Usuário
-              </button>
-              <button
-                onClick={() => { setActiveTab('google-workspace'); setMobileMenuOpen(false); }}
-                className={`w-full text-left p-3 rounded-lg text-xs font-black uppercase tracking-wider font-mono ${activeTab === 'google-workspace' ? 'bg-indigo-600 text-white border border-zinc-950' : 'text-zinc-400'}`}
-              >
-                Google Workspace
-              </button>
-            </nav>
-          </div>
-        </div>
-      )}
-
       {/* Right Core Content viewports wrapper */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         {/* Mobile top-bar */}
         {/* Universal Action & Notification Header Bar - Unified Single Responsive Header */}
-        <div className={`px-4 md:px-8 py-3.5 border-b-4 flex items-center justify-between transition-colors duration-300 ${
-          theme === 'claro' 
-            ? 'bg-white border-zinc-950 text-zinc-800' 
-            : theme === 'escuro' 
-              ? 'bg-zinc-900 border-zinc-950 text-zinc-100' 
-              : 'bg-indigo-950 border-indigo-900 text-indigo-100'
-        }`}>
-          {/* Menu Trigger Hamburger button for mobile only */}
-          <div className="flex items-center gap-2">
-            <button 
+        <div className="px-4 md:px-8 py-3.5 border-b-4 bg-black border-zinc-950 text-white flex items-center justify-between">
+          {/* Left Portion of Header: Clickable brand title, shortcuts, and collapsible menu trigger right after appointments */}
+          <div className="flex flex-wrap items-center gap-4 min-w-0">
+            {/* Clickable Brand Logo/Title - Clicking it redirects directly to Dashboard ('leads') */}
+            <button
               onClick={() => {
                 triggerSensoryFeedback('click', accSettings);
-                setMobileMenuOpen(true);
+                setActiveTab('leads');
               }}
-              className="md:hidden p-1.5 px-3 rounded-xl bg-zinc-850 hover:bg-indigo-900/40 text-white font-mono text-[10px] font-black border-2 border-zinc-950 shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 shrink-0"
+              className="flex items-center gap-1.5 focus:outline-none transition group select-none text-left shrink-0 cursor-pointer"
+              title="Ir para a Tela Inicial"
             >
-              MENU ☰
-            </button>
-
-            {/* Logo/Brand visible on mobile screen only */}
-            <div className="md:hidden flex items-center gap-1.5">
-              <span className="font-sans font-black tracking-tighter text-[13px] uppercase italic text-indigo-400">SWAT</span>
-            </div>
-
-            {/* Header Greeting, Local Time, Temperature and Location */}
-            <div className="hidden lg:flex flex-col text-left select-none border-l-2 border-zinc-850 pl-4 py-0.5">
-              {/* Título do CRM */}
-              <h1 className="font-sans font-black tracking-tight text-sm text-white uppercase italic leading-none">
+              <Briefcase className="w-5 h-5 text-indigo-400 group-hover:scale-110 transition duration-200" />
+              <span className="font-sans font-black tracking-tighter text-md uppercase italic text-white leading-none whitespace-nowrap">
                 cicloCRED <span className="text-indigo-400">CRM</span>
-              </h1>
-              
-              {/* Saudação abaixo do título do CRM */}
-              <div className="mt-1 text-[11px] font-semibold text-zinc-350 leading-none">
-                {(() => {
-                  const hrs = currentDateTime.getHours();
-                  if (hrs < 12) return '🌤️ Bom dia';
-                  if (hrs < 18) return '☀️ Boa tarde';
-                  return '🌙 Boa noite';
-                })()}, Corretor <span className="text-indigo-400 font-extrabold">{userName.split(' ')[0]}</span>!
-                <span className="text-[8.5px] font-mono text-zinc-500 uppercase font-bold tracking-wider ml-2.5">
-                  Creci F: {creciNumber || 'Não Integrado'}
-                </span>
-              </div>
-
-              {/* Temperatura e horário e localização abaixo da saudação (dentro do mesmo escopo) */}
-              <div className="mt-2.5 flex items-center gap-2 font-mono text-[9px] font-extrabold uppercase tracking-wider text-zinc-400">
-                <div className="flex items-center gap-1 text-indigo-400">
-                  <Clock className="w-3 h-3 text-indigo-400 shrink-0" />
-                  <span>
-                    {currentDateTime.toLocaleDateString('pt-BR', { weekday: 'short' })} •{' '}
-                    {currentDateTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </div>
-                <span className="text-zinc-800">•</span>
-                <div className="flex items-center gap-1 text-emerald-400">
-                  <span>🌡️ 24°C • SÃO PAULO, SP</span>
-                </div>
-              </div>
-            </div>
+              </span>
+            </button>
           </div>
 
+          {/* Right Portion of Header: Notifications, Settings, and Novo Lead button */}
           <div className="flex items-center gap-3">
-            {/* Real-time Game level indicator pill */}
-            <div className="rounded-full px-3 py-1.5 text-[10px] font-mono font-black uppercase text-indigo-400 bg-indigo-950 bg-opacity-80 border border-indigo-900/65 hidden sm:flex items-center gap-2.5">
-              <span>GALAXY NÍVEL {userLevel}</span>
-              <span className="text-zinc-500 font-mono font-bold">({userXP}/5000 XP)</span>
-            </div>
-
-            {/* Glowing Bell Notification controller button */}
+            {/* Static Bell Notification controller button */}
             <button
                id="bell-notification-trigger"
                type="button"
@@ -2261,25 +2263,10 @@ export default function App() {
                  triggerSensoryFeedback('click', accSettings);
                  setIsNotificationsOpen(true);
                }}
-               className={`relative p-2 rounded-xl border-2 transition-all ${
-                 notifications.some(n => !n.read) 
-                   ? 'border-indigo-600 bg-indigo-500/15 text-indigo-400 hover:bg-indigo-500/25 shadow-[0_0_12px_rgba(99,102,241,0.25)] animate-pulse'
-                   : 'border-zinc-700 hover:bg-zinc-800'
-               }`}
+               className="relative p-2.5 rounded-xl border-2 border-zinc-805 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-white transition cursor-pointer"
                title="Ver Notificações"
             >
-              <AnimatePresence mode="popLayout">
-                {notifications.some(n => !n.read) ? (
-                  <motion.div
-                    animate={{ rotate: [0, -18, 18, -18, 18, 0] }}
-                    transition={{ repeat: Infinity, duration: 2, repeatDelay: 1 }}
-                  >
-                    <BellRing className="w-4 h-4 text-indigo-400" />
-                  </motion.div>
-                ) : (
-                  <Bell className="w-4 h-4 text-zinc-400" />
-                )}
-              </AnimatePresence>
+              <Bell className="w-4 h-4 text-zinc-300 shrink-0" />
 
               {notifications.filter(n => !n.read).length > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 block text-[9px] font-black font-mono leading-none py-0.5 px-1 bg-rose-600 text-white rounded-full border border-zinc-950">
@@ -2288,76 +2275,162 @@ export default function App() {
               )}
             </button>
 
-            {/* User Profile button - triggers the administrative & configuration panel as requested */}
+            {/* Static Settings Gear Icon button */}
             <button
               onClick={() => {
                 triggerSensoryFeedback('click', accSettings);
                 setIsSettingsModalOpen(true);
               }}
-              className="w-10 h-10 rounded-xl border-2 border-zinc-950 overflow-hidden shrink-0 shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] flex items-center justify-center bg-indigo-500 hover:scale-105 active:translate-y-0.5 hover:bg-indigo-600 transition-all focus:outline-none cursor-pointer select-none relative group"
+              className="p-2.5 rounded-xl border-2 border-zinc-805 bg-zinc-900 text-zinc-300 hover:bg-zinc-850 hover:text-white transition cursor-pointer flex items-center justify-center focus:outline-none"
               title="Ajustes, Administração & Perfil do Operador"
             >
-              {localStorage.getItem('ciclocred_user_photo') && localStorage.getItem('ciclocred_user_photo') !== '' ? (
-                <img                     
-                  src={localStorage.getItem('ciclocred_user_photo') || undefined}
-                  alt="Perfil"
-                  className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <div className="w-full h-full bg-indigo-500 font-extrabold text-xs text-zinc-950 font-mono flex items-center justify-center uppercase">
-                  {userName.substring(0, 2).toUpperCase()}
-                </div>
-              )}
-              {/* Interactive Settings Gear Hover Overlay */}
-              <div className="absolute inset-0 bg-indigo-950/45 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-200">
-                <Settings className="w-4 h-4 text-white animate-spin-slow shrink-0" />
-              </div>
+              <Settings className="w-4 h-4 text-zinc-300 shrink-0" />
             </button>
 
-            {/* Shortcuts (Requested: "aplique no canto superior direito de onde foi retirado o cadastro rápido") */}
-            <div className="flex items-center gap-1.5 shrink-0">
-              {/* Shortcut to Agendamentos */}
-              <button
-                type="button"
-                onClick={() => {
-                  triggerSensoryFeedback('click', accSettings);
-                  setActiveTab('leads');
-                  setLeadsViewMode('appointments');
-                  setIsPlanilhasModalOpen(false);
-                }}
-                className={`text-[9.5px] font-mono font-black border-2 border-zinc-950 px-2.5 py-1.5 rounded-xl shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] uppercase transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
-                  activeTab === 'leads' && leadsViewMode === 'appointments'
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-zinc-850 hover:bg-zinc-800 text-zinc-300'
-                }`}
-                title="Acessar Painel de Agendamentos no Funil de Leads"
-              >
-                <Calendar className="w-3.5 h-3.5 shrink-0 text-indigo-400" />
-                <span className="hidden lg:inline">Agendamentos</span>
-              </button>
-
-              {/* Shortcut to Marketing */}
-              <button
-                type="button"
-                onClick={() => {
-                  triggerSensoryFeedback('click', accSettings);
-                  setActiveTab('leads');
-                  setLeadsViewMode('marketing');
-                  setIsPlanilhasModalOpen(false);
-                }}
-                className={`text-[9.5px] font-mono font-black border-2 border-zinc-950 px-2.5 py-1.5 rounded-xl shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] uppercase transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
-                  activeTab === 'leads' && leadsViewMode === 'marketing'
-                    ? 'bg-pink-600 text-white'
-                    : 'bg-zinc-850 hover:bg-zinc-800 text-zinc-300'
-                }`}
-                title="Acessar Ferramentas de Marketing no Funil de Leads"
-              >
-                <Mail className="w-3.5 h-3.5 shrink-0 text-pink-400" />
-                <span className="hidden lg:inline">Marketing</span>
-              </button>
-            </div>
+            {/* Novo Lead Button - Cadastro Rápido Trigger styled as elegant neo-brutalist widget */}
+            <button
+              type="button"
+              onClick={() => {
+                triggerSensoryFeedback('click', accSettings);
+                setSelectedLeadForEdit(null);
+                setIsLeadModalOpen(true);
+              }}
+              className="px-4.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs tracking-wider border-2 border-zinc-950 shadow-[2.5px_2.5px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition-all cursor-pointer flex items-center gap-1.5 uppercase shrink-0"
+              title="Adicionar Novo Lead no CRM"
+            >
+              <UserPlus className="w-4 h-4 text-white shrink-0" />
+              <span>Novo Lead</span>
+            </button>
           </div>
+        </div>
+
+        {/* Nova Barra Horizontal de Navegação Fixa (Substitui Menu Lateral) */}
+        <div className={`px-4 md:px-8 py-3.5 border-b-4 flex flex-wrap items-center gap-3 transition-colors duration-300 md:overflow-visible overflow-x-auto scrollbar-thin ${
+          theme === 'claro' 
+            ? 'bg-zinc-100 border-zinc-950' 
+            : theme === 'escuro' 
+              ? 'bg-zinc-900 border-zinc-950' 
+              : 'bg-indigo-950 border-indigo-900'
+        }`} id="fixed-horizontal-navbar">
+          
+          {/* Botão Leads */}
+          <button
+            type="button"
+            onClick={() => {
+              triggerSensoryFeedback('click', accSettings);
+              setActiveTab('leads');
+            }}
+            className={`px-4 py-2 text-xs font-black uppercase font-mono tracking-wider rounded-xl transition-all border-2 border-zinc-950 flex items-center gap-2 cursor-pointer shadow-[2.5px_2.5px_0px_0px_rgba(0,0,0,1)] shrink-0 h-10 ${
+              activeTab === 'leads'
+                ? 'bg-indigo-600 text-white translate-y-[1px] shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'
+                : 'bg-zinc-850 hover:bg-zinc-800 border-transparent text-zinc-350'
+            }`}
+          >
+            <Users className="w-4 h-4 text-indigo-400 shrink-0" />
+            <span>Leads</span>
+          </button>
+
+          {/* Botão Estoque (Renomeado) */}
+          <button
+            type="button"
+            onClick={() => {
+              triggerSensoryFeedback('click', accSettings);
+              setActiveTab('inventory');
+            }}
+            className={`px-4 py-2 text-xs font-black uppercase font-mono tracking-wider rounded-xl transition-all border-2 border-zinc-950 flex items-center gap-2 cursor-pointer shadow-[2.5px_2.5px_0px_0px_rgba(0,0,0,1)] shrink-0 h-10 ${
+              activeTab === 'inventory'
+                ? 'bg-indigo-600 text-white translate-y-[1px] shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'
+                : 'bg-zinc-850 hover:bg-zinc-800 border-transparent text-zinc-350'
+            }`}
+          >
+            <Home className="w-4 h-4 text-amber-500 shrink-0" />
+            <span>Estoque</span>
+          </button>
+
+          {/* Botão Agendamentos (Fixo após estoque) */}
+          <button
+            type="button"
+            onClick={() => {
+              triggerSensoryFeedback('click', accSettings);
+              setActiveTab('appointments');
+            }}
+            className={`px-4 py-2 text-xs font-black uppercase font-mono tracking-wider rounded-xl transition-all border-2 border-zinc-950 flex items-center gap-2 cursor-pointer shadow-[2.5px_2.5px_0px_0px_rgba(0,0,0,1)] shrink-0 h-10 ${
+              activeTab === 'appointments'
+                ? 'bg-indigo-600 text-white translate-y-[1px] shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'
+                : 'bg-zinc-850 hover:bg-zinc-800 border-transparent text-zinc-350'
+            }`}
+          >
+            <Calendar className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>Agendamentos</span>
+          </button>
+
+          {/* Botão Simulador */}
+          <button
+            type="button"
+            onClick={() => {
+              triggerSensoryFeedback('click', accSettings);
+              setActiveTab('simulador');
+            }}
+            className={`px-4 py-2 text-xs font-black uppercase font-mono tracking-wider rounded-xl transition-all border-2 border-zinc-950 flex items-center gap-2 cursor-pointer shadow-[2.5px_2.5px_0px_0px_rgba(0,0,0,1)] shrink-0 h-10 ${
+              activeTab === 'simulador'
+                ? 'bg-indigo-600 text-white translate-y-[1px] shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'
+                : 'bg-zinc-850 hover:bg-zinc-800 border-transparent text-zinc-350'
+            }`}
+          >
+            <Calculator className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>Simulador</span>
+          </button>
+
+          {/* Botão Relatórios */}
+          <button
+            type="button"
+            onClick={() => {
+              triggerSensoryFeedback('click', accSettings);
+              setActiveTab('reports');
+            }}
+            className={`px-4 py-2 text-xs font-black uppercase font-mono tracking-wider rounded-xl transition-all border-2 border-zinc-950 flex items-center gap-2 cursor-pointer shadow-[2.5px_2.5px_0px_0px_rgba(0,0,0,1)] shrink-0 h-10 ${
+              activeTab === 'reports'
+                ? 'bg-indigo-600 text-white translate-y-[1px] shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'
+                : 'bg-zinc-850 hover:bg-zinc-800 border-transparent text-zinc-350'
+            }`}
+          >
+            <BarChart2 className="w-4 h-4 text-pink-400 shrink-0" />
+            <span>Relatórios</span>
+          </button>
+
+          {/* Botão Assistente AI (Com Workspace Integrado) */}
+          <button
+            type="button"
+            onClick={() => {
+              triggerSensoryFeedback('click', accSettings);
+              setActiveTab('gemini-server');
+            }}
+            className={`px-4 py-2 text-xs font-black uppercase font-mono tracking-wider rounded-xl transition-all border-2 border-zinc-950 flex items-center gap-2 cursor-pointer shadow-[2.5px_2.5px_0px_0px_rgba(0,0,0,1)] shrink-0 h-10 ${
+              activeTab === 'gemini-server'
+                ? 'bg-indigo-600 text-white translate-y-[1px] shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'
+                : 'bg-zinc-850 hover:bg-zinc-800 border-transparent text-zinc-350'
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-violet-400 shrink-0" />
+            <span>Assistente AI</span>
+          </button>
+
+          {/* Botão Usuário */}
+          <button
+            type="button"
+            onClick={() => {
+              triggerSensoryFeedback('click', accSettings);
+              setActiveTab('user-central');
+            }}
+            className={`px-4 py-2 text-xs font-black uppercase font-mono tracking-wider rounded-xl transition-all border-2 border-zinc-950 flex items-center gap-2 cursor-pointer shadow-[2.5px_2.5px_0px_0px_rgba(0,0,0,1)] shrink-0 h-10 ${
+              activeTab === 'user-central'
+                ? 'bg-indigo-600 text-white translate-y-[1px] shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'
+                : 'bg-zinc-850 hover:bg-zinc-800 border-transparent text-zinc-350'
+            }`}
+          >
+            <User className="w-4 h-4 text-cyan-400 shrink-0" />
+            <span>Usuário</span>
+          </button>
         </div>
 
         {/* Main dynamically scrolled workspace content viewport */}
@@ -2404,82 +2477,8 @@ export default function App() {
             </div>
           )}
 
-          {/* Header titles depends on tab */}
-          <div className={`flex flex-col md:flex-row gap-4 items-start justify-between border-b-4 pb-6 ${
-            theme === 'galatico' ? 'border-indigo-500/30' : 'border-zinc-950'
-          }`}>
-            <div>
-              <h1 className={`text-3xl font-black tracking-tighter uppercase italic ${
-                theme === 'galatico' 
-                  ? 'text-transparent bg-clip-text bg-gradient-to-r from-violet-400 via-indigo-300 to-cyan-300 drop-shadow-[0_2px_8px_rgba(129,140,248,0.5)]' 
-                  : theme === 'escuro' 
-                    ? 'text-white' 
-                    : 'text-zinc-900'
-              }`}>
-                {activeTab === 'dashboard' && 'Dashboard Operacional'}
-                {activeTab === 'leads' && 'Leads & Funil de Vendas'}
-                {activeTab === 'follow-up' && 'Acompanhamento & Follow-up'}
-                {activeTab === 'inventory' && 'Portfólio de Imóveis'}
-                {activeTab === 'ciclocred-inform' && 'Portal cicloCRED Inform'}
-                {activeTab === 'reports' && 'Relatórios de Performance'}
-                {activeTab === 'settings' && 'Administração & Ajustes'}
-                {activeTab === 'automation-flows' && 'Scripts e fluxos de Automação'}
-                {activeTab === 'gemini-server' && 'Assistente AI cicloCRED'}
-                {activeTab === 'kids' && 'Acelerador de Alavancagem & Finanças'}
-                {activeTab === 'user-central' && 'Painel do Usuário (Metas & Adm)'}
-                {activeTab === 'google-workspace' && 'Conectores Google Workspace'}
-              </h1>
-              <p className={`text-sm font-medium ${
-                theme === 'galatico' ? 'text-indigo-300/90' : theme === 'escuro' ? 'text-zinc-400' : 'text-zinc-500'
-              }`}>
-                {activeTab === 'dashboard' && 'Visão analítica instantânea do seu funil e contatos mais recentes.'}
-                {activeTab === 'leads' && 'Gerencie seus clientes através do funil Kanban integrado ou da tabela operacional completa.'}
-                {activeTab === 'follow-up' && 'Acompanhe contatos históricos, registre conversas e agende compromissos de retorno estrategicamente.'}
-                {activeTab === 'inventory' && 'Cadastro de estoque imobiliário, tabela inteligente de captação e importador de planilhas.'}
-                {activeTab === 'reports' && 'KPIs, saúde de canais de aquisição corporativa, e taxas de conversões integradas.'}
-                {activeTab === 'settings' && 'Gerencie seu perfil de credenciamento CRECI, paleta de cores, bipes e configurações do CRM.'}
-                {activeTab === 'automation-flows' && 'Crie e envie templates de e-mail automatizados e scripts de copywriting estruturados.'}
-                {activeTab === 'gemini-server' && 'Interaja diretamente com o seu Assistente AI, teste seu comportamento e configure parâmetros e auto-respostas.'}
-                {activeTab === 'kids' && 'Cálculo de juros compostos a 1% real ao mês, alocação de comissões, montagem de ferramentas e simulados de marketing.'}
-                {activeTab === 'user-central' && 'Configure suas metas comerciais, gerencie o nível de gamificação e controle suas tarefas diárias.'}
-                {activeTab === 'google-workspace' && 'Painel de sincronismo avançado com Google Calendar, Drive, Sheets e API do Gmail.'}
-              </p>
-            </div>
-            
-            {activeTab === 'dashboard' && (
-              <div className="flex flex-wrap items-center gap-3">
-                {/* Agendamentos Quick Shortcut button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerSensoryFeedback('click', accSettings);
-                    setActiveTab('leads');
-                    setLeadsViewMode('appointments');
-                    setIsPlanilhasModalOpen(false);
-                  }}
-                  className="flex items-center gap-2 px-4.5 py-3 bg-indigo-600 hover:bg-indigo-750 text-white font-black rounded-xl text-xs tracking-wider border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-2px] transition-all cursor-pointer whitespace-nowrap"
-                >
-                  <Calendar className="w-4 h-4 text-indigo-200" />
-                  <span>🗓️ Agendamentos</span>
-                </button>
-
-                {/* Marketing Email / Campaign Quick Shortcut button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerSensoryFeedback('click', accSettings);
-                    setActiveTab('leads');
-                    setLeadsViewMode('marketing');
-                    setIsPlanilhasModalOpen(false);
-                  }}
-                  className="flex items-center gap-2 px-4.5 py-3 bg-pink-600 hover:bg-pink-700 text-white font-black rounded-xl text-xs tracking-wider border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-2px] transition-all cursor-pointer whitespace-nowrap"
-                >
-                  <Mail className="w-4 h-4 text-pink-200" />
-                  <span>📢 Marketing</span>
-                </button>
-              </div>
-            )}
-          </div>
+          {/* Space between header bar and active tab content */}
+          <div className="pt-2"></div>
 
           {/* RENDER ACTIVE TAB */}
           
@@ -2492,6 +2491,136 @@ export default function App() {
               id="crm-dashboard-default"
               className="space-y-8"
             >
+              {/* BLOCO DE SAUDAÇÃO E INFORMAÇÕES CRM CONSOLIDADOS */}
+              <div className="bg-zinc-950 text-white border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] grid grid-cols-1 md:grid-cols-12 gap-6 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-6 opacity-5 font-mono tracking-tighter text-8xl select-none pointer-events-none font-black uppercase">
+                  CRM
+                </div>
+                
+                {/* LADO ESQUERDO: SAUDAÇÃO, CRECI, DIA, HORÁRIO E CLIMA */}
+                <div className="md:col-span-6 space-y-4 z-10 text-left flex flex-col justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-3xl">
+                      {currentDateTime.getHours() < 12 ? '🌤️' : currentDateTime.getHours() < 18 ? '☀️' : '🌙'}
+                    </span>
+                    <div>
+                      <h2 className="text-xl font-black tracking-tight uppercase italic leading-tight text-white">
+                        {currentDateTime.getHours() < 12 ? 'Bom dia' : currentDateTime.getHours() < 18 ? 'Boa tarde' : 'Boa noite'}, <span className="text-indigo-400">{userName}</span>!
+                      </h2>
+                      <p className="text-[10px] text-zinc-400 font-mono font-bold uppercase tracking-wide text-left mt-0.5">
+                        🏡 {agencyName} • CRECI: {creciNumber || 'Não Integrado'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Date, Time & Clima display substituting old information block */}
+                  <div className="bg-zinc-900 border border-zinc-800/80 p-4 rounded-2xl space-y-2.5 text-left">
+                    <span className="text-[9.5px] font-mono font-black text-indigo-400 uppercase tracking-widest block text-left">
+                      🕒 DATA, HORÁRIO E CLIMA CORRENTE
+                    </span>
+                    
+                    <div className="space-y-1.5 font-mono text-[10.5px]">
+                      <div className="flex items-center gap-2 text-white">
+                        <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                        <span className="uppercase text-zinc-200 font-bold">
+                          {currentDateTime.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+                        </span>
+                      </div>
+                      
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className="text-white text-lg font-black tracking-tight font-sans">
+                          {currentDateTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                        </span>
+                        <span className="w-1.5 h-1.5 bg-zinc-700 rounded-full hidden sm:inline" />
+                        <span className="text-emerald-400 font-black flex items-center gap-1">
+                          🌡️ 24°C • SÃO PAULO, SP
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* LADO DIREITO: OBJETIVOS OPERACIONAIS CONSOLIDADOS */}
+                <div className="md:col-span-6 bg-zinc-900 border border-zinc-850 p-5 rounded-2xl flex flex-col justify-between h-full relative overflow-hidden group z-10">
+                  <div className="space-y-1 text-left">
+                    <span className="text-[10px] font-mono font-black text-indigo-400 uppercase tracking-widest block">
+                      🎛️ INFORMAÇÕES CRM CONSOLIDADAS
+                    </span>
+                    <h4 className="text-xs font-black text-zinc-350 uppercase tracking-tight">Objetivos Operacionais de Venda</h4>
+                  </div>
+
+                  <div className="space-y-3 my-3">
+                    {/* Metric 1: Taxa de Negócios Fechados */}
+                    {(() => {
+                      const closedCount = leads.filter(l => l.status === 'fechado').length;
+                      const totalCount = leads.length;
+                      const pct = totalCount > 0 ? Math.round((closedCount / totalCount) * 105) : 0;
+                      const displayPct = Math.min(100, pct);
+                      return (
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="font-bold text-zinc-300">🏆 Taxa de Negócios Fechados</span>
+                            <span className="font-mono font-black text-emerald-450">{displayPct}%</span>
+                          </div>
+                          <div className="w-full bg-zinc-950 h-2 rounded-full overflow-hidden border border-zinc-805">
+                            <div 
+                              className="bg-emerald-500 h-full rounded-full transition-all duration-1000" 
+                              style={{ width: `${displayPct}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Metric 2: Meta de Leads */}
+                    {(() => {
+                      const count = leads.length;
+                      const pct = Math.min(Math.round((count / 10) * 100), 100);
+                      return (
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="font-bold text-zinc-300">📈 Meta na Carteira Ativa</span>
+                            <span className="font-mono font-black text-indigo-400">{pct}%</span>
+                          </div>
+                          <div className="w-full bg-zinc-950 h-2 rounded-full overflow-hidden border border-zinc-805">
+                            <div 
+                              className="bg-indigo-500 h-full rounded-full transition-all duration-1000" 
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Metric 3: Qualidade de Cadastro Real */}
+                    {(() => {
+                      const totalCrm = leads.length;
+                      const hasFictitious = leads.filter(l => l.phone && (l.phone.includes('99999-9999') || l.phone.includes('00000-0000'))).length;
+                      const realPct = totalCrm > 0 ? Math.round(((totalCrm - hasFictitious) / totalCrm) * 100) : 100;
+                      return (
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="font-bold text-zinc-300">📞 Saneamento & Qualidade</span>
+                            <span className="font-mono font-black text-emerald-400">{realPct}%</span>
+                          </div>
+                          <div className="w-full bg-zinc-950 h-2 rounded-full overflow-hidden border border-zinc-805">
+                            <div 
+                              className="bg-emerald-500 h-full rounded-full transition-all duration-1000" 
+                              style={{ width: `${realPct}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Informações consolidadas custom user edit note */}
+                  <p className="text-[9px] text-zinc-400 font-sans italic border-t border-zinc-800/60 pt-2 text-left">
+                    💬 {consolidatedCrmInfo || 'Painel de faturamento integrado e atualizado via Google Workspace CRM.'}
+                  </p>
+                </div>
+              </div>
+
               {/* KPIs indicators belt */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
                 <div className="bg-white border-4 border-zinc-950 p-5 rounded-2xl flex items-center justify-between shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-2px] transition-all duration-250">
@@ -2591,114 +2720,96 @@ export default function App() {
               {/* NEW PREMIUM KPI ROW (1/3 metrics, 2/3 Leads Control Pie Chart) */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 select-none animate-fade-in">
                 
-                {/* 1. Bar/Card Consolidation of CRM Metrics (No speedometers, high-end premium minimal design) */}
-                <div className="bg-zinc-950 text-white border-4 border-zinc-950 p-6 rounded-3xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] flex flex-col justify-between h-[340px] relative overflow-hidden group">
-                  <div className="absolute inset-0 bg-gradient-to-br from-indigo-950/20 to-transparent pointer-events-none" />
-                  
-                  <div className="relative z-10 space-y-1">
-                    <span className="text-[10.5px] font-mono font-black text-indigo-450 uppercase tracking-widest block">
-                      🎛️ INFORMAÇÕES CRM CONSOLIDADAS
-                    </span>
-                    <h4 className="text-sm font-black text-zinc-100 uppercase tracking-tight">Objetivos Operacionais</h4>
+                {/* 1. Novo Gráfico: Origem de Captação dos Leads (Recharts BarChart) */}
+                <div className="bg-white border-4 border-zinc-950 p-6 rounded-3xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] flex flex-col justify-between h-[340px] select-none">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <span className="text-[10px] tracking-wider uppercase font-black text-indigo-650 font-mono">★ Canais de Marketing</span>
+                      <h3 className="text-lg font-black text-zinc-900 uppercase italic tracking-tighter">Origem de Captação</h3>
+                    </div>
                   </div>
 
-                  <div className="relative z-10 space-y-4 my-2">
-                    {/* Metric 1: Taxa de Fechamento */}
-                    {(() => {
-                      const closedCount = leads.filter(l => l.status === 'fechado').length;
-                      const totalCount = leads.length;
-                      const pct = totalCount > 0 ? Math.round((closedCount / totalCount) * 105) : 0; // scale nicely
-                      const displayPct = Math.min(100, pct);
-                      return (
-                        <div 
-                          onClick={() => {
-                            triggerSensoryFeedback('click', accSettings);
-                            setActiveTab('reports');
-                          }}
-                          className="space-y-1.5 cursor-pointer hover:bg-zinc-900/50 p-2 rounded-xl transition-all"
-                        >
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-bold text-zinc-350">🏆 Taxa de Negócios Fechados</span>
-                            <span className="font-mono font-black text-emerald-450">{displayPct}%</span>
-                          </div>
-                          <div className="w-full bg-zinc-900 h-2 rounded-full overflow-hidden border border-zinc-800">
-                            <div 
-                              className="bg-emerald-500 h-full rounded-full transition-all duration-1000" 
-                              style={{ width: `${displayPct}%` }}
-                            />
-                          </div>
-                          <p className="text-[9.5px] text-zinc-500 font-mono">
-                            {closedCount} fechados de {totalCount} leads cadastrados
-                          </p>
-                        </div>
-                      );
-                    })()}
+                  {leads.length === 0 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
+                      <p className="text-zinc-500 text-xs font-mono uppercase font-bold">Sem captação registrada</p>
+                      <p className="text-zinc-400 text-[10px] max-w-xs mt-1 leading-tight">Cadastre novos leads com canais definidos para alimentar este gráfico gerencial.</p>
+                    </div>
+                  ) : (
+                    <div className="flex-1 flex flex-col justify-end mt-4 h-[210px] w-full">
+                      {(() => {
+                        const counts: Record<string, number> = {};
+                        leads.forEach(l => {
+                          let raw = l.origin || 'Outros';
+                          if (raw.toLowerCase().includes('chat')) raw = 'Chatbot';
+                          else if (raw.toLowerCase().includes('whats')) raw = 'WhatsApp';
+                          else if (raw.toLowerCase().includes('meta') || raw.toLowerCase().includes('face') || raw.toLowerCase().includes('insta')) raw = 'Meta Ads';
+                          else if (raw.toLowerCase().includes('indica')) raw = 'Indicação';
+                          else if (raw.toLowerCase().includes('site') || raw.toLowerCase().includes('web')) raw = 'Portal Web';
+                          else if (raw.toLowerCase().includes('manual') || raw.toLowerCase().includes('cadast')) raw = 'Manual';
+                          counts[raw] = (counts[raw] || 0) + 1;
+                        });
 
-                    {/* Metric 2: Meta de Leads */}
-                    {(() => {
-                      const count = leads.length;
-                      const pct = Math.min(Math.round((count / 10) * 100), 100);
-                      return (
-                        <div 
-                          onClick={() => {
-                            triggerSensoryFeedback('click', accSettings);
-                            setActiveTab('leads');
-                          }}
-                          className="space-y-1.5 cursor-pointer hover:bg-zinc-900/50 p-2 rounded-xl transition-all"
-                        >
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-bold text-zinc-350">📈 Meta na Carteira Ativa</span>
-                            <span className="font-mono font-black text-indigo-400">{pct}%</span>
-                          </div>
-                          <div className="w-full bg-zinc-900 h-2 rounded-full overflow-hidden border border-zinc-800">
-                            <div 
-                              className="bg-indigo-500 h-full rounded-full transition-all duration-1000" 
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                          <p className="text-[9.5px] text-zinc-500 font-mono">
-                            {count} de 10 leads desejados na carteira ideal
-                          </p>
-                        </div>
-                      );
-                    })()}
+                        const chartData = Object.entries(counts)
+                          .map(([name, value]) => ({ name, value }))
+                          .sort((a, b) => b.value - a.value)
+                          .slice(0, 4);
 
-                    {/* Metric 3: Qualidade de Cadastro Real */}
-                    {(() => {
-                      const totalCrm = leads.length;
-                      const hasFictitious = leads.filter(l => l.phone && (l.phone.includes('99999-9999') || l.phone.includes('00000-0000'))).length;
-                      const realPct = totalCrm > 0 ? Math.round(((totalCrm - hasFictitious) / totalCrm) * 100) : 100;
-                      return (
-                        <div 
-                          onClick={() => {
-                            triggerSensoryFeedback('click', accSettings);
-                            setActiveTab('leads');
-                          }}
-                          className="space-y-1.5 cursor-pointer hover:bg-zinc-900/50 p-2 rounded-xl transition-all"
-                        >
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-bold text-zinc-350">📞 Qualidade dos Contatos</span>
-                            <span className="font-mono font-black text-emerald-400">{realPct}% Real</span>
-                          </div>
-                          <div className="w-full bg-zinc-900 h-2 rounded-full overflow-hidden border border-zinc-800">
-                            <div 
-                              className="bg-emerald-500 h-full rounded-full transition-all duration-1000" 
-                              style={{ width: `${realPct}%` }}
-                            />
-                          </div>
-                          <p className="text-[9.5px] text-zinc-500 font-mono">
-                            {hasFictitious > 0 ? `${hasFictitious} contatos pendentes de saneamento` : "100% dos contatos validados e reais"}
-                          </p>
-                        </div>
-                      );
-                    })()}
-                  </div>
+                        const colors = ['#6366f1', '#10b981', '#06b6d4', '#f59e0b'];
 
-                  <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between text-[9px] font-mono text-zinc-500 z-10 select-none">
-                    <span>SISTEMA cicloCRED</span>
-                    <span className="animate-pulse flex items-center gap-1 text-emerald-450">
-                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span> AGENTE ONLINE
-                    </span>
+                        return (
+                          <div className="w-full h-full relative">
+                            <ResponsiveContainer width="100%" height={180}>
+                              <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 15, left: -10, bottom: 5 }}>
+                                <XAxis type="number" hide />
+                                <YAxis 
+                                  dataKey="name" 
+                                  type="category" 
+                                  axisLine={false}
+                                  tickLine={false} 
+                                  tick={{ fontSize: 9, fontWeight: 900, fill: '#18181b', fontFamily: 'monospace' }}
+                                  width={75}
+                                />
+                                <Tooltip 
+                                  cursor={{ fill: '#f4f4f5', opacity: 0.5 }}
+                                  content={({ active, payload }) => {
+                                    if (active && payload && payload.length) {
+                                      const data = payload[0].payload;
+                                      return (
+                                        <div className="bg-zinc-950 border-2 border-zinc-900 p-2 rounded-xl shadow-lg text-[9px] font-mono text-white">
+                                          <p className="font-bold">{data.name}</p>
+                                          <p className="text-zinc-300 mt-0.5">Leads: {data.value}</p>
+                                        </div>
+                                      );
+                                    }
+                                    return null;
+                                  }}
+                                />
+                                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14}>
+                                  {chartData.map((_, index) => (
+                                    <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+                                  ))}
+                                </Bar>
+                              </BarChart>
+                            </ResponsiveContainer>
+                            
+                            {/* Premium Mini-Legend inline below */}
+                            <div className="flex flex-wrap gap-x-3 gap-y-1 justify-center pt-2 border-t border-zinc-100">
+                              {chartData.map((d, i) => (
+                                <div key={d.name} className="flex items-center gap-1 font-mono text-[8px] font-bold text-zinc-500 uppercase">
+                                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: colors[i % colors.length] }} />
+                                  <span>{d.name}: {d.value}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  <div className="border-t border-zinc-100 pt-2 flex items-center justify-between text-[8px] font-mono font-bold text-zinc-400 select-none">
+                    <span>CANAIS DE MARKETING</span>
+                    <span>ATUALIZAÇÃO TEMPO REAL</span>
                   </div>
                 </div>
 
@@ -3283,26 +3394,18 @@ export default function App() {
               transition={{ duration: 0.22 }}
               className="w-full space-y-5"
             >
-              {/* TRÊS BLOCOS FIXOS EM TODOS OS MODOS: 1. Modo Operacional, 2. Filtros Avançados, 3. Gestão de Leads */}
-
-              {/* BLOCO 1: PAINEL OPERACIONAL DETALHADO DO CRM (VISTAS & OPERAÇÕES UNIFICADAS) */}
-              <div className="bg-zinc-900 border-4 border-zinc-950 p-5 rounded-2xl shadow-[6px_6px_0px_0px_rgba(24,24,27,1)] flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-5 select-none animate-fadeIn">
-                <div className="flex items-center gap-2">
-                  <Briefcase className="w-4.5 h-4.5 text-indigo-400 shrink-0" />
-                  <span className="text-white font-mono font-black text-xs uppercase tracking-wider italic">VISTA OPERACIONAL:</span>
-                </div>
-                
-                <div className="grid grid-cols-2 md:grid-cols-4 bg-zinc-950 p-1.5 border-2 border-zinc-800 rounded-2xl gap-2 w-full xl:w-auto">
+              {/* BLOCO 1: NAVEGAÇÃO DE STATUS E FUNIL COMPLETO DO CRM (SEM TÍTULOS REPETIDOS) */}
+              <div className="bg-zinc-900 border-4 border-zinc-950 p-2.5 rounded-2xl shadow-[6px_6px_0px_0px_rgba(24,24,27,1)] select-none animate-fadeIn w-full">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 bg-zinc-950 p-1.5 border-2 border-zinc-800 rounded-xl gap-2 w-full">
                   {/* 1. Tabela */}
                   <button
                     type="button"
                     onClick={() => {
                       setLeadsViewMode('list');
-                      setIsPlanilhasModalOpen(false);
                       triggerSensoryFeedback('click', accSettings);
                     }}
-                    className={`px-4 py-3 rounded-xl text-[10.5px] font-mono font-black uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
-                      leadsViewMode === 'list' && !isPlanilhasModalOpen
+                    className={`px-3 py-3 rounded-xl text-[10.5px] font-mono font-black uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
+                      leadsViewMode === 'list'
                         ? 'bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
                         : 'text-zinc-400 hover:text-white hover:bg-zinc-900 border-transparent'
                     }`}
@@ -3311,33 +3414,31 @@ export default function App() {
                     <span>Tabela</span>
                   </button>
 
-                  {/* 2. Status (Kanban) */}
+                  {/* 2. Funil (Renomeado de Status) */}
                   <button
                     type="button"
                     onClick={() => {
                       setLeadsViewMode('kanban');
-                      setIsPlanilhasModalOpen(false);
                       triggerSensoryFeedback('click', accSettings);
                     }}
-                    className={`px-4 py-3 rounded-xl text-[10.5px] font-mono font-black uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
+                    className={`px-3 py-3 rounded-xl text-[10.5px] font-mono font-black uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
                       leadsViewMode === 'kanban'
                         ? 'bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
                         : 'text-zinc-400 hover:text-white hover:bg-zinc-900 border-transparent'
                     }`}
                   >
                     <Sliders className="w-3.5 h-3.5 shrink-0 text-pink-400" />
-                    <span>Kanban</span>
+                    <span>Funil</span>
                   </button>
 
-                  {/* 3. Follow-up */}
+                  {/* 3. Follow-ups */}
                   <button
                     type="button"
                     onClick={() => {
                       setLeadsViewMode('followup');
-                      setIsPlanilhasModalOpen(false);
                       triggerSensoryFeedback('click', accSettings);
                     }}
-                    className={`px-4 py-3 rounded-xl text-[10.5px] font-mono font-black uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
+                    className={`px-3 py-3 rounded-xl text-[10.5px] font-mono font-black uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
                       leadsViewMode === 'followup'
                         ? 'bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
                         : 'text-zinc-400 hover:text-white hover:bg-zinc-900 border-transparent'
@@ -3347,22 +3448,38 @@ export default function App() {
                     <span>Follow-ups</span>
                   </button>
 
-                  {/* 4. Planilha (Importar & Exportar) */}
+                  {/* 4. Scripts e fluxos (Integrated) */}
                   <button
                     type="button"
                     onClick={() => {
-                      setLeadsViewMode('list');
-                      setIsPlanilhasModalOpen(!isPlanilhasModalOpen);
+                      setLeadsViewMode('automation-flows');
                       triggerSensoryFeedback('click', accSettings);
                     }}
-                    className={`px-4 py-3 rounded-xl text-[10.5px] font-mono font-black uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
-                      isPlanilhasModalOpen
-                        ? 'bg-amber-400 text-zinc-950 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                    className={`px-3 py-3 rounded-xl text-[10.5px] font-mono font-black uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
+                      leadsViewMode === 'automation-flows'
+                        ? 'bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] font-extrabold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
                         : 'text-zinc-400 hover:text-white hover:bg-zinc-900 border-transparent'
                     }`}
                   >
-                    <Plus className="w-3.5 h-3.5 shrink-0 text-amber-400 animate-pulse" />
-                    <span>Planilha</span>
+                    <Cpu className="w-3.5 h-3.5 shrink-0 text-cyan-400" />
+                    <span>Scripts e Fluxos</span>
+                  </button>
+
+                  {/* 5. Disparos (Renomeado) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLeadsViewMode('marketing');
+                      triggerSensoryFeedback('click', accSettings);
+                    }}
+                    className={`px-3 py-3 rounded-xl text-[10.5px] font-mono font-black uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
+                      leadsViewMode === 'marketing'
+                        ? 'bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] font-extrabold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900 border-transparent'
+                    }`}
+                  >
+                    <Mail className="w-3.5 h-3.5 shrink-0 text-teal-400" />
+                    <span>Disparos</span>
                   </button>
                 </div>
               </div>
@@ -3432,24 +3549,37 @@ export default function App() {
                     ))}
                   </select>
 
-                  {/* Diagnostic IA button */}
+                  {/* Importar Button */}
                   <button
                     onClick={() => {
                       triggerSensoryFeedback('click', accSettings);
-                      simulateCRMAction();
+                      setIsImportModalOpen(true);
+                    }}
+                    className="text-[10px] font-mono font-black text-white bg-emerald-600 hover:bg-emerald-700 px-4 py-3.5 rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase transition-all flex items-center gap-1.5 shrink-0 cursor-pointer hover:translate-y-[-1px] active:translate-y-0.5"
+                    title="Importar dados deste painel"
+                  >
+                    <Download className="w-3.5 h-3.5 shrink-0 text-emerald-100" />
+                    <span>Importar</span>
+                  </button>
+
+                  {/* Exportar Button */}
+                  <button
+                    onClick={() => {
+                      triggerSensoryFeedback('click', accSettings);
+                      setIsExportModalOpen(true);
                     }}
                     className="text-[10px] font-mono font-black text-white bg-indigo-600 hover:bg-indigo-700 px-4 py-3.5 rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase transition-all flex items-center gap-1.5 shrink-0 cursor-pointer hover:translate-y-[-1px] active:translate-y-0.5"
-                     title="Executar análise inteligente de propensão do funil"
+                    title="Exportar dados deste painel"
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-indigo-200 shrink-0" />
-                    <span>Diagnóstico IA</span>
+                    <Upload className="w-3.5 h-3.5 shrink-0 text-indigo-100" />
+                    <span>Exportar</span>
                   </button>
                 </div>
               </div>
 
               {leadsViewMode === 'list' ? (
                 <LeadList 
-                  leads={leads}
+                  leads={unifiedFilteredLeads}
                   searchTerm={searchTerm}
                   setSearchTerm={setSearchTerm}
                   statusFilter={statusFilter}
@@ -3508,19 +3638,7 @@ export default function App() {
                 />
               ) : leadsViewMode === 'kanban' ? (
                 <KanbanBoard 
-                  leads={leads.filter(lead => {
-                    const matchesSearch = 
-                      lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      lead.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      lead.phone.includes(searchTerm) ||
-                      (lead.company || '').toLowerCase().includes(searchTerm.toLowerCase());
-                    const matchesStatus = statusFilter === 'todos' || lead.status === statusFilter;
-                    const matchesOrigin = originFilter === 'todos' || lead.origin === originFilter;
-                    const matchesInitial = 
-                      initialLetterFilter === 'todos' ||
-                      lead.name.trim().charAt(0).toUpperCase() === initialLetterFilter.toUpperCase();
-                    return matchesSearch && matchesStatus && matchesOrigin && matchesInitial;
-                  })}
+                  leads={unifiedFilteredLeads}
                   onMoveLead={handleMoveLead}
                   onOpenLeadDetails={(lead) => {
                     setSelectedLeadForDetails(lead);
@@ -3538,24 +3656,23 @@ export default function App() {
                 />
               ) : leadsViewMode === 'followup' ? (
                 <FollowUpManager
-                  leads={leads}
+                  leads={unifiedFilteredLeads}
                   followUps={followUps}
                   onAddFollowUp={handleAddFollowUp}
                   onDeleteFollowUp={handleDeleteFollowUp}
                   accSettings={accSettings}
                 />
-              ) : leadsViewMode === 'appointments' ? (
-                <Appointments
-                  leads={leads}
-                  appointments={appointments}
-                  onAddAppointment={handleAddAppointment}
-                  onUpdateAppointmentStatus={handleUpdateAppointmentStatus}
-                  onDeleteAppointment={handleDeleteAppointment}
+              ) : leadsViewMode === 'automation-flows' ? (
+                <AutomationFlowsTab
+                  templates={templates}
+                  setTemplates={setTemplates}
+                  awardXP={(xp) => awardXP(xp)}
+                  addNotification={addNotification}
                   accSettings={accSettings}
                 />
               ) : (
                 <MultiLevelMarketingTab
-                  leads={leads}
+                  leads={unifiedFilteredLeads}
                   templates={templates}
                   logs={emailLogs}
                   onAddTemplate={handleAddTemplate}
@@ -3570,6 +3687,51 @@ export default function App() {
                   onTriggerConversao={() => setIsConversaoModalOpen(true)}
                 />
               )}
+            </motion.div>
+          )}
+
+          {/* DEDICATED APPOINTMENTS TAB */}
+          {activeTab === 'appointments' && (
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22 }}
+              className="w-full"
+            >
+              <Appointments
+                leads={leads}
+                appointments={appointments}
+                onAddAppointment={handleAddAppointment}
+                onUpdateAppointmentStatus={handleUpdateAppointmentStatus}
+                onDeleteAppointment={handleDeleteAppointment}
+                accSettings={accSettings}
+              />
+            </motion.div>
+          )}
+
+          {/* DEDICATED MARKETING TAB */}
+          {activeTab === 'marketing' && (
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22 }}
+              className="w-full"
+            >
+              <MultiLevelMarketingTab
+                leads={leads}
+                templates={templates}
+                logs={emailLogs}
+                onAddTemplate={handleAddTemplate}
+                onEditTemplate={handleEditTemplate}
+                onDeleteTemplate={handleDeleteTemplate}
+                onSendEmailSimulated={handleSendEmailSimulated}
+                properties={properties}
+                theme={theme}
+                accSettings={accSettings}
+                awardXP={(xp, cause) => awardXP(xp)}
+                addNotification={addNotification}
+                onTriggerConversao={() => setIsConversaoModalOpen(true)}
+              />
             </motion.div>
           )}
 
@@ -3594,25 +3756,6 @@ export default function App() {
                 accSettings={accSettings}
                 addNotification={addNotification}
                 awardXP={(xp, cause) => awardXP(xp)}
-              />
-            </motion.div>
-          )}
-
-          {/* 4.7. CENTRAL DE MÍDIA INTEGRADA (DISABLED SILENTLY BECAUSE IT IS NOW EMBEDDED IN MULTI-LEVEL MARKETING) */}
-          {activeTab === 'media-center-disabled' && (
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.22 }}
-              className="w-full"
-            >
-              <MediaCenter 
-                leads={leads}
-                properties={properties}
-                theme={theme}
-                accSettings={accSettings}
-                awardXP={awardXP}
-                addNotification={addNotification}
               />
             </motion.div>
           )}
@@ -3668,24 +3811,6 @@ export default function App() {
             </motion.div>
           )}
 
-          {/* 7. SCRIPTS AND AUTOMATION FLOWS MODULE */}
-          {activeTab === 'automation-flows' && (
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.22 }}
-              className="w-full"
-            >
-              <AutomationFlowsTab
-                templates={templates}
-                setTemplates={setTemplates}
-                awardXP={awardXP}
-                addNotification={addNotification}
-                accSettings={accSettings}
-              />
-            </motion.div>
-          )}
-
           {/* 7.1. GEMINI NEURAL SERVER MANAGEMENT MODULE */}
           {activeTab === 'gemini-server' && (
             <motion.div
@@ -3701,6 +3826,10 @@ export default function App() {
                 leads={leads}
                 setLeads={setLeads}
                 templates={templates}
+                appointments={appointments}
+                setAppointments={setAppointments}
+                emailLogs={emailLogs}
+                setEmailLogs={setEmailLogs}
               />
             </motion.div>
           )}
@@ -3766,6 +3895,9 @@ export default function App() {
                 setIsAutonomyActive={setIsAutonomyActive}
                 autonomyIntervalSec={autonomyIntervalSec}
                 setAutonomyIntervalSec={setAutonomyIntervalSec}
+                consolidatedCrmInfo={consolidatedCrmInfo}
+                setConsolidatedCrmInfo={setConsolidatedCrmInfo}
+                awardXP={awardXP}
               />
             </motion.div>
           )}
@@ -3885,6 +4017,275 @@ export default function App() {
         awardXP={(xp) => awardXP(xp)}
       />
 
+      {/* ADAPTIVE IMPORT AND EXPORT MODALS */}
+      <AnimatePresence>
+        {isImportModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-4 backdrop-blur-md select-none overflow-y-auto">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white border-4 border-zinc-950 rounded-3xl w-full max-w-xl shadow-[8px_8px_0px_0px_rgba(24,24,27,1)] overflow-hidden flex flex-col max-h-[85vh]"
+            >
+              <div className="p-4 bg-emerald-600 text-white font-sans font-black flex items-center justify-between border-b-4 border-zinc-950">
+                <div className="flex items-center gap-2">
+                  <Download className="w-5 h-5 text-white" />
+                  <span className="uppercase tracking-wider text-xs">Importador Adaptável ({activeTab === 'leads' ? 'Leads' : activeTab === 'inventory' ? 'Estoque' : activeTab === 'appointments' ? 'Agenda' : 'Geral'})</span>
+                </div>
+                <button onClick={() => setIsImportModalOpen(false)} className="bg-zinc-950 hover:bg-zinc-900 border border-zinc-750 text-white rounded-lg p-1.5 transition cursor-pointer">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-6 overflow-y-auto space-y-4">
+                <p className="text-zinc-600 text-xs font-mono font-bold uppercase select-none">
+                  Insira abaixo os dados estruturados em texto ou JSON para alimentar o painel do seu CRM de forma direta e persistente:
+                </p>
+
+                {activeTab === 'leads' && (
+                  <div className="space-y-3">
+                    <div className="bg-emerald-50 border-2 border-emerald-500 rounded-xl p-3 text-emerald-800 text-[10px] font-mono leading-relaxed select-none">
+                      💡 <strong>Dica de formato de Importação de Leads:</strong> Copie e cole linhas como <code>Nome, Renda Bruta, Telefone, Email</code> ou insira uma lista simples. Se preferir, use o botão rápido abaixo para auto-popular dados de teste reais.
+                    </div>
+                    <textarea
+                      id="importLeadsTextarea"
+                      rows={5}
+                      className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-3 text-xs font-mono text-zinc-950 focus:outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500"
+                      placeholder="Ana Silva, 5500, 11988887777, ana.silva@email.com&#10;Bruno Santana, 7200, 21977778888, bruno@email.com"
+                    />
+                    <div className="flex gap-2 justify-between">
+                      <button
+                        onClick={() => {
+                          const textarea = document.getElementById('importLeadsTextarea') as HTMLTextAreaElement;
+                          if (textarea) {
+                            textarea.value = JSON.stringify([
+                              { name: 'Gabriel Toledo', familyGrossIncome: 8500, phone: '11981234567', email: 'gabriel.toledo@email.com', origin: 'Indicação' },
+                              { name: 'Larissa Alencar', familyGrossIncome: 12400, phone: '21983456789', email: 'larissa.a@email.com', origin: 'Instagram' }
+                            ], null, 2);
+                          }
+                        }}
+                        className="px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 border-2 border-zinc-950 rounded-lg text-[9px] font-mono font-black uppercase shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] cursor-pointer"
+                      >
+                        Carregar Exemplo JSON
+                      </button>
+                      <button
+                        onClick={() => {
+                          const textarea = document.getElementById('importLeadsTextarea') as HTMLTextAreaElement;
+                          if (textarea && textarea.value.trim()) {
+                            try {
+                              let count = 0;
+                              const content = textarea.value.trim();
+                              if (content.startsWith('[')) {
+                                const parsed = JSON.parse(content);
+                                if (Array.isArray(parsed)) {
+                                  parsed.forEach(item => {
+                                    const newLead: any = {
+                                      id: 'imported_' + Math.random().toString(36).substring(2, 9),
+                                      name: item.name || 'Contato Importado',
+                                      familyGrossIncome: Number(item.familyGrossIncome) || 4500,
+                                      phone: item.phone || '11900000000',
+                                      email: item.email || 'importado@email.com',
+                                      origin: item.origin || 'Importação Direta',
+                                      status: 'novo',
+                                      createdAt: new Date().toISOString(),
+                                      history: [{ date: new Date().toISOString().substring(0, 10), text: 'Lead importado via carga adaptável.' }],
+                                      tags: ['Importado']
+                                    };
+                                    setLeads(prev => [newLead, ...prev]);
+                                    count++;
+                                  });
+                                }
+                              } else {
+                                const lines = content.split('\n');
+                                lines.forEach(line => {
+                                  if (line.trim()) {
+                                    const parts = line.split(',');
+                                    const newLead: any = {
+                                      id: 'imported_' + Math.random().toString(36).substring(2, 9),
+                                      name: parts[0]?.trim() || 'Contato Sem Nome',
+                                      familyGrossIncome: Number(parts[1]) || 5000,
+                                      phone: parts[2] ? parts[2].trim() : '11900000000',
+                                      email: parts[3] ? parts[3].trim() : 'import@email.com',
+                                      origin: 'Importação Manual',
+                                      status: 'novo',
+                                      createdAt: new Date().toISOString(),
+                                      history: [{ date: new Date().toISOString().substring(0, 10), text: 'Contato importado CSV manual.' }],
+                                      tags: ['Importado']
+                                    };
+                                    setLeads(prev => [newLead, ...prev]);
+                                    count++;
+                                  }
+                                });
+                              }
+                              triggerSensoryFeedback('success', accSettings);
+                              addNotification('📥 IMPORTAÇÃO EXECUTADA', `${count} novos leads injetados no CRM com sucesso!`, 'success');
+                              setIsImportModalOpen(false);
+                            } catch (e) {
+                              alert('Erro ao processar dados de entrada. Verifique a semântica.');
+                            }
+                          }
+                        }}
+                        className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white border-2 border-zinc-950 rounded-lg text-[9px] font-mono font-black uppercase shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] cursor-pointer"
+                      >
+                        Salvar e Importar Leads
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'inventory' && (
+                  <div className="space-y-3">
+                    <div className="bg-emerald-50 border-2 border-emerald-500 rounded-xl p-3 text-emerald-800 text-[10px] font-mono leading-relaxed select-none">
+                      🏢 <strong>Importar Lançamento Imobiliário:</strong> Insira o JSON do imóvel. O estoque persistirá instantaneamente com os novos ativos no painel de vendas.
+                    </div>
+                    <textarea
+                      id="importInventoryTextarea"
+                      rows={5}
+                      className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-3 text-xs font-mono text-zinc-950 focus:outline-none"
+                      placeholder='{ "title": "Cury Jardim de Alah", "price": 275000, "typology": "Apartamento 2D", "city": "Rio de Janeiro" }'
+                    />
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => {
+                          const textarea = document.getElementById('importInventoryTextarea') as HTMLTextAreaElement;
+                          if (textarea && textarea.value.trim()) {
+                            try {
+                              const parsed = JSON.parse(textarea.value.trim());
+                              const list = Array.isArray(parsed) ? parsed : [parsed];
+                              list.forEach(prop => {
+                                const newId = Math.random().toString(36).substring(2, 9);
+                                setProperties(prev => [
+                                  {
+                                    id: prop.id || 'imported-' + newId,
+                                    title: prop.title || 'Lançamento Cury Importado',
+                                    price: Number(prop.price) || 289000,
+                                    typology: prop.typology || 'Apartamento 2 Dorms',
+                                    builder: prop.builder || 'Cury Construtora',
+                                    region: prop.region || 'Metropolitana',
+                                    city: prop.city || 'São Paulo',
+                                    parameters: prop.parameters || { maxFinancingRatio: 0.8, baseInterestRate: 0.0829 }
+                                  },
+                                  ...prev
+                                ]);
+                              });
+                              triggerSensoryFeedback('success', accSettings);
+                              addNotification('🏢 ESTOQUE EXPANDIDO', `Novas propriedades de Cury adicionadas de forma durável!`, 'success');
+                              setIsImportModalOpen(false);
+                            } catch (err) {
+                              alert('Dados JSON inválidos. Favor corrigir a sintaxe.');
+                            }
+                          }
+                        }}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-mono font-black text-[10px] uppercase border-2 border-zinc-950 rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] cursor-pointer"
+                      >
+                        Carregar Unidades
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab !== 'leads' && activeTab !== 'inventory' && (
+                  <div className="space-y-3">
+                    <p className="text-[10px] text-zinc-500 font-mono select-none">
+                      Não há importadores adicionais necessários para a aba "{activeTab}". Use os importadores customizados nativos do cicloCRED CRM.
+                    </p>
+                    <button
+                      onClick={() => setIsImportModalOpen(false)}
+                      className="px-4 py-2 bg-zinc-900 border-2 border-zinc-950 text-white rounded-xl text-xs font-mono font-black uppercase cursor-pointer block text-center w-full"
+                    >
+                      Entendido / Fechar Janela
+                    </button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {isExportModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-4 backdrop-blur-md select-none overflow-y-auto">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white border-4 border-zinc-950 rounded-3xl w-full max-w-xl shadow-[8px_8px_0px_0px_rgba(24,24,27,1)] overflow-hidden flex flex-col max-h-[85vh]"
+            >
+              <div className="p-4 bg-indigo-600 text-white font-sans font-black flex items-center justify-between border-b-4 border-zinc-950">
+                <div className="flex items-center gap-2">
+                  <Upload className="w-5 h-5 text-white" />
+                  <span className="uppercase tracking-wider text-xs">Exportar Dados ({activeTab === 'leads' ? 'Leads' : activeTab === 'inventory' ? 'Ativos Estoque' : 'Relatórios & Parâmetros'})</span>
+                </div>
+                <button onClick={() => setIsExportModalOpen(false)} className="bg-zinc-950 hover:bg-zinc-900 border border-zinc-750 text-white rounded-lg p-1.5 transition cursor-pointer">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-6 overflow-y-auto space-y-4">
+                <div className="bg-indigo-50 border-2 border-indigo-400 p-3 rounded-xl text-indigo-900 text-[10px] font-mono leading-relaxed select-none">
+                  Sincronização Ativa & Exportação Dinâmica. Abaixo, copie ou baixe a representação codificada dos seus dados no CRM.
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-[10px] text-zinc-950 font-black font-mono uppercase">Snapshot JSON Atual:</label>
+                  <pre className="bg-zinc-900 text-green-400 p-4 rounded-xl text-[10px] font-mono overflow-auto max-h-[250px] whitespace-pre-wrap select-all">
+                    {activeTab === 'leads' ? (
+                      JSON.stringify(unifiedFilteredLeads.map(l => ({ name: l.name, email: l.email, phone: l.phone, income: l.familyGrossIncome, status: l.status, origin: l.origin })), null, 2)
+                    ) : activeTab === 'inventory' ? (
+                      JSON.stringify(properties, null, 2)
+                    ) : activeTab === 'appointments' ? (
+                      JSON.stringify(appointments, null, 2)
+                    ) : (
+                      JSON.stringify({
+                        exportedAt: new Date().toISOString(),
+                        currentActiveTab: activeTab,
+                        leadsFilteredCount: unifiedFilteredLeads.length
+                      }, null, 2)
+                    )}
+                  </pre>
+                </div>
+
+                <div className="flex justify-between gap-2">
+                  <button
+                    onClick={() => {
+                      const text = activeTab === 'leads' ? (
+                        JSON.stringify(unifiedFilteredLeads, null, 2)
+                      ) : activeTab === 'inventory' ? (
+                        JSON.stringify(properties, null, 2)
+                      ) : (
+                        JSON.stringify(appointments, null, 2)
+                      );
+                      navigator.clipboard.writeText(text);
+                      triggerSensoryFeedback('success', accSettings);
+                      addNotification('📋 COPIADO', 'Os dados estruturados foram copiados para sua área de transferência.', 'success');
+                    }}
+                    className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white font-mono font-black text-[10px] uppercase border-2 border-zinc-950 rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] cursor-pointer"
+                  >
+                    Copiar Clipboard
+                  </button>
+                  <button
+                    onClick={() => {
+                      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(
+                        activeTab === 'leads' ? JSON.stringify(unifiedFilteredLeads) : JSON.stringify(properties)
+                      );
+                      const downloadAnchor = document.createElement('a');
+                      downloadAnchor.setAttribute("href", dataStr);
+                      downloadAnchor.setAttribute("download", `ciclocred-${activeTab}-export.json`);
+                      document.body.appendChild(downloadAnchor);
+                      downloadAnchor.click();
+                      downloadAnchor.remove();
+                      addNotification('💾 ARQUIVO SALVO', 'Exportação realizada e transferida com êxito!', 'success');
+                    }}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-mono font-black text-[10px] uppercase border-2 border-zinc-950 rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] cursor-pointer"
+                  >
+                    Baixar Arquivo .json
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* BB. Settings & Administration Modal Overlay */}
       <AnimatePresence>
         {isSettingsModalOpen && (
@@ -3971,6 +4372,8 @@ export default function App() {
                     onRequestConfirm={requestConfirmation}
                     forceLocalStorageMode={forceLocalStorageMode}
                     onToggleForceLocalMode={handleToggleForceLocalMode}
+                    consolidatedCrmInfo={consolidatedCrmInfo}
+                    setConsolidatedCrmInfo={setConsolidatedCrmInfo}
                   />
                 ) : (
                   <BackupManager
@@ -4573,6 +4976,200 @@ export default function App() {
                     <span>Instagram Bio</span>
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* BOTÃO FLUTUANTE TRÊS PONTINHOS - PERSISTENTE E PREMIUM */}
+      <div className="fixed bottom-6 right-6 z-50">
+        <button
+          onClick={() => {
+            setIsPremiumActionsOpen(!isPremiumActionsOpen);
+            triggerSensoryFeedback('click', accSettings);
+          }}
+          className="h-14 w-14 rounded-full bg-zinc-950 hover:bg-zinc-900 text-white flex items-center justify-center border-4 border-white shadow-[0px_4px_16px_0px_rgba(0,0,0,0.3)] animate-pulse hover:animate-none cursor-pointer transition transform active:scale-95"
+          title="Central de Ações cicloCRED"
+        >
+          {isPremiumActionsOpen ? (
+            <X className="w-6 h-6 text-pink-400 shrink-0" />
+          ) : (
+            <MoreHorizontal className="w-7 h-7 text-indigo-400 shrink-0" />
+          )}
+        </button>
+      </div>
+
+      {/* CENTRAL DE AÇÕES PREMIUM OVERLAY */}
+      <AnimatePresence>
+        {isPremiumActionsOpen && (
+          <div className="fixed inset-0 z-45 flex items-end sm:items-center justify-center bg-zinc-950/80 p-4 backdrop-blur-md">
+            <motion.div
+              initial={{ y: 50, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 50, opacity: 0 }}
+              className="bg-white border-4 border-zinc-950 rounded-3xl w-full max-w-lg shadow-[8px_8px_0px_0px_rgba(24,24,27,1)] overflow-hidden text-zinc-900 text-left"
+            >
+              <div className="p-4.5 bg-zinc-900 border-b-4 border-zinc-950 text-white flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">⚙️</span>
+                  <h3 className="font-sans font-black text-sm uppercase italic tracking-tight">
+                    Central de Ações Premium
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setIsPremiumActionsOpen(false)}
+                  className="text-zinc-400 hover:text-white text-xs font-bold uppercase font-mono px-2 py-1 rounded hover:bg-zinc-800 cursor-pointer"
+                >
+                  Fechar
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <p className="text-xs text-zinc-500 font-sans font-semibold">
+                  Acesso rápido e unificado de importação, relatórios, rotinas de backup e links operacionais simplificados.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                  
+                  {/* IMPORT LEADS */}
+                  <button
+                    onClick={() => {
+                      setIsPremiumActionsOpen(false);
+                      setActiveTab('leads');
+                      setIsPlanilhasModalOpen(true);
+                      awardXP(10);
+                    }}
+                    className="flex items-center gap-2.5 p-3.5 bg-indigo-50 hover:bg-indigo-100 border-2 border-zinc-950 rounded-xl transition text-left cursor-pointer"
+                  >
+                    <span className="text-lg">📥</span>
+                    <div>
+                      <strong className="block text-xs font-black uppercase text-indigo-950 leading-tight">Importar Leads</strong>
+                      <span className="text-[10.5px] text-zinc-500 font-medium">Planilhas Excel/CSV</span>
+                    </div>
+                  </button>
+
+                  {/* EXPORT LEADS */}
+                  <button
+                    onClick={() => {
+                      setIsPremiumActionsOpen(false);
+                      // Execute exporting
+                      let csvContent = "data:text/csv;charset=utf-8,ID;Nome;Email;Telefone;Orcamento;Canal;Notas;CriadoEm\r\n";
+                      leads.forEach(l => {
+                        csvContent += `"${l.id}";"${l.name}";"${l.email}";"${l.phone}";"${l.value}";"${l.origin}";"${l.notes.replace(/"/g, '""')}";"${l.createdAt}"\r\n`;
+                      });
+                      const encodedUri = encodeURI(csvContent);
+                      const link = document.createElement("a");
+                      link.setAttribute("href", encodedUri);
+                      link.setAttribute("download", 'Planilha_Leads_cicloCRED.csv');
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                      awardXP(15);
+                      addNotification('📊 EXPORTAÇÃO INICIADA', 'Os contatos cadastrados no CRM foram consolidados com sucesso em formato .csv', 'success');
+                    }}
+                    className="flex items-center gap-2.5 p-3.5 bg-emerald-50 hover:bg-emerald-100 border-2 border-zinc-950 rounded-xl transition text-left cursor-pointer"
+                  >
+                    <span className="text-lg">📤</span>
+                    <div>
+                      <strong className="block text-xs font-black uppercase text-emerald-950 leading-tight">Exportar Leads</strong>
+                      <span className="text-[10.5px] text-zinc-500 font-medium">Download Planilha</span>
+                    </div>
+                  </button>
+
+                  {/* EXPORT PROPERTIES */}
+                  <button
+                    onClick={() => {
+                      setIsPremiumActionsOpen(false);
+                      // Execute exporting properties
+                      let csvContent = "data:text/csv;charset=utf-8,Codigo;Titulo;Tipo;Preco;Quartos;Bairro;Area_m2;Status\r\n";
+                      properties.forEach(p => {
+                        csvContent += `"${p.code}";"${p.title}";"${p.type}";"${p.price}";"${p.bedrooms}";"${p.neighborhood}";"${p.sizeSqm}";"${p.status}"\r\n`;
+                      });
+                      const encodedUri = encodeURI(csvContent);
+                      const link = document.createElement("a");
+                      link.setAttribute("href", encodedUri);
+                      link.setAttribute("download", 'Planilha_Estoque_IMO_cicloCRED.csv');
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                      awardXP(15);
+                      addNotification('🏠 ACERVO EXPORTADO', 'A planilha consolidada com todo o catálogo de estoque foi exportada com sucesso.', 'success');
+                    }}
+                    className="flex items-center gap-2.5 p-3.5 bg-zinc-50 hover:bg-zinc-100 border-2 border-zinc-950 rounded-xl transition text-left cursor-pointer"
+                  >
+                    <span className="text-lg">📊</span>
+                    <div>
+                      <strong className="block text-xs font-black uppercase text-zinc-950 leading-tight">Exportar Estoque</strong>
+                      <span className="text-[10.5px] text-zinc-500 font-medium">Download de Imóveis</span>
+                    </div>
+                  </button>
+
+                  {/* BULK DISPAROS */}
+                  <button
+                    onClick={() => {
+                      setIsPremiumActionsOpen(false);
+                      setActiveTab('marketing');
+                      awardXP(5);
+                    }}
+                    className="flex items-center gap-2.5 p-3.5 bg-purple-50 hover:bg-purple-100 border-2 border-zinc-950 rounded-xl transition text-left cursor-pointer"
+                  >
+                    <span className="text-lg">📣</span>
+                    <div>
+                      <strong className="block text-xs font-black uppercase text-purple-950 leading-tight">Campanhas</strong>
+                      <span className="text-[10.5px] text-zinc-500 font-medium">Central de Disparos</span>
+                    </div>
+                  </button>
+
+                  {/* APPOINTMENTS */}
+                  <button
+                    onClick={() => {
+                      setIsPremiumActionsOpen(false);
+                      setActiveTab('appointments');
+                      awardXP(5);
+                    }}
+                    className="flex items-center gap-2.5 p-3.5 bg-amber-50 hover:bg-amber-100 border-2 border-zinc-950 rounded-xl transition text-left cursor-pointer"
+                  >
+                    <span className="text-lg">📅</span>
+                    <div>
+                      <strong className="block text-xs font-black uppercase text-amber-950 leading-tight">Compromissos</strong>
+                      <span className="text-[10.5px] text-zinc-500 font-medium">Agenda do Corretor</span>
+                    </div>
+                  </button>
+
+                  {/* BACKUP & RESTORE */}
+                  <button
+                    onClick={() => {
+                      setIsPremiumActionsOpen(false);
+                      setActiveTab('settings');
+                      setSettingsModalTab('database');
+                      awardXP(5);
+                    }}
+                    className="flex items-center gap-2.5 p-3.5 bg-pink-50 hover:bg-pink-100 border-2 border-zinc-950 rounded-xl transition text-left cursor-pointer"
+                  >
+                    <span className="text-lg">💾</span>
+                    <div>
+                      <strong className="block text-xs font-black uppercase text-pink-950 leading-tight">Migração local</strong>
+                      <span className="text-[10.5px] text-zinc-555 font-medium">Importador de Banco</span>
+                    </div>
+                  </button>
+
+                </div>
+
+                {/* COPY PORTAL LINK */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsPremiumActionsOpen(false);
+                    navigator.clipboard.writeText(window.location.origin);
+                    triggerSensoryFeedback('success', accSettings);
+                    addNotification('🔗 LINK COPIADO', 'O endereço de acesso ao seu portal de vendas cicloCRED foi copiado!', 'success');
+                    awardXP(10);
+                  }}
+                  className="w-full py-3 bg-zinc-900 hover:bg-zinc-950 text-white rounded-2xl border-4 border-zinc-950 font-mono font-black text-xs uppercase shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition active:translate-y-0.5 cursor-pointer mt-2"
+                >
+                  🔗 Copiar Link de Acesso do CRM
+                </button>
               </div>
             </motion.div>
           </div>

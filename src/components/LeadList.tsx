@@ -59,6 +59,7 @@ interface LeadListProps {
   setExternalShowImporter?: (val: boolean) => void;
   externalShowPlanner?: boolean;
   setExternalShowPlanner?: (val: boolean) => void;
+  onlyImporter?: boolean;
 }
 
 export function isFictitiousPhone(phone: string | undefined | null): boolean {
@@ -427,7 +428,8 @@ export default function LeadList({
   externalShowImporter,
   setExternalShowImporter,
   externalShowPlanner,
-  setExternalShowPlanner
+  setExternalShowPlanner,
+  onlyImporter = false
 }: LeadListProps) {
   const localSearchState = useState('');
   const searchTerm = propsSearchTerm !== undefined ? propsSearchTerm : localSearchState[0];
@@ -447,7 +449,10 @@ export default function LeadList({
 
   const [accSettings] = useState<AccessibilitySettings>(() => {
     const saved = localStorage.getItem('crm_accessibility_settings');
-    return saved ? JSON.parse(saved) : INITIAL_ACCESSIBILITY_SETTINGS;
+    try {
+      if (saved) return JSON.parse(saved);
+    } catch (_) {}
+    return INITIAL_ACCESSIBILITY_SETTINGS;
   });
   const [sortBy, setSortBy] = useState<'name' | 'value' | 'createdAt'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -553,7 +558,7 @@ export default function LeadList({
     setBatchProgress(0);
     setBatchCountdownSeconds(3); // 3-second warm-up delay
     setBatchLog([
-      `🚀 [SETUP] Iniciando Transmissora SWAT Lote...`,
+      `🚀 [SETUP] Iniciando Transmissora de Lote...`,
       `🔌 Canal: ${campaignWhatsappChannel === 'app' ? 'WhatsApp Desktop (Local)' : 'WhatsApp Web'}`,
       `⏱️ Intervalo Base: ${campaignDispatchDelay}s`,
       `🎯 Total: ${selectedLeads.length} leads selecionados`
@@ -705,7 +710,7 @@ export default function LeadList({
   }, [isDispatchingBatch, campaignIsAssistedMode, activeBatchIndex, customCampaignText, selectedCampaignTemplate]);
 
   // Lead spreadsheet states
-  const showImporter = externalShowImporter !== undefined ? externalShowImporter : false;
+  const showImporter = onlyImporter || (externalShowImporter !== undefined ? externalShowImporter : false);
   const setShowImporter = setExternalShowImporter || (() => {});
   const showCampaignPlanner = externalShowPlanner !== undefined ? externalShowPlanner : false;
   const setShowCampaignPlanner = setExternalShowPlanner || (() => {});
@@ -1265,7 +1270,22 @@ export default function LeadList({
     <div className="space-y-8">
       {/* Collapsible Importer/Exporter Panel */}
       {showImporter && (
-        <div className="bg-white border-4 border-zinc-950 p-6 rounded-2xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] space-y-5 animate-scaleIn">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-4 backdrop-blur-md overflow-y-auto">
+          <div className="bg-white border-4 border-zinc-950 p-6 rounded-3xl w-full max-w-4xl shadow-[8px_8px_0px_0px_rgba(24,24,27,1)] space-y-5 animate-scaleIn max-h-[90vh] overflow-y-auto relative text-zinc-900">
+            {/* Close button */}
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-200">
+              <div className="flex items-center gap-2 text-zinc-950">
+                <FileSpreadsheet className="w-5 h-5 text-indigo-600 animate-pulse" />
+                <h3 className="font-sans font-black text-sm uppercase italic tracking-tight">📥 Central de Fomento & Importação</h3>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setShowImporter(false)}
+                className="text-zinc-600 hover:text-zinc-900 p-1.5 rounded-lg border border-zinc-250 hover:bg-zinc-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
             
             {/* Embedded Subsistem Tab Bar Selector */}
             <div className="flex border-b-2 border-zinc-200 gap-1 overflow-x-auto pb-1.5 select-none">
@@ -1718,11 +1738,24 @@ export default function LeadList({
                 <p>Importação de Leads concluída! Os contatos foram inseridos como "Novos" na carteira do CRM.</p>
               </div>
             )}
+            
+            <div className="pt-4 border-t border-zinc-200 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowImporter(false)}
+                className="px-6 py-2.5 bg-zinc-900 border-2 border-zinc-950 rounded-xl hover:bg-zinc-950 text-white font-mono font-black text-xs uppercase shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition active:translate-y-0 cursor-pointer"
+              >
+                Concluir & Fechar
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
       {/* Single Bulk Actions & Selection Toolbar */}
-      {selectedLeadIds.length > 0 && (
+      {!onlyImporter && (
+        <>
+          {selectedLeadIds.length > 0 && (
         <div className="bg-indigo-50 border-4 border-zinc-950 p-4 rounded-xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-scaleIn font-mono text-xs mb-4">
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
@@ -2936,6 +2969,8 @@ export default function LeadList({
         </div>
       )}
       {/* End Campaign Planner modal */}
+        </>
+      )}
     </div>
   );
 }

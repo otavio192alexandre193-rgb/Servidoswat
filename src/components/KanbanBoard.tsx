@@ -30,7 +30,7 @@ import { getKanbanColumns, saveKanbanColumns, KanbanColumn } from '../utils/kanb
 
 interface KanbanBoardProps {
   leads: Lead[];
-  onMoveLead: (leadId: string, newStatus: LeadStatus) => void;
+  onMoveLead: (leadId: string, newStatus: LeadStatus, newPageId?: string) => void;
   onOpenLeadDetails: (lead: Lead) => void;
   onOpenEditModal: (lead: Lead) => void;
   onOpenCreateModal: (status?: LeadStatus) => void;
@@ -77,6 +77,40 @@ export default function KanbanBoard({
 
   // Load columns from LocalStorage helper and put into state for dynamic rendering
   const [columns, setColumns] = useState<KanbanColumn[]>(() => getKanbanColumns());
+  
+  // Funnel multiple pages states
+  const [funnelPages, setFunnelPages] = useState<{ id: string; name: string }[]>(() => {
+    const saved = localStorage.getItem('ciclocred_funnel_pages');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (_) {}
+    }
+    return [
+      { id: 'principal', name: 'Funil Habitacional Principal' },
+      { id: 'alavancagem', name: 'Funil de Alavancagem Financeira' },
+      { id: 'portabilidade', name: 'Funil de Portabilidade' }
+    ];
+  });
+  const [activeFunnelsPage, setActiveFunnelsPage] = useState(() => {
+    return localStorage.getItem('ciclocred_active_funnel_page_id') || 'principal';
+  });
+  const [newFunnelPageName, setNewFunnelPageName] = useState('');
+
+  const handleCreateFunnelPage = () => {
+    if (!newFunnelPageName.trim()) return;
+    const newPage = {
+      id: 'page_' + Date.now(),
+      name: newFunnelPageName.trim()
+    };
+    const updated = [...funnelPages, newPage];
+    setFunnelPages(updated);
+    localStorage.setItem('ciclocred_funnel_pages', JSON.stringify(updated));
+    setActiveFunnelsPage(newPage.id);
+    localStorage.setItem('ciclocred_active_funnel_page_id', newPage.id);
+    setNewFunnelPageName('');
+  };
   
   // Create / Edit aba state
   const [newAbaName, setNewAbaName] = useState('');
@@ -165,8 +199,14 @@ export default function KanbanBoard({
     window.dispatchEvent(new Event('kanban-columns-updated'));
   };
 
+  // Filtered leads by selected Funnel Page
+  const filteredPageLeads = leads.filter(l => {
+    const lPage = l.funnelPageId || 'principal';
+    return lPage === activeFunnelsPage;
+  });
+
   // Filtered leads
-  const filteredLeads = leads;
+  const filteredLeads = filteredPageLeads;
 
   // Calculate sum of values for a column
   const getColumnTotal = (status: string) => {
@@ -176,17 +216,64 @@ export default function KanbanBoard({
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 animate-fadeIn">
+      {/* Páginas do Funil (Tabs Selector) */}
+      <div className="bg-zinc-900 border-4 border-zinc-950 p-4 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] select-none">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Sliders className="w-5 h-5 text-indigo-400 shrink-0" />
+            <span className="font-mono font-black uppercase tracking-wider text-white text-xs leading-none">
+              Páginas de Funil:
+            </span>
+          </div>
+          
+          <div className="flex flex-wrap items-center gap-1.5">
+            {funnelPages.map(page => (
+              <button
+                key={page.id}
+                onClick={() => {
+                  setActiveFunnelsPage(page.id);
+                  localStorage.setItem('ciclocred_active_funnel_page_id', page.id);
+                }}
+                className={`px-3 py-1.5 rounded-xl border text-xs font-black uppercase font-mono transition-all cursor-pointer ${
+                  activeFunnelsPage === page.id
+                    ? 'bg-indigo-600 text-white border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                    : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-850'
+                }`}
+              >
+                {page.name}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-zinc-800">
+            <input
+              type="text"
+              placeholder="Criar novo funil..."
+              value={newFunnelPageName}
+              onChange={(e) => setNewFunnelPageName(e.target.value)}
+              className="bg-zinc-900 border border-zinc-800 text-white font-bold text-[10px] px-2.5 py-1 rounded placeholder-zinc-500 w-28 focus:outline-none focus:border-indigo-500 font-mono"
+            />
+            <button
+              onClick={handleCreateFunnelPage}
+              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-mono text-[9px] font-black uppercase"
+            >
+              + Funil
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Abas Dynamic Controller Toolbar - Rebranded to Personalizar */}
       <div className="bg-white p-5 rounded-2xl border-4 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h2 className="text-md font-sans font-black uppercase text-zinc-950 flex items-center gap-2">
-              <span className="bg-indigo-600 text-white rounded px-2 py-0.5 tracking-tighter uppercase font-mono italic text-xs">SWAT</span>
-              Personalizar ({columns.length}/10)
+              <span className="bg-indigo-600 text-white rounded px-2 py-0.5 tracking-tighter uppercase font-mono italic text-xs">cicloCRED</span>
+              Design das Etapas ({columns.length}/10)
             </h2>
             <p className="text-xs text-zinc-500 font-bold mt-1">
-              Configure o fluxo de atendimento. Insira novos status de CRM e use os recursos de Zoom e Organização abaixo.
+              Configure as abas/colunas deste funil. Insira novos status e use os recursos de Zoom e Organização abaixo.
             </p>
           </div>
 
@@ -431,6 +518,18 @@ export default function KanbanBoard({
                             >
                               {lead.name}
                             </button>
+                            
+                            {/* Tags Display */}
+                            {lead.tags && lead.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-0.5">
+                                {lead.tags.map(tg => (
+                                  <span key={tg} className="text-[8px] font-black uppercase bg-indigo-50 border border-indigo-150 text-indigo-700 rounded px-1.5 py-0.2 tracking-tight shrink-0 font-mono">
+                                    🏷️ {tg}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
                             {isOverdue && (
                               <span 
                                 className="flex items-center gap-1 text-[8px] bg-red-100 border-2 border-red-650 text-red-950 rounded px-1.5 py-0.5 font-mono font-black animate-pulse select-none shrink-0"
@@ -463,8 +562,8 @@ export default function KanbanBoard({
                           </div>
 
                           {/* Quick Interactive Actions */}
-                          <div className="flex items-center justify-between gap-2 pt-1.5 border-t-2 border-zinc-100 mt-1">
-                            <div className="flex items-center gap-1">
+                          <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t-2 border-zinc-100 mt-1">
+                            <div className="flex items-center gap-1.5">
                               <button
                                 onClick={() => onOpenLeadDetails(lead)}
                                 title="Visualizar Ficha"
@@ -473,13 +572,19 @@ export default function KanbanBoard({
                                 <Info className="w-2.5 h-2.5 text-indigo-650" />
                                 <span>Ficha</span>
                               </button>
-                              <button
-                                onClick={() => onOpenEditModal(lead)}
-                                title="Editar Leads"
-                                className="p-0.5 px-1 bg-white border border-zinc-950 hover:bg-zinc-100 text-zinc-900 text-[9px] font-black uppercase shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition active:translate-y-0.5"
+                              
+                              <select
+                                value={lead.funnelPageId || 'principal'}
+                                onChange={(e) => {
+                                  onMoveLead(lead.id, lead.status, e.target.value);
+                                }}
+                                className="text-[8px] font-black uppercase font-mono max-w-[80px] border border-zinc-950 rounded bg-zinc-50 tracking-tighter cursor-pointer focus:outline-none"
+                                title="Mover este Lead para outra página de Funil"
                               >
-                                E
-                              </button>
+                                {funnelPages.map(page => (
+                                  <option key={page.id} value={page.id}>{page.name.split(' ')[0]}</option>
+                                ))}
+                              </select>
                             </div>
 
                             {/* Quick stage rotation arrows (Prev/Next) */}
@@ -523,7 +628,7 @@ export default function KanbanBoard({
       </div>
     </div>
 
-    {/* SWATS Sidebar Drawer: "Gerador & Organizador Premium de Status" */}
+    {/* cicloCRED Sidebar Drawer: "Gerador & Organizador Premium de Status" */}
     {showAbaOrganizer && (
       <div className="w-full xl:w-80 shrink-0 bg-white border-4 border-zinc-950 p-5 rounded-2xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] space-y-4 animate-fadeIn sticky top-4 z-10 self-start">
         {/* Sidebar Header */}
@@ -577,7 +682,7 @@ export default function KanbanBoard({
         </div>
 
         <div className="bg-[#fcf8e3] border border-[#faebcc] text-[#8a6d3b] p-3 rounded-xl text-[10px] leading-relaxed font-semibold">
-          💡 Dica: O CRM SWAT foi otimizado para comportar de forma premium até 10 status ativos simultaneamente.
+          💡 Dica: O cicloCRED CRM foi otimizado para comportar de forma premium até 10 status ativos simultaneamente.
         </div>
       </div>
     )}

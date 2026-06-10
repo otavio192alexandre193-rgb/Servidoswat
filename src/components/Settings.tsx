@@ -77,6 +77,8 @@ interface SettingsProps {
   onRequestConfirm?: (title: string, desc: string, onConfirm: () => void, type?: 'danger' | 'warning') => void;
   forceLocalStorageMode?: boolean;
   onToggleForceLocalMode?: (val: boolean) => void;
+  consolidatedCrmInfo?: string;
+  setConsolidatedCrmInfo?: (info: string) => void;
 }
 
 export default function SettingsView({
@@ -113,7 +115,9 @@ export default function SettingsView({
   onWipeEstoque,
   onRequestConfirm,
   forceLocalStorageMode = false,
-  onToggleForceLocalMode
+  onToggleForceLocalMode,
+  consolidatedCrmInfo = 'Operando com performance máxima. Metas comerciais alinhadas e integradas cycleCRED.',
+  setConsolidatedCrmInfo = () => {}
 }: SettingsProps) {
   const [copiedScriptId, setCopiedScriptId] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -524,6 +528,16 @@ export default function SettingsView({
                   value={agencyName}
                   onChange={(e) => setAgencyName(e.target.value)}
                   className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-2.5 font-bold focus:bg-white focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-[9px] font-black uppercase text-zinc-500 font-mono">Informações CRM Consolidados (Página Inicial)</label>
+                <textarea
+                  value={consolidatedCrmInfo}
+                  onChange={(e) => setConsolidatedCrmInfo(e.target.value)}
+                  className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-2.5 font-bold text-xs focus:bg-white focus:outline-none h-20 resize-none"
+                  placeholder="Mensagem institucional, resumo de metas ou bloco informativo para exibição na tela inicial..."
                 />
               </div>
 

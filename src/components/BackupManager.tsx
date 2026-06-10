@@ -90,7 +90,13 @@ export default function BackupManager({
 }: BackupManagerProps) {
   const [localHistory, setLocalHistory] = useState<BackupSnapshot[]>(() => {
     const saved = localStorage.getItem('ciclocred_system_backups');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
+    return [];
   });
 
   const [backupLabel, setBackupLabel] = useState('');

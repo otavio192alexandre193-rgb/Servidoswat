@@ -61,7 +61,7 @@ export default function EmailAutomation({
   onClearInitialTargets
 }: EmailAutomationProps) {
   // Tabs: 'templates' (Modelos de Scripts), 'dispatch' (Painel de Disparos), 'logs' (Histórico)
-  const [activeTab, setActiveTab] = useState<'templates' | 'dispatch' | 'logs'>('templates');
+  const [activeTab, setActiveTab] = useState<'templates' | 'dispatch' | 'logs'>('dispatch');
 
   // Filter dispatch options based on selected leads from CRM list
   const [isFilterBySelected, setIsFilterBySelected] = useState<boolean>(initialTargetLeadIds.length > 0);
@@ -112,8 +112,12 @@ export default function EmailAutomation({
   // Placeholders list
   const placeholders = [
     { code: '{{nome}}', desc: 'Nome do lead' },
-    { code: '{{empresa}}', desc: 'Nome da empresa' },
-    { code: '{{valor}}', desc: 'Valor estimado' },
+    { code: '{{clientName}}', desc: 'Nome do cliente' },
+    { code: '{{valor}}', desc: 'Preço/Valor de Venda' },
+    { code: '{{budget}}', desc: 'Preço/Valor de Venda' },
+    { code: '{{income}}', desc: 'Renda Familiar' },
+    { code: '{{creci}}', desc: 'Seu Número de CRECI' },
+    { code: '{{propertyInterest}}', desc: 'Nome do Imóvel de Interesse' },
     { code: '{{origem}}', desc: 'Origem do lead' },
   ];
 
@@ -121,9 +125,14 @@ export default function EmailAutomation({
   const resolvePlaceholders = (text: string, lead: Lead): string => {
     return text
       .replace(/\{\{nome\}\}/g, lead.name)
+      .replace(/\{\{clientName\}\}/g, lead.name)
       .replace(/\{\{empresa\}\}/g, lead.company || 'sua empresa')
       .replace(/\{\{origem\}\}/g, lead.origin)
-      .replace(/\{\{valor\}\}/g, lead.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }));
+      .replace(/\{\{valor\}\}/g, lead.value ? lead.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }) : '0')
+      .replace(/\{\{budget\}\}/g, lead.value ? lead.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }) : '0')
+      .replace(/\{\{income\}\}/g, lead.familyIncome ? lead.familyIncome.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }) : 'sob consulta')
+      .replace(/\{\{creci\}\}/g, localStorage.getItem('ciclocred_user_creci') || 'Inexistente')
+      .replace(/\{\{propertyInterest\}\}/g, lead.propertyInterest || 'Empreendimento Cury');
   };
 
   const handleCreateOrEditTemplate = (e: React.FormEvent) => {

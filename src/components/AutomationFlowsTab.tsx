@@ -96,7 +96,13 @@ export default function AutomationFlowsTab({
   // Flow rules manager
   const [rules, setRules] = useState<AutomationRule[]>(() => {
     const saved = localStorage.getItem('ciclocred_automation_rules');
-    return saved ? JSON.parse(saved) : DEFAULT_RULES;
+    try {
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
+    return DEFAULT_RULES;
   });
 
   // Create rule state
@@ -114,7 +120,12 @@ export default function AutomationFlowsTab({
   // Load WhatsApp templates locally
   const [whatsappTemplates, setWhatsappTemplates] = useState<any[]>(() => {
     const saved = localStorage.getItem('ciclocred_whatsapp_templates');
-    if (saved) return JSON.parse(saved);
+    try {
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
     return [
       {
         id: 'wa-1',

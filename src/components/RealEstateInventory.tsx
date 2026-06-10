@@ -38,7 +38,8 @@ import {
   Eye,
   LayoutDashboard,
   Users,
-  MessageSquare
+  MessageSquare,
+  X
 } from 'lucide-react';
 
 interface RealEstateInventoryProps {
@@ -70,7 +71,8 @@ export default function RealEstateInventory({
   addNotification,
   awardXP
 }: RealEstateInventoryProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'estoque' | 'estoque-tabela' | 'importador' | 'simulador'>('estoque');
+  const [activeSubTab, setActiveSubTab] = useState<'estoque' | 'estoque-tabela' | 'importador'>('estoque');
+  const [isPropertyImportModalOpen, setIsPropertyImportModalOpen] = useState(false);
 
   // Properties filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -176,7 +178,7 @@ export default function RealEstateInventory({
 
   const stopInventoryBatchDispatch = () => {
     setIsInventoryBatchDispatching(false);
-    setInventoryBatchLog(prev => [`🛑 [SWAT_ENGINE] Envio em lote interrompido pelo corretor.`, ...prev]);
+    setInventoryBatchLog(prev => [`🛑 [ENGINE] Envio em lote interrompido pelo corretor.`, ...prev]);
   };
 
   const startInventoryBatchDispatch = (prop: RealEstateProperty) => {
@@ -1192,31 +1194,19 @@ export default function RealEstateInventory({
 
   return (
     <div className="space-y-8 animate-fadeIn">
-      {/* Upper Navigation Bars */}
+      {/* Upper Navigation Bars: Grade, Tabela */}
       <div className="flex flex-col md:flex-row border-4 border-zinc-950 bg-white p-2 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] select-none gap-1.5">
         <button
           onClick={() => setActiveSubTab('estoque')}
-          className={`flex-1 py-3 text-xs font-black uppercase tracking-wider font-mono rounded-xl transition ${activeSubTab === 'estoque' ? 'bg-indigo-600 text-white border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-zinc-500 hover:bg-zinc-50'}`}
+          className={`flex-1 py-3 text-xs font-black uppercase tracking-wider font-mono rounded-xl transition cursor-pointer ${activeSubTab === 'estoque' ? 'bg-indigo-600 text-white border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] font-extrabold' : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800'}`}
         >
-          🏨 Estoque & Matches
+          🏨 Grade de Imóveis
         </button>
         <button
           onClick={() => setActiveSubTab('estoque-tabela')}
-          className={`flex-1 py-3 text-xs font-black uppercase tracking-wider font-mono rounded-xl transition ${activeSubTab === 'estoque-tabela' ? 'bg-indigo-600 text-white border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-zinc-500 hover:bg-zinc-50'}`}
+          className={`flex-1 py-3 text-xs font-black uppercase tracking-wider font-mono rounded-xl transition cursor-pointer ${activeSubTab === 'estoque-tabela' ? 'bg-indigo-600 text-white border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] font-extrabold' : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800'}`}
         >
-          📊 Visão Planilha (Tabela)
-        </button>
-        <button
-          onClick={() => setActiveSubTab('importador')}
-          className={`flex-1 py-3 text-xs font-black uppercase tracking-wider font-mono rounded-xl transition ${activeSubTab === 'importador' ? 'bg-indigo-600 text-white border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-zinc-500 hover:bg-zinc-50'}`}
-        >
-          📋 Importador Lote
-        </button>
-        <button
-          onClick={() => setActiveSubTab('simulador')}
-          className={`flex-1 py-3 text-xs font-black uppercase tracking-wider font-mono rounded-xl transition ${activeSubTab === 'simulador' ? 'bg-indigo-600 text-white border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-zinc-500 hover:bg-zinc-50'}`}
-        >
-          🧾 Simulador Integrado
+          📊 Tabela de Ativos
         </button>
       </div>
 
@@ -1807,14 +1797,6 @@ export default function RealEstateInventory({
                   <div className="p-4 bg-zinc-50/70 border-t border-zinc-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 select-none">
                     <div className="flex gap-2.5">
                       <button
-                        onClick={() => handleSelectPropertyForSimulation(prop)}
-                        className="flex items-center gap-1 px-2 py-1.5 bg-indigo-50 hover:bg-slate-100 border border-zinc-950 text-[10px] font-black uppercase rounded shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition text-indigo-950"
-                      >
-                        <Calculator className="w-3.5 h-3.5" />
-                        <span>Simular</span>
-                      </button>
-
-                      <button
                         onClick={() => {
                           setSelectedPropertyForMedia(prop);
                           setDetailsCarouselIndex(0);
@@ -1860,15 +1842,35 @@ export default function RealEstateInventory({
       {activeSubTab === 'estoque-tabela' && (
         <div className="space-y-6">
           <div className="bg-white border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] text-zinc-900 overflow-hidden">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-4 border-b">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-4 border-b">
               <div>
                 <span className="text-[10px] uppercase font-mono font-black text-indigo-600 block">Tabela de Ativos</span>
-                <h3 className="text-lg font-black italic uppercase tracking-tight text-zinc-950">Spreadsheet de Capturas e Estoque</h3>
-                <p className="text-xs text-zinc-500 font-medium mt-0.5 font-sans">Visão tabular consolidada com filtros, controle de reservas e matching biunívoco com os leads cadastrados.</p>
+                <h3 className="text-lg font-black italic uppercase tracking-tight text-zinc-950">Acervo Operacional do Estoque</h3>
+                <p className="text-xs text-zinc-500 font-medium mt-0.5 font-sans">Visão consolidada com filtros, controle de reservas e matching biunívoco com os leads cadastrados.</p>
               </div>
-              <span className="text-[10px] font-mono font-black py-1.5 px-3 bg-zinc-100 border border-zinc-350 rounded-lg shrink-0">
-                ATIVOS NO CRM: {properties.length} UNIDADES
-              </span>
+              <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setIsPropertyImportModalOpen(true)}
+                  className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white border-2 border-zinc-950 rounded-xl font-mono font-black text-[9.5px] uppercase shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition active:translate-y-0.5 flex items-center gap-1.5 cursor-pointer"
+                  title="Importar lista de ativos imobiliários (.csv)"
+                >
+                  <Upload className="w-3.5 h-3.5 text-indigo-200 shrink-0" />
+                  <span>Importar</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExportCSV('properties')}
+                  className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white border-2 border-zinc-950 rounded-xl font-mono font-black text-[9.5px] uppercase shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition active:translate-y-0.5 flex items-center gap-1.5 cursor-pointer"
+                  title="Exportar arquivo consolidado (.csv)"
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-100 shrink-0" />
+                  <span>Exportar</span>
+                </button>
+                <span className="text-[10px] font-mono font-black py-2 px-3 bg-zinc-100 border border-zinc-350 rounded-lg shrink-0">
+                  ATIVOS NO CRM: {properties.length} UNIDADES
+                </span>
+              </div>
             </div>
 
             {/* Scrollable table container */}
@@ -2581,16 +2583,17 @@ export default function RealEstateInventory({
                       <button
                         type="button"
                         onClick={() => {
-                          setSimPrice(275000);
-                          setSimDownPayment(55000); // Faixa 1 standard
-                          setSimIncome(2400);
-                          setSimProgram('mcmv');
-                          setSimHasStateSubsidy(true);
-                          setActiveSubTab('simulador');
+                          if (addNotification) {
+                            addNotification(
+                              "Simulação: Dez Metro Itaquera",
+                              "Estimativa Caixa • Imóvel: R$ 275k • Entrada: R$ 55k • Financiado: R$ 207k • Subsídio Paulista: R$ 13k • Parcela: R$ 745/mês",
+                              "success"
+                            );
+                          }
                         }}
                         className="flex-1 text-center py-2 bg-gradient-to-r from-indigo-700 to-indigo-900 hover:from-indigo-800 hover:to-indigo-950 text-white border-2 border-zinc-950 rounded-lg font-mono text-[9px] font-black uppercase cursor-pointer"
                       >
-                        🧮 Simular na CEF
+                        🧮 Simulação Ideal
                       </button>
                       
                       <button
@@ -2641,16 +2644,17 @@ export default function RealEstateInventory({
                       <button
                         type="button"
                         onClick={() => {
-                          setSimPrice(400000);
-                          setSimDownPayment(80000); // 20% down
-                          setSimIncome(6250);
-                          setSimProgram('mcmv');
-                          setSimHasStateSubsidy(false);
-                          setActiveSubTab('simulador');
+                          if (addNotification) {
+                            addNotification(
+                              "Simulação: Dez Guarulhos Centro",
+                              "Estimativa Caixa • Imóvel: R$ 400k • Entrada: R$ 80k • Financiado: R$ 320k • Parcela Inicial: R$ 2.450/mês",
+                              "success"
+                            );
+                          }
                         }}
                         className="flex-1 text-center py-2 bg-gradient-to-r from-indigo-700 to-indigo-900 hover:from-indigo-800 hover:to-indigo-950 text-white border-2 border-zinc-950 rounded-lg font-mono text-[9px] font-black uppercase cursor-pointer"
                       >
-                        🧮 Simular na CEF
+                        🧮 Simulação Ideal
                       </button>
                       
                       <button
@@ -2701,16 +2705,17 @@ export default function RealEstateInventory({
                       <button
                         type="button"
                         onClick={() => {
-                          setSimPrice(400000);
-                          setSimDownPayment(80000);
-                          setSimIncome(8500);
-                          setSimProgram('sbpe');
-                          setSimHasStateSubsidy(false);
-                          setActiveSubTab('simulador');
+                          if (addNotification) {
+                            addNotification(
+                              "Simulação: Único Santo André",
+                              "Estimativa Caixa • Imóvel: R$ 400k • Entrada: R$ 80k • Financiado: R$ 320k • Parcela Inicial: R$ 2.580/mês",
+                              "success"
+                            );
+                          }
                         }}
                         className="flex-1 text-center py-2 bg-gradient-to-r from-indigo-700 to-indigo-900 hover:from-indigo-800 hover:to-indigo-950 text-white border-2 border-zinc-950 rounded-lg font-mono text-[9px] font-black uppercase cursor-pointer"
                       >
-                        🧮 Simular na CEF
+                        🧮 Simulação Ideal
                       </button>
                       
                       <button
@@ -2761,16 +2766,17 @@ export default function RealEstateInventory({
                       <button
                         type="button"
                         onClick={() => {
-                          setSimPrice(750000);
-                          setSimDownPayment(150000); // 20% down
-                          setSimIncome(16000);
-                          setSimProgram('sbpe');
-                          setSimHasStateSubsidy(false);
-                          setActiveSubTab('simulador');
+                          if (addNotification) {
+                            addNotification(
+                              "Simulação: Elite Pinheiros",
+                              "Estimativa Crédito • Imóvel: R$ 750k • Entrada: R$ 150k • Financiado: R$ 600k (SBPE) • Parcela Inicial: R$ 5.800/mês",
+                              "success"
+                            );
+                          }
                         }}
                         className="flex-1 text-center py-2 bg-gradient-to-r from-indigo-700 to-indigo-900 hover:from-indigo-800 hover:to-indigo-950 text-white border-2 border-zinc-950 rounded-lg font-mono text-[9px] font-black uppercase cursor-pointer"
                       >
-                        🧮 Simular na CEF
+                        🧮 Simulação Ideal
                       </button>
                       
                       <button
@@ -3693,6 +3699,192 @@ export default function RealEstateInventory({
 
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* EXCLUSIVO MODAL DE IMPORTAÇÃO DE ATIVOS / CURY / CAIXA */}
+      <AnimatePresence>
+        {isPropertyImportModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-4 backdrop-blur-md select-none overflow-y-auto">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white border-4 border-zinc-950 rounded-3xl w-full max-w-4xl shadow-[8px_8px_0px_0px_rgba(24,24,27,1)] overflow-hidden max-h-[90vh] flex flex-col text-zinc-900"
+            >
+              <div className="p-4.5 border-b-4 border-zinc-950 bg-zinc-900 text-white flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Upload className="w-5 h-5 text-indigo-400" />
+                  <h3 className="font-sans font-black text-sm uppercase italic tracking-tight">
+                    📥 Importador de Estoque (Lote)
+                  </h3>
+                </div>
+                <button 
+                  onClick={() => setIsPropertyImportModalOpen(false)}
+                  className="text-zinc-400 hover:text-white p-1 rounded-lg border border-transparent hover:border-zinc-700 hover:bg-zinc-800 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-6 overflow-y-auto bg-zinc-50 flex-1 text-zinc-800 space-y-6">
+                
+                {/* PDF Construtora Stock Integration Panel */}
+                <div className="p-5 bg-indigo-50 border-4 border-zinc-950 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] text-left animate-fadeIn">
+                  <div className="space-y-1 md:max-w-xl">
+                    <span className="px-2 py-0.5 rounded bg-indigo-500 text-white font-mono text-[8px] font-black uppercase tracking-wider">
+                      📋 Catálogo Construtora PDF
+                    </span>
+                    <h4 className="text-xs font-black text-zinc-950 uppercase font-mono leading-tight">
+                      Tabela de Estoque Extraída do PDF ({pdfProperties.length} Apartamentos & Unidades)
+                    </h4>
+                    <p className="text-[11px] text-indigo-950 leading-relaxed font-sans font-semibold">
+                      Deseja injetar as tabelas de empreendimentos credenciadas cycleCRED (Cury, Mérito e Dez) em lote no seu acervo de estoque?
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onAddBulkProperties(pdfProperties);
+                      if (addNotification) addNotification('📥 CATÁLOGO IMPORTADO', `${pdfProperties.length} Unidades das construtoras parceiras foram injetadas.`, 'success');
+                      setIsPropertyImportModalOpen(false);
+                    }}
+                    className="px-4 py-2.5 bg-indigo-650 hover:bg-indigo-700 text-white font-black text-[10px] uppercase rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] cursor-pointer shrink-0 transition"
+                  >
+                    Injetar {pdfProperties.length} Unidades do PDF
+                  </button>
+                </div>
+
+                {/* Real File Drag & Drop Zone */}
+                <div 
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDraggingFile(true);
+                  }}
+                  onDragLeave={() => setIsDraggingFile(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDraggingFile(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = (evt) => {
+                        const text = evt.target?.result as string;
+                        if (text) {
+                          const lines = text.split('\n').slice(1);
+                          const imported: RealEstateProperty[] = [];
+                          lines.forEach(line => {
+                            const cols = line.split(';');
+                            if (cols.length >= 7) {
+                              imported.push({
+                                id: 'prop-imported-' + Math.random().toString(36).substr(2, 9),
+                                code: cols[0]?.replace(/"/g, '') || 'NEW',
+                                title: cols[1]?.replace(/"/g, '') || 'Imóvel Importado',
+                                type: (cols[2]?.replace(/"/g, '').toLowerCase() || 'apartamento') as any,
+                                price: Number(cols[3]?.replace(/"/g, '')) || 250000,
+                                bedrooms: Number(cols[4]?.replace(/"/g, '')) || 2,
+                                suites: 1,
+                                bathrooms: 2,
+                                parkingSpaces: 1,
+                                sizeSqm: Number(cols[6]?.replace(/"/g, '')) || 55,
+                                location: 'Localidade Importada',
+                                neighborhood: cols[5]?.replace(/"/g, '') || 'Bairro',
+                                description: 'Imóvel importado via arquivo Spreadsheet cicloCRED.',
+                                status: (cols[7]?.replace(/"/g, '').trim().toLowerCase() || 'disponivel') as any,
+                                imageUrl: 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&q=80&w=600',
+                                images: []
+                              });
+                            }
+                          });
+                          if (imported.length > 0) {
+                            onAddBulkProperties(imported);
+                            if (addNotification) addNotification('📊 ATIVOS CARREGADOS', `${imported.length} imóveis foram adicionados ao acervo.`, 'success');
+                            setIsPropertyImportModalOpen(false);
+                          }
+                        }
+                      };
+                      reader.readAsText(file);
+                    }
+                  }}
+                  className={`border-4 border-dashed rounded-3xl p-8 text-center transition cursor-pointer flex flex-col items-center justify-center space-y-3 ${
+                    isDraggingFile 
+                      ? 'bg-indigo-50 border-indigo-500 scale-95' 
+                      : 'border-zinc-350 bg-white hover:border-zinc-950'
+                  }`}
+                >
+                  <div className="p-4 rounded-full bg-zinc-150 border-2 border-zinc-950 shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)]">
+                    <FileText className="w-8 h-8 text-indigo-600 animate-bounce" />
+                  </div>
+                  <div>
+                    <strong className="text-zinc-900 block font-extrabold uppercase font-mono text-xs">Arraste seu Arquivo imobiliário Aqui</strong>
+                    <span className="text-[11px] text-zinc-550 block font-medium mt-1">Carregue arquivos .csv com o formato: Codigo;Titulo;Tipo;Preco;Quartos;Bairro;Area_m2;Status</span>
+                  </div>
+                </div>
+
+                {/* Paste Text Row */}
+                <div className="space-y-2 text-left">
+                  <label className="text-[10px] font-mono font-black uppercase text-zinc-900">Ou Cole Linhas de Texto Manualmente (Formato CSV com ponto-e-vírgula)</label>
+                  <textarea
+                    rows={4}
+                    value={rawPasteData}
+                    onChange={(e) => setRawPasteData(e.target.value)}
+                    placeholder="MO-902;Residencial Mérito;Apartamento;290000;2;Centro;60;Disponível"
+                    className="w-full text-xs font-mono p-4 border-2 border-zinc-950 rounded-2xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] bg-white text-zinc-900 placeholder-zinc-400 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!rawPasteData.trim()) return;
+                      const lines = rawPasteData.split('\n');
+                      const imported: RealEstateProperty[] = [];
+                      lines.forEach(line => {
+                        const cols = line.split(';');
+                        if (cols.length >= 7) {
+                          imported.push({
+                            id: 'prop-imported-' + Math.random().toString(36).substr(2, 9),
+                            code: cols[0]?.replace(/"/g, '') || 'NEW',
+                            title: cols[1]?.replace(/"/g, '') || 'Imóvel Importado',
+                            type: (cols[2]?.replace(/"/g, '').toLowerCase() || 'apartamento') as any,
+                            price: Number(cols[3]?.replace(/"/g, '')) || 250000,
+                            bedrooms: Number(cols[4]?.replace(/"/g, '')) || 2,
+                            suites: 1,
+                            bathrooms: 2,
+                            parkingSpaces: 1,
+                            sizeSqm: Number(cols[6]?.replace(/"/g, '')) || 55,
+                            location: 'Localidade Importada',
+                            neighborhood: cols[5]?.replace(/"/g, '') || 'Bairro',
+                            description: 'Imóvel importado via colagem manual.',
+                            status: (cols[7]?.replace(/"/g, '').trim().toLowerCase() || 'disponivel') as any,
+                            imageUrl: 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&q=80&w=600',
+                            images: []
+                          });
+                        }
+                      });
+                      if (imported.length > 0) {
+                        onAddBulkProperties(imported);
+                        if (addNotification) addNotification('📊 ATIVOS CARREGADOS', `${imported.length} imóveis colados foram adicionados ao acervo.`, 'success');
+                        setRawPasteData('');
+                        setIsPropertyImportModalOpen(false);
+                      }
+                    }}
+                    className="w-full py-3 bg-zinc-900 border-2 border-zinc-950 rounded-2xl hover:bg-zinc-950 text-white font-mono font-black text-xs uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition cursor-pointer active:translate-y-0.5"
+                  >
+                    ⚡ Processar e Importar {rawPasteData.split('\n').filter(l => l.trim()).length} Unidades
+                  </button>
+                </div>
+
+              </div>
+              <div className="p-4.5 bg-zinc-100 border-t-2 border-zinc-200 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setIsPropertyImportModalOpen(false)}
+                  className="px-6 py-2.5 bg-white border-2 border-zinc-950 rounded-xl hover:bg-zinc-50 font-mono font-black text-xs uppercase shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] cursor-pointer"
+                >
+                  Fechar Painel
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 

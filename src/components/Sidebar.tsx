@@ -27,7 +27,8 @@ import {
   Cpu,
   Cloud,
   Sparkles,
-  Globe
+  Globe,
+  Clock
 } from 'lucide-react';
 import { AccessibilitySettings, triggerSensoryFeedback, INITIAL_ACCESSIBILITY_SETTINGS } from '../utils/sensory';
 
@@ -41,6 +42,10 @@ interface SidebarProps {
   accSettings?: AccessibilitySettings;
   forceLocalStorageMode?: boolean;
   onToggleForceLocalMode?: (val: boolean) => void;
+  userLevel?: number;
+  userXP?: number;
+  creciNumber?: string;
+  currentDateTime?: Date;
 }
 
 export default function Sidebar({ 
@@ -52,7 +57,11 @@ export default function Sidebar({
   onLogout,
   accSettings = INITIAL_ACCESSIBILITY_SETTINGS,
   forceLocalStorageMode = false,
-  onToggleForceLocalMode
+  onToggleForceLocalMode,
+  userLevel = 1,
+  userXP = 0,
+  creciNumber = '',
+  currentDateTime = new Date()
 }: SidebarProps) {
   const [showUserMenu, setShowUserMenu] = useState(false);
 
@@ -60,10 +69,8 @@ export default function Sidebar({
   const profilePhoto = localStorage.getItem('ciclocred_user_photo') || '';
 
   const menuItems = [
-    { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard },
     { id: 'leads', name: 'Leads', icon: Users, badge: leadsCount },
     { id: 'inventory', name: 'Estoque de Imóveis', icon: Package },
-    { id: 'automation-flows', name: 'Scripts e fluxos', icon: Cpu },
     { id: 'gemini-server', name: 'Assistente AI', icon: Sparkles },
     { id: 'google-workspace', name: 'Google Workspace', icon: Cloud },
     { id: 'kids', name: 'Alavancagem & Finanças', icon: TrendingUp },
@@ -71,24 +78,32 @@ export default function Sidebar({
     { id: 'reports', name: 'Relatórios Integrados', icon: TrendingUp },
   ];
 
+  // Helper inside sidebar to render proper greetings
+  const getGreeting = () => {
+    const hrs = currentDateTime.getHours();
+    if (hrs < 12) return '🌤️ Bom dia';
+    if (hrs < 18) return '☀️ Boa tarde';
+    return '🌙 Boa noite';
+  };
+
+  const formattedDateAndClock = `${currentDateTime.toLocaleDateString('pt-BR', { weekday: 'short' })} • ${currentDateTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+
   return (
-    <aside className="w-68 bg-zinc-900 border-r-4 border-zinc-950 flex flex-col h-screen text-zinc-100 shrink-0 md:block hidden">
-      {/* Brand Header */}
-      <div className="p-6 border-b-4 border-zinc-950">
+    <aside className="w-68 bg-zinc-900 border-r-4 border-zinc-950 flex flex-col h-screen text-zinc-100 shrink-0">
+      {/* Brand Header & Dynamic Greetings Panel */}
+      <div className="p-5 border-b-4 border-zinc-950 space-y-4">
+        {/* Clean Logo without SWAT keyword as requested */}
         <div className="flex items-center gap-2">
-          <Briefcase className="w-6 h-6 text-indigo-400" />
-          <span className="font-sans font-black tracking-tighter text-2xl uppercase italic text-white">
-            SWAT<span className="text-indigo-400"></span> CRM
+          <Briefcase className="w-5.5 h-5.5 text-indigo-400" />
+          <span className="font-sans font-black tracking-tighter text-xl uppercase italic text-white leading-none">
+            cicloCRED <span className="text-indigo-400">CRM</span>
           </span>
         </div>
-        <p className="text-[10px] text-zinc-400 uppercase tracking-widest font-black mt-1.5 font-mono">
-          ▲ GESTOR COMERCIAL DE LEADS
-        </p>
       </div>
 
       {/* Navigation Links */}
-      <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-        <div className="px-3 mb-3 text-[10px] font-black text-zinc-500 uppercase tracking-widest font-mono">
+      <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
+        <div className="px-3 mb-2 text-[10px] font-black text-zinc-500 uppercase tracking-widest font-mono">
           Menu Principal
         </div>
         {menuItems.map((item) => {
@@ -124,6 +139,7 @@ export default function Sidebar({
 
       {/* User Profile Footer Card with Actionable Sign-out */}
       <div className="p-4 border-t-4 border-zinc-950 bg-zinc-950 relative">
+
         {showUserMenu && (
           <div className="absolute bottom-20 left-4 right-4 bg-zinc-900 border-2 border-zinc-950 p-2.5 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] z-30 animate-scaleIn text-xs space-y-2">
             {/* Database Engine Operation Mode Selector Button in Footer/Sidebar */}
@@ -153,6 +169,20 @@ export default function Sidebar({
                 {forceLocalStorageMode ? '📁 Usar Local' : '☁️ Usar Firestore'}
               </span>
             </button>
+
+            {/* Gamification Level Pill Relocalized relative to user menu */}
+            <div className="p-2 border border-zinc-800 rounded-lg text-left bg-zinc-950/70 select-none">
+              <div className="text-[9px] font-mono font-black text-indigo-450 uppercase tracking-widest leading-none flex items-center justify-between">
+                <span>⭐ GALAXY NÍVEL {userLevel}</span>
+                <span className="text-zinc-500 font-bold">({userXP}/5000 XP)</span>
+              </div>
+              <div className="w-full bg-zinc-850 h-1.5 rounded-full mt-1.5 overflow-hidden border border-zinc-900">
+                <div 
+                  className="bg-indigo-500 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(100, (userXP / 5000) * 100)}%` }}
+                />
+              </div>
+            </div>
 
             {onLogout && (
               <button

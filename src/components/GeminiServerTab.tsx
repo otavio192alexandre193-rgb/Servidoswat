@@ -17,9 +17,11 @@ import {
   Zap,
   Info,
   Search,
-  Trash2
+  Trash2,
+  Cloud
 } from 'lucide-react';
 import { triggerSensoryFeedback, AccessibilitySettings } from '../utils/sensory';
+import GoogleWorkspace from './GoogleWorkspace';
 
 interface AIConfig {
   active: boolean;
@@ -55,6 +57,10 @@ interface GeminiServerTabProps {
   leads?: any[];
   setLeads?: React.Dispatch<React.SetStateAction<any[]>>;
   templates?: any[];
+  appointments?: any[];
+  setAppointments?: React.Dispatch<React.SetStateAction<any[]>>;
+  emailLogs?: any[];
+  setEmailLogs?: React.Dispatch<React.SetStateAction<any[]>>;
 }
 
 export default function GeminiServerTab({ 
@@ -63,8 +69,15 @@ export default function GeminiServerTab({
   addNotification,
   leads = [],
   setLeads,
-  templates = []
+  templates = [],
+  appointments = [],
+  setAppointments,
+  emailLogs = [],
+  setEmailLogs
 }: GeminiServerTabProps) {
+  // Inner Tab selection: 'ai' ou 'workspace' (Google Workspace)
+  const [innerTab, setInnerTab] = useState<'ai' | 'workspace'>('ai');
+
   // Config state
   const [config, setConfig] = useState<AIConfig>({
     active: true,
@@ -818,8 +831,42 @@ export default function GeminiServerTab({
         </div>
       </div>
 
-      {/* Main Core Columns */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
+      {/* INTEGRAÇÃO DE ABAS: ASSISTENTE AI & GOOGLE WORKSPACE */}
+      <div className="flex flex-wrap bg-zinc-900 p-1.5 border-4 border-zinc-950 rounded-2xl w-full sm:w-max select-none text-left gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            if (triggerSensoryFeedback && accSettings) triggerSensoryFeedback('click', accSettings);
+            setInnerTab('ai');
+          }}
+          className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase font-mono tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
+            innerTab === 'ai'
+              ? 'bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800 border-transparent'
+          }`}
+        >
+          <Sparkles className="w-4 h-4 shrink-0 text-amber-400" />
+          <span>Configuração & Chat do Assistente IA</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (triggerSensoryFeedback && accSettings) triggerSensoryFeedback('click', accSettings);
+            setInnerTab('workspace');
+          }}
+          className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase font-mono tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
+            innerTab === 'workspace'
+              ? 'bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800 border-transparent'
+          }`}
+        >
+          <Cloud className="w-4 h-4 shrink-0 text-cyan-400" />
+          <span>Google Workspace Integrado</span>
+        </button>
+      </div>
+
+      <div className={`grid grid-cols-1 xl:grid-cols-12 gap-8 ${innerTab === 'ai' ? 'block' : 'hidden'}`}>
         
         {/* Column Left: Server Configurations (Config e Instruções) */}
         <div className="xl:col-span-7 space-y-8">
@@ -2124,6 +2171,21 @@ export default function GeminiServerTab({
         </div>
 
       </div>
+
+      {innerTab === 'workspace' && (
+        <GoogleWorkspace
+          leads={leads}
+          setLeads={setLeads}
+          appointments={appointments}
+          setAppointments={setAppointments}
+          templates={templates}
+          emailLogs={emailLogs}
+          setEmailLogs={setEmailLogs}
+          awardXP={(xp) => awardXP && awardXP(xp, 'Conexão Google Workspace')}
+          addNotification={addNotification}
+          accSettings={accSettings}
+        />
+      )}
     </div>
   );
 }

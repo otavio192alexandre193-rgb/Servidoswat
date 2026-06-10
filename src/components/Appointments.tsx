@@ -339,8 +339,8 @@ export default function Appointments({
                 }
                 
                 if (isSelectedDay) {
-                  borderStyleClass = 'border-zinc-950 ring-4 ring-zinc-900/10 scale-95';
-                  bgStyleClass = 'bg-zinc-905 text-zinc-900 font-extrabold';
+                  borderStyleClass = 'border-zinc-950 ring-4 ring-indigo-500/30 scale-95';
+                  bgStyleClass = 'bg-indigo-600 text-white font-extrabold';
                 }
 
                 return (

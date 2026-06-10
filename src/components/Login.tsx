@@ -145,10 +145,10 @@ export default function LoginView({ onLoginSuccess, theme, setTheme }: LoginProp
         {/* Branding header */}
         <div className="text-center space-y-1 select-none">
           <div className="mx-auto w-12 h-12 bg-indigo-600 border-2 border-zinc-950 flex items-center justify-center text-white font-black text-lg rounded-2xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-            S
+            C
           </div>
           <h1 className="text-md font-black uppercase italic tracking-tight text-zinc-950 font-mono mt-2">
-            CRM SWAT Imobiliário
+            cicloCRED CRM
           </h1>
           <p className="text-[10px] text-zinc-500 font-bold font-mono">
             SISTEMA DE GESTÃO PATRIMONIAL & EXPANSÃO

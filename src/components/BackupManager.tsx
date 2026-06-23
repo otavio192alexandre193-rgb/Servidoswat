@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { Lead, RealEstateProperty, Appointment, InventoryItem, EmailTemplate, Goal, Project } from '../types';
 import { triggerSensoryFeedback, AccessibilitySettings } from '../utils/sensory';
+import { processFileOrPasteContent } from './LeadList';
 
 interface BackupSnapshot {
   id: string;
@@ -63,6 +64,8 @@ interface BackupManagerProps {
   onAddNotification: (title: string, msg: string, type: 'success' | 'warning' | 'info') => void;
   // Trigger delete warning
   onRequestConfirm: (title: string, desc: string, onConfirm: () => void, type?: 'danger' | 'warning') => void;
+  awardXP?: (xp: number) => void;
+  theme?: 'claro' | 'escuro' | 'galatico';
 }
 
 export default function BackupManager({
@@ -86,7 +89,8 @@ export default function BackupManager({
   setUserLevel,
   accSettings,
   onAddNotification,
-  onRequestConfirm
+  onRequestConfirm,
+  theme = 'escuro'
 }: BackupManagerProps) {
   const [localHistory, setLocalHistory] = useState<BackupSnapshot[]>(() => {
     const saved = localStorage.getItem('ciclocred_system_backups');
@@ -319,7 +323,7 @@ export default function BackupManager({
         <div class="flex items-center gap-2.5 min-w-0">
           <div class="w-8 h-8 rounded bg-indigo-500 border-2 border-zinc-900 flex items-center justify-center text-zinc-950 font-black text-xs shadow-sm font-mono shrink-0">OP</div>
           <div class="min-w-0">
-            <h4 id="sidebar-op-name" class="text-xs font-black text-white uppercase tracking-wider font-mono truncate">Operador CicloCred</h4>
+            <h4 id="sidebar-op-name" class="text-xs font-black text-white uppercase tracking-wider font-mono truncate">Operador cicloCRED</h4>
             <p id="sidebar-op-creci" class="text-[9px] text-zinc-400 font-bold font-mono">CRECI-SP SP349272</p>
           </div>
         </div>
@@ -437,7 +441,7 @@ export default function BackupManager({
       appointments: loadFromStorage('appointments', ${serializedAppointments}),
       xp: parseInt(loadFromStorage('user_xp', '${userXP}')),
       level: parseInt(loadFromStorage('user_level', '${userLevel}')),
-      userName: loadFromStorage('user_name', 'Operador CicloCred'),
+      userName: loadFromStorage('user_name', 'Operador cicloCRED'),
       userCreci: loadFromStorage('user_creci', 'CRECI-SP SP349272'),
       activeTab: 'dashboard',
       scoreKids: parseInt(loadFromStorage('kids_score', '0')),
@@ -1564,51 +1568,34 @@ export default function BackupManager({
     fileReader.onload = (e) => {
       try {
         const text = e.target?.result as string;
-        const lines = text.split('\n');
-        if (lines.length < 2) {
-          alert('O arquivo CSV selecionado parece vazio.');
-          return;
-        }
+        const { parsedItems } = processFileOrPasteContent(text, 'Importação Manual CSV');
 
-        // Simplistic CSV line parser
-        const importedLeads: Lead[] = [];
-        // Header line represents indices
-        for (let i = 1; i < lines.length; i++) {
-          const line = lines[i].trim();
-          if (!line) continue;
-          
-          // Split with separator
-          const cols = line.split(separator).map(c => {
-            // Remove double quotes
-            let clean = c.trim();
-            if (clean.startsWith('"') && clean.endsWith('"')) {
-              clean = clean.substring(1, clean.length - 1);
-            }
-            return clean.replace(/""/g, '"');
-          });
-
-          if (cols.length >= 3) {
-            // Match fields: cols[1] Name, cols[2] Email, cols[3] Phone
-            const name = cols[1] || `Lead Importado #${Date.now() + i}`;
-            const email = cols[2] || 'sem@email.com';
-            const phone = cols[3] || '(00) 00000-0000';
-            const origin = cols[4] || 'Importação Manual CSV';
-            const statusStr = cols[5] || 'novo';
-            const valNum = Number(cols[6]) || 250000;
-
-            importedLeads.push({
-              id: `lead-import-${Date.now()}-${i}`,
-              name,
-              email,
-              phone,
-              origin,
-              status: statusStr as any,
-              value: valNum,
-              notes: '',
-              createdAt: new Date().toISOString()
-            });
-          }
-        }
+        const importedLeads: Lead[] = parsedItems.map((item, i) => ({
+          id: `lead-import-${Date.now()}-${i}`,
+          name: item.name || `Lead Importado #${Date.now() + i}`,
+          email: item.email || '',
+          phone: item.phone || '',
+          origin: item.origin || 'Importação Manual CSV',
+          status: item.status || 'novo',
+          stage: item.stage || 'abordagem',
+          familyIncome: item.familyIncome,
+          value: item.value || 0,
+          region: item.region,
+          propertyInterest: item.propertyInterest,
+          objection: item.objection,
+          gender: item.gender,
+          ageBracket: item.ageBracket,
+          cpf: item.cpf,
+          birthDate: item.birthDate,
+          maritalStatus: item.maritalStatus,
+          fgtsSaldo: item.fgtsSaldo,
+          restricaoBacen: item.restricaoBacen,
+          possuiImovel: item.possuiImovel,
+          programaDesejado: item.programaDesejado,
+          checklist: item.checklist,
+          notes: item.notes || '',
+          createdAt: new Date().toISOString()
+        }));
 
         if (importedLeads.length > 0) {
           setLeads(prev => [...importedLeads, ...prev]);
@@ -1619,7 +1606,7 @@ export default function BackupManager({
             'success'
           );
         } else {
-          alert('Nenhum registro legível encontrado. Certifique-se que o delimitador seja ponto e vírgula (;).');
+          alert('Nenhum registro legível encontrado ou arquivo vazio.');
         }
 
       } catch (err) {
@@ -1707,33 +1694,34 @@ export default function BackupManager({
   };
 
   return (
-    <div className="bg-white border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] space-y-6">
+    <div className="bg-transparent space-y-8 animate-fadeIn">
       
       {/* Title block */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4">
+      <div className="bg-zinc-900 border-4 border-zinc-950 p-6 rounded-2xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] flex flex-col md:flex-row md:items-center md:justify-between gap-4 select-none">
         <div>
-          <span className="text-[10px] uppercase font-mono font-black text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-200">
-            🛡️ Inteligência e Segurança Cósmica
-          </span>
-          <h2 className="text-lg font-black uppercase text-zinc-950 font-mono tracking-tight mt-1.5 flex items-center gap-2">
-            <Database className="w-5.5 h-5.5 text-indigo-600" />
-            <span>Central de Backup, Histórico & Importação/Exportação</span>
+          <h2 className="text-xl font-black uppercase text-white font-mono tracking-tighter italic flex items-center gap-2">
+            <Database className="w-6 h-6 text-indigo-400" />
+            <span>Banco de Dados & Administração Técnica</span>
           </h2>
-          <p className="text-xs text-zinc-500 font-medium font-sans mt-0.5">
-            Crie cópias de segurança manuais ou configure automações de logs, exporte faturas/comissões para CSV e restaure versões anteriores do sistema em tempo real.
+          <p className="text-xs text-zinc-400 font-semibold font-sans mt-0.5">
+            Gerencie pontos de restauração, importe dados externos e monitore logs de segurança do cluster cicloCRED.
           </p>
+        </div>
+        <div className="flex items-center gap-3 bg-zinc-950 p-1.5 rounded-xl border border-zinc-800 shrink-0">
+          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="text-[10px] font-black text-zinc-450 uppercase tracking-widest font-mono">Status: Sincronizado</span>
         </div>
       </div>
 
-      {/* Sub tabs navigation */}
-      <div className="flex border-2 border-zinc-950 bg-zinc-50 p-1 rounded-2xl select-none text-[10px] font-mono font-black uppercase gap-1 max-w-lg">
+      {/* Sub tabs navigation (Broadcast Style) */}
+      <div className={`flex flex-col sm:flex-row border-4 border-zinc-950 p-1.5 rounded-2xl gap-2 select-none ${theme === "claro" ? "bg-zinc-100" : "bg-zinc-900"}`}>
         <button
           onClick={() => {
             setActiveTab('backup-list');
             triggerSensoryFeedback('click', accSettings);
           }}
-          className={`flex-1 py-1.5 text-center rounded-xl transition ${
-            activeTab === 'backup-list' ? 'bg-zinc-900 text-white shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]' : 'text-zinc-550 hover:bg-zinc-150'
+          className={`flex-1 px-5 py-3 font-black text-xs uppercase tracking-widest transition-all rounded-xl border-2 text-center ${
+            activeTab === 'backup-list' ? 'bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] font-black' : 'border-transparent hover:text-indigo-400 transition ' + (theme === 'claro' ? 'text-zinc-600' : 'text-zinc-400')
           }`}
         >
           ⏱️ Banco Local ({localHistory.length})
@@ -1743,51 +1731,53 @@ export default function BackupManager({
             setActiveTab('custom-import-export');
             triggerSensoryFeedback('click', accSettings);
           }}
-          className={`flex-1 py-1.5 text-center rounded-xl transition ${
-            activeTab === 'custom-import-export' ? 'bg-zinc-900 text-white shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]' : 'text-zinc-550 hover:bg-zinc-150'
+          className={`flex-1 px-5 py-3 font-black text-xs uppercase tracking-widest transition-all rounded-xl border-2 text-center ${
+            activeTab === 'custom-import-export' ? 'bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] font-black' : 'border-transparent hover:text-indigo-400 transition ' + (theme === 'claro' ? 'text-zinc-600' : 'text-zinc-400')
           }`}
         >
-          📊 CSV e JSON Sob Medida
+          📊 CSV/JSON Externo
         </button>
         <button
           onClick={() => {
             setActiveTab('automation');
             triggerSensoryFeedback('click', accSettings);
           }}
-          className={`flex-1 py-1.5 text-center rounded-xl transition ${
-            activeTab === 'automation' ? 'bg-zinc-900 text-white shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]' : 'text-zinc-550 hover:bg-zinc-150'
+          className={`flex-1 px-5 py-3 font-black text-xs uppercase tracking-widest transition-all rounded-xl border-2 text-center ${
+            activeTab === 'automation' ? 'bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] font-black' : 'border-transparent hover:text-indigo-400 transition ' + (theme === 'claro' ? 'text-zinc-600' : 'text-zinc-400')
           }`}
         >
-          🤖 Automações de Cópias
+          🤖 Automações
         </button>
       </div>
 
-      {/* TAB 1: LOCAL SNAPSHOTS */}
-      {activeTab === 'backup-list' && (
-        <div className="space-y-4 animate-scaleIn text-xs">
-          
-          {/* Snap Input creator row */}
-          <div className="p-4 bg-zinc-55 bg-indigo-50/50 border-2 border-dashed border-indigo-250 rounded-2xl grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-            <div className="sm:col-span-8">
-              <label className="block text-[10px] font-mono font-black text-indigo-900 uppercase mb-1">Rotular Novo Ponto de Restauração</label>
-              <input
-                type="text"
-                placeholder="Exemplo: Antes de importar planilha de chácaras de SP"
-                value={backupLabel}
-                onChange={(e) => setBackupLabel(e.target.value)}
-                className="w-full p-2.5 bg-white border border-zinc-350 rounded-xl font-bold text-zinc-900 text-xs focus:outline-none"
-              />
+      {/* Content wrapper */}
+      <div className="bg-white border-4 border-zinc-950 rounded-2xl p-6 shadow-[8px_8px_0px_0px_rgba(24,24,27,1)] overflow-hidden">
+        {/* TAB 1: LOCAL SNAPSHOTS */}
+        {activeTab === 'backup-list' && (
+          <div className="space-y-6 animate-scaleIn text-xs">
+            
+            {/* Snap Input creator row */}
+            <div className="p-5 bg-indigo-50/40 border-2 border-zinc-950 rounded-2xl grid grid-cols-1 sm:grid-cols-12 gap-4 items-end shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+              <div className="sm:col-span-8">
+                <label className="block text-[11px] font-mono font-black text-zinc-900 uppercase mb-1.5 italic tracking-tight">Rótulo do Ponto de Restauração</label>
+                <input
+                  type="text"
+                  placeholder="Exemplo: Snap de Segurança antes de importar leads da Leste..."
+                  value={backupLabel}
+                  onChange={(e) => setBackupLabel(e.target.value)}
+                  className="w-full p-3 bg-white border-2 border-zinc-950 rounded-xl font-black text-zinc-900 text-xs focus:ring-4 focus:ring-indigo-500/20 outline-none placeholder:text-zinc-400 placeholder:italic"
+                />
+              </div>
+              <div className="sm:col-span-4">
+                <button
+                  type="button"
+                  onClick={() => handleCreateSnapshot()}
+                  className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-mono font-black text-[11px] uppercase rounded-xl border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition active:translate-y-px active:shadow-none"
+                >
+                  💾 Registrar Backup
+                </button>
+              </div>
             </div>
-            <div className="sm:col-span-4">
-              <button
-                type="button"
-                onClick={() => handleCreateSnapshot()}
-                className="w-full p-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-mono font-black text-[10.5px] uppercase rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition active:translate-y-0.5"
-              >
-                💾 Registrar Backup
-              </button>
-            </div>
-          </div>
 
           {/* List of points */}
           <div className="space-y-3">
@@ -2053,6 +2043,7 @@ export default function BackupManager({
         </div>
       )}
 
+      </div>
     </div>
   );
 }

@@ -3,10 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Lead, LeadStatus } from '../types';
 import { getKanbanColumns } from '../utils/kanban';
 import { triggerSensoryFeedback, AccessibilitySettings, INITIAL_ACCESSIBILITY_SETTINGS } from '../utils/sensory';
+import { auth } from '../firebase';
+import * as XLSX from 'xlsx';
 import { 
   Search, 
   Trash2, 
@@ -28,20 +30,35 @@ import {
   Zap,
   Wand2,
   Info,
-  Check
+  Check,
+  RotateCw,
+  Globe,
+  BookOpen,
+  MessageCircle, 
+  Phone, 
+  Bell, 
+  Bot, 
+  FileText,
+  ListTree,
+  ChevronDown
 } from 'lucide-react';
+import { handleWhatsAppAction, autoGenerateScript as advancedAutoGenerateScript } from '../utils/whatsapp';
+import { cn } from '../lib/utils';
 
 interface LeadListProps {
   leads: Lead[];
+  tableHeaderComponent?: React.ReactNode | ((selectedLeadIds: string[], actions: { openCampaignModal: () => void }) => React.ReactNode);
   onOpenLeadDetails: (lead: Lead) => void;
   onOpenEditModal: (lead: Lead) => void;
   onDeleteLead: (leadId: string) => void;
   onOpenCreateModal: () => void;
-  onMoveLead: (leadId: string, newStatus: LeadStatus) => void;
+  onMoveLead: (leadId: string, newStatus: LeadStatus | string, targetPageId?: string) => void;
+  onNavigateToFollowUp?: (lead: Lead) => void;
   onAddBulkLeads?: (newLeads: Lead[]) => void;
-  onDeleteMultipleLeads?: (leadIds: string[]) => void; // New bulk delete prop
-  onMoveMultipleLeads?: (leadIds: string[], status: LeadStatus) => void; // New bulk status update prop
-  onUpdateMultipleLeads?: (updatedLeads: Lead[]) => void; // Prop for applying bulk updates
+  onDeleteMultipleLeads?: (leadIds: string[]) => void;
+  onMoveMultipleLeads?: (leadIds: string[], status: LeadStatus) => void;
+  onUpdateMultipleLeads?: (updatedLeads: Lead[]) => void;
+  onUpdateLeadField?: (leadId: string, fields: Partial<Lead>) => void;
   onRequestConfirm?: (title: string, desc: string, onConfirm: () => void, type?: 'danger' | 'warning') => void;
   awardXP?: (xp: number) => void;
   addNotification?: (title: string, message: string, type?: any) => void;
@@ -55,20 +72,62 @@ interface LeadListProps {
   setOriginFilter?: (val: string) => void;
   initialLetterFilter?: string;
   setInitialLetterFilter?: (val: string) => void;
+  regionFilter?: string;
+  profileFilter?: string;
+  stageFilter?: string;
+  objectionFilter?: string;
+  programaDesejadoFilter?: string;
+  restricaoBacenFilter?: string;
+  genderFilter?: string;
+  familyIncomeFilter?: string;
+  incomeTypeFilter?: string;
+  deliveryExpectedFilter?: string;
   externalShowImporter?: boolean;
   setExternalShowImporter?: (val: boolean) => void;
   externalShowPlanner?: boolean;
   setExternalShowPlanner?: (val: boolean) => void;
   onlyImporter?: boolean;
+  onOpenAIAssistant?: (lead: Lead) => void;
+  onOpenRuleEngine?: (lead: Lead) => void;
+  hideRowActionButtons?: boolean;
+  isTodosView?: boolean;
+  isActiveLeadsView?: boolean;
+  isCompactColumns?: boolean;
+  maxRows?: number;
+  theme?: 'claro' | 'escuro' | 'galatico';
 }
 
 export function isFictitiousPhone(phone: string | undefined | null): boolean {
   if (!phone) return true;
   const clean = phone.replace(/\D/g, '');
   if (clean.length < 8) return true;
-  // Common fictitious strings, all 9s, all 0s, containing 9999999
-  if (clean.includes('99999999') || clean.includes('00000000') || clean.includes('11111111') || clean.includes('999999999')) return true;
+  if (/(\d)\1{5,}/.test(clean)) return true;
+  if (clean.includes('1234567') || clean.includes('9876543')) return true;
   return false;
+}
+
+const getDaysSinceContact = (lastContactAt?: string): number | null => {
+  if (!lastContactAt) return null;
+  const cleanStr = lastContactAt.slice(0, 10);
+  const parts = cleanStr.split("-");
+  if (parts.length !== 3) return null;
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  const contactDate = new Date(year, month, day);
+  contactDate.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const targetDate = new Date();
+  targetDate.setFullYear(2026, 5, 13);
+  targetDate.setHours(0, 0, 0, 0);
+  const diffTime = targetDate.getTime() - contactDate.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays;
+};
+
+export function autoGenerateScript(lead: any): string {
+  return advancedAutoGenerateScript(lead);
 }
 
 export function formatBRLPhone(digits: string): string {
@@ -85,333 +144,499 @@ export function formatBRLPhone(digits: string): string {
   return digits;
 }
 
-export function extractPhoneFromEmail(email: string | undefined | null): { extractedPhone: string | null; cleanedEmail: string } {
-  if (!email) return { extractedPhone: null, cleanedEmail: '' };
+export function extractPhoneFromString(text: string | undefined | null): { extractedPhone: string | null; cleanedText: string } {
+  if (!text) return { extractedPhone: null, cleanedText: '' };
   
-  // Look for any string of 10 or 11 digits (Brazilian phone sequence)
-  const phoneRegex = /\d{10,11}/;
-  const match = email.match(phoneRegex);
-  if (match) {
-    const digits = match[0];
-    const ddd = parseInt(digits.slice(0, 2), 10);
-    if (ddd >= 11 && ddd <= 99) {
-      // Clean digits out of the email body
-      let cleaned = email.replace(digits, '');
-      // Fix dangling hyphens, underscores or periods before the @ sign
-      cleaned = cleaned.replace(/[_.-]+@/g, '@');
-      return {
-        extractedPhone: formatBRLPhone(digits),
-        cleanedEmail: cleaned
-      };
+  const phoneRegexWithDDD = /(?:\+?55\s*)?\(?([1-9][0-9])\)?\s*(9?\s*[0-9]{4})\s*-?\s*([0-9]{4})(?!\d)/;
+  const matchWithDDD = text.match(phoneRegexWithDDD);
+  
+  if (matchWithDDD) {
+    const fullMatch = matchWithDDD[0];
+    const ddd = matchWithDDD[1];
+    const p1 = matchWithDDD[2];
+    const p2 = matchWithDDD[3];
+    
+    // Clean to strict digits
+    const rawDigits = (ddd + p1 + p2).replace(/\D/g, '');
+    let formatted = '';
+    
+    if (rawDigits.length >= 10 && rawDigits.length <= 11) {
+       formatted = formatBRLPhone(rawDigits);
+    } else {
+       formatted = rawDigits;
     }
+    
+    let cleaned = text.replace(fullMatch, '').trim();
+    cleaned = cleaned.replace(/^[-_\s()]+|[-_\s()]+$/g, '').trim();
+    
+    return {
+      extractedPhone: formatted,
+      cleanedText: cleaned
+    };
   }
 
-  // Fallback: look for 8 or 9 digits without DDD
-  const phoneShortRegex = /\d{8,9}/;
-  const matchShort = email.match(phoneShortRegex);
+  // Fallback: look for 8 or 9 digits WITHOUT DDD
+  const phoneShortRegex = /(?<!\d)(9?\s*[0-9]{4})\s*-?\s*([0-9]{4})(?!\d)/;
+  const matchShort = text.match(phoneShortRegex);
+  
   if (matchShort) {
-    const digits = matchShort[0];
-    // Exclude common year matches like 19xx, 202x
-    if (!digits.startsWith('19') && !digits.startsWith('20')) {
-      let cleaned = email.replace(digits, '');
-      cleaned = cleaned.replace(/[_.-]+@/g, '@');
+    const fullMatch = matchShort[0];
+    const p1 = matchShort[1];
+    const p2 = matchShort[2];
+    const rawDigits = (p1 + p2).replace(/\D/g, '');
+    
+    if (rawDigits.length >= 8 && !(rawDigits.length === 8 && (rawDigits.startsWith('19') || rawDigits.startsWith('20')))) {
+      let formatted = formatBRLPhone('11' + rawDigits); // Default to SP DDD
+      
+      let cleaned = text.replace(fullMatch, '').trim();
+      cleaned = cleaned.replace(/^[-_\s()]+|[-_\s()]+$/g, '').trim();
+      
       return {
-        extractedPhone: formatBRLPhone('11' + digits), // Default to SP DDD
-        cleanedEmail: cleaned
+        extractedPhone: formatted,
+        cleanedText: cleaned
       };
     }
   }
 
-  return { extractedPhone: null, cleanedEmail: email };
+  return { extractedPhone: null, cleanedText: text.trim() };
 }
+;
 
-// === Smart Universal Importer Engine ===
-const KEYWORDS = {
-  name: ['nome', 'name', 'lead', 'contato', 'cliente', 'proprietario', 'interessado', 'usuario', 'corretor', 'pess'],
-  email: ['email', 'mail', 'correio', 'eletronico', 'electronicmail', 'contatoemail'],
-  phone: ['telefone', 'tel', 'celular', 'phone', 'whatsapp', 'cel', 'fone', 'zap', 'wpp', 'mobi', 'mobile', 'contatotelefone'],
-  value: ['valor', 'orcamento', 'preco', 'budget', 'value', 'investimento', 'capital', 'dinheiro'],
-  company: ['empresa', 'company', 'imobiliaria', 'corporacao', 'organizacao', 'org'],
-  origin: ['origem', 'canal', 'origin', 'source', 'midia', 'campanha', 'como'],
-  notes: ['notas', 'notes', 'mensagem', 'descricao', 'obs', 'observacao', 'comentario', 'detalhes'],
-  status: ['status', 'fase', 'etapa', 'estagio', 'coluna']
-};
-
-function normalizeString(str: string): string {
-  if (!str) return '';
-  return str
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") // remove accents
-    .replace(/[^a-z0-9]/g, ""); // remove spaces/punctuation
-}
-
-function detectDelimiter(text: string): string {
-  const delimiters = ['\t', ';', ',', '|'];
-  const firstLines = text.split(/\r?\n/).slice(0, 4).filter(line => line.trim().length > 0);
-  if (firstLines.length === 0) return ',';
-  
-  let bestDelimiter = ',';
-  let maxCount = -1;
-  
-  for (const delim of delimiters) {
-    let consistentSum = 0;
-    firstLines.forEach(line => {
-      consistentSum += (line.split(delim).length - 1);
-    });
-    const avg = consistentSum / firstLines.length;
-    if (avg > maxCount && consistentSum > 0) {
-      maxCount = avg;
-      bestDelimiter = delim;
-    }
-  }
-  return bestDelimiter;
-}
-
-function parseCSVLine(line: string, delimiter: string): string[] {
+export function splitCSVRow(line: string, separator: string): string[] {
   const result: string[] = [];
   let current = '';
   let inQuotes = false;
-  
   for (let i = 0; i < line.length; i++) {
     const char = line[i];
-    
-    if (char === '"' || char === "'") {
-      if (inQuotes && line[i + 1] === char) {
-        current += char;
-        i++; // skip next quote
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (char === delimiter && !inQuotes) {
-      result.push(current.trim());
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === separator && !inQuotes) {
+      result.push(current);
       current = '';
     } else {
       current += char;
     }
   }
-  result.push(current.trim());
+  result.push(current);
   return result;
 }
 
-function isHeaderRow(row: string[]): boolean {
-  if (row.length === 0 || row.every(cell => !cell)) return false;
-  
-  const keywordsList = Object.values(KEYWORDS).flat();
-  const matchedCount = row.filter(cell => {
-    const norm = normalizeString(cell);
-    return keywordsList.some(kw => norm === kw || norm.includes(kw));
-  }).length;
-  
-  if (matchedCount > 0) return true;
-  
-  const totalEmails = row.filter(cell => cell.includes('@') && cell.includes('.')).length;
-  if (totalEmails > 0) return false;
-  
-  const numericCount = row.filter(cell => cell && !isNaN(Number(cell.replace(/[^0-9.-]/g, '')))).length;
-  if (row.length > 2 && numericCount / row.length > 0.5) return false;
-  
-  return true;
-}
+export function processFileOrPasteContent(text: string, origin: string): { parsedItems: Partial<Lead>[], errors: string[] } {
+  try {
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l !== '');
+    const parsedItems: Partial<Lead>[] = [];
+    const errors: string[] = [];
 
-function processFileOrPasteContent(text: string, defaultOrigin: string): { parsedItems: Lead[], errors: string[] } {
-  const parsedItems: Lead[] = [];
-  const errors: string[] = [];
-  
-  if (!text.trim()) return { parsedItems, errors };
-  
-  const delimiter = detectDelimiter(text);
-  const rawLines = text.split(/\r?\n/).filter(line => line.trim().length > 0);
-  if (rawLines.length === 0) return { parsedItems, errors };
-  
-  const rows = rawLines.map(line => parseCSVLine(line, delimiter));
-  
-  const hasHeaders = isHeaderRow(rows[0]);
-  const headers = hasHeaders ? rows[0] : [];
-  const dataStartRow = hasHeaders ? 1 : 0;
-  
-  const mapping = {
-    name: -1,
-    email: -1,
-    phone: -1,
-    value: -1,
-    company: -1,
-    origin: -1,
-    notes: -1,
-    status: -1
-  };
-  
-  const numColumns = rows[0].length;
-  
-  // 1. Synonym matching on headers
-  if (hasHeaders) {
-    headers.forEach((hdr, idx) => {
-      const norm = normalizeString(hdr);
-      Object.entries(KEYWORDS).forEach(([field, synonyms]) => {
-        if (synonyms.some(syn => norm === syn || norm.includes(syn))) {
-          if (mapping[field as keyof typeof mapping] === -1) {
-            mapping[field as keyof typeof mapping] = idx;
+    if (lines.length === 0) {
+      return { parsedItems: [], errors: [] };
+    }
+
+    // Detect separator: Tab, Semicolon, or Comma
+    let separator = '\t';
+    const tabCount = (text.match(/\t/g) || []).length;
+    const semiCount = (text.match(/;/g) || []).length;
+    const commaCount = (text.match(/,/g) || []).length;
+
+    if (tabCount >= semiCount && tabCount >= commaCount) {
+      separator = '\t';
+    } else if (semiCount >= tabCount && semiCount >= commaCount) {
+      separator = ';';
+    } else if (commaCount >= tabCount) {
+      separator = ',';
+    }
+
+    const cleanCell = (str: string) => {
+      let val = str.trim();
+      if (val.startsWith('"') && val.endsWith('"')) {
+        val = val.slice(1, -1).trim();
+      }
+      return val;
+    };
+
+    const firstLine = lines[0];
+    const firstLinePartsRaw = splitCSVRow(firstLine, separator).map(p => cleanCell(p));
+    const firstLinePartsCleaned = firstLinePartsRaw.map(p => p.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
+
+    let nameIdx = -1;
+    let phoneIdx = -1;
+    let emailIdx = -1;
+    let statusIdx = -1;
+    let regionIdx = -1;
+    let incomeIdx = -1;
+    let valueIdx = -1;
+    let notesIdx = -1;
+    let originIdx = -1;
+    let propertyIdx = -1;
+    let objectionIdx = -1;
+    let genderIdx = -1;
+    let ageIdx = -1;
+    let cpfIdx = -1;
+    let birthIdx = -1;
+    let civilIdx = -1;
+    let fgtsIdx = -1;
+    let bacenIdx = -1;
+    let possuiIdx = -1;
+    let programaIdx = -1;
+
+    // Search for keywords (handles translation varieties seamlessly)
+    firstLinePartsCleaned.forEach((part, idx) => {
+      if (part.includes('nome') || part.includes('name') || part.includes('client') || part.includes('lead') || part.includes('contato') || part.includes('proponente')) {
+        if (nameIdx === -1) nameIdx = idx;
+      } else if (part.includes('telefone') || part.includes('phone') || part.includes('tel') || part.includes('celular') || part.includes('whatsapp') || part.includes('cel') || part.includes('numero')) {
+        if (phoneIdx === -1) phoneIdx = idx;
+      } else if (part.includes('email') || part.includes('e-mail') || part.includes('mail')) {
+        if (emailIdx === -1) emailIdx = idx;
+      } else if (part.includes('status') || part.includes('etapa') || part.includes('fase') || part.includes('situac')) {
+        if (statusIdx === -1) statusIdx = idx;
+      } else if (part.includes('regia') || part.includes('local') || part.includes('uf') || part.includes('zona') || part.includes('cidade') || part.includes('bairro')) {
+        if (regionIdx === -1) regionIdx = idx;
+      } else if (part.includes('renda') || part.includes('income') || part.includes('faturamento') || part.includes('salari')) {
+        if (incomeIdx === -1) incomeIdx = idx;
+      } else if (part.includes('valor') || part.includes('value') || part.includes('proposta') || part.includes('budget') || part.includes('credito') || part.includes('potencial') || part.includes('aprovado')) {
+        if (valueIdx === -1) valueIdx = idx;
+      } else if (part.includes('nota') || part.includes('coment') || part.includes('notes') || part.includes('obs')) {
+        if (notesIdx === -1) notesIdx = idx;
+      } else if (part.includes('origem') || part.includes('origin') || part.includes('canal')) {
+        if (originIdx === -1) originIdx = idx;
+      } else if (part.includes('empreendimento') || part.includes('projeto') || part.includes('imovel')) {
+        if (propertyIdx === -1) propertyIdx = idx;
+      } else if (part.includes('objec') || part.includes('motivo')) {
+        if (objectionIdx === -1) objectionIdx = idx;
+      } else if (part.includes('genero') || part.includes('sexo')) {
+        if (genderIdx === -1) genderIdx = idx;
+      } else if (part.includes('idade') || part.includes('faixa')) {
+        if (ageIdx === -1) ageIdx = idx;
+      } else if (part.includes('cpf')) {
+        if (cpfIdx === -1) cpfIdx = idx;
+      } else if (part.includes('nasc') || part.includes('birth')) {
+        if (birthIdx === -1) birthIdx = idx;
+      } else if (part.includes('civil') || part.includes('marital')) {
+        if (civilIdx === -1) civilIdx = idx;
+      } else if (part.includes('fgts')) {
+        if (fgtsIdx === -1) fgtsIdx = idx;
+      } else if (part.includes('bacen') || part.includes('restric')) {
+        if (bacenIdx === -1) bacenIdx = idx;
+      } else if (part.includes('possui')) {
+        if (possuiIdx === -1) possuiIdx = idx;
+      } else if (part.includes('programa')) {
+        if (programaIdx === -1) programaIdx = idx;
+      }
+    });
+
+    const hasHeader = nameIdx !== -1 || emailIdx !== -1 || phoneIdx !== -1;
+    let startIndex = 0;
+
+    if (hasHeader) {
+      startIndex = 1; // Seek rows from index 1 forward
+    } else {
+      // Dynamic smart guessing based on row format below
+    }
+
+    for (let i = startIndex; i < lines.length; i++) {
+      const line = lines[i];
+      const parts = splitCSVRow(line, separator).map(p => cleanCell(p));
+      
+      let name = '';
+      let email = '';
+      let phone = '';
+      let rawIncome = '';
+      let rawValue = '';
+      let statusValue = '';
+      let notesValue = '';
+      let leadOrigin = '';
+      let region = '';
+      let propertyInterest = '';
+      let objection = '';
+      let gender = '';
+      let ageBracket = '';
+      let cpf = '';
+      let birthDate = '';
+      let maritalStatus = '';
+      let fgtsSaldo = '';
+      let restricaoBacen = '';
+      let possuiImovel = '';
+      let programaDesejado = '';
+
+      if (hasHeader) {
+        name = nameIdx !== -1 && nameIdx < parts.length ? parts[nameIdx] : '';
+        email = emailIdx !== -1 && emailIdx < parts.length ? parts[emailIdx] : '';
+        phone = phoneIdx !== -1 && phoneIdx < parts.length ? parts[phoneIdx] : '';
+        rawIncome = incomeIdx !== -1 && incomeIdx < parts.length ? parts[incomeIdx] : '';
+        rawValue = valueIdx !== -1 && valueIdx < parts.length ? parts[valueIdx] : '';
+        statusValue = statusIdx !== -1 && statusIdx < parts.length ? parts[statusIdx] : '';
+        notesValue = notesIdx !== -1 && notesIdx < parts.length ? parts[notesIdx] : '';
+        leadOrigin = originIdx !== -1 && originIdx < parts.length ? parts[originIdx] : '';
+        region = regionIdx !== -1 && regionIdx < parts.length ? parts[regionIdx] : '';
+        propertyInterest = propertyIdx !== -1 && propertyIdx < parts.length ? parts[propertyIdx] : '';
+        objection = objectionIdx !== -1 && objectionIdx < parts.length ? parts[objectionIdx] : '';
+        gender = genderIdx !== -1 && genderIdx < parts.length ? parts[genderIdx] : '';
+        ageBracket = ageIdx !== -1 && ageIdx < parts.length ? parts[ageIdx] : '';
+        cpf = cpfIdx !== -1 && cpfIdx < parts.length ? parts[cpfIdx] : '';
+        birthDate = birthIdx !== -1 && birthIdx < parts.length ? parts[birthIdx] : '';
+        maritalStatus = civilIdx !== -1 && civilIdx < parts.length ? parts[civilIdx] : '';
+        fgtsSaldo = fgtsIdx !== -1 && fgtsIdx < parts.length ? parts[fgtsIdx] : '';
+        restricaoBacen = bacenIdx !== -1 && bacenIdx < parts.length ? parts[bacenIdx] : '';
+        possuiImovel = possuiIdx !== -1 && possuiIdx < parts.length ? parts[possuiIdx] : '';
+        programaDesejado = programaIdx !== -1 && programaIdx < parts.length ? parts[programaIdx] : '';
+      } else {
+        // Smart guessing based on value patterns for headerless content
+        parts.forEach(part => {
+          if (!part || part.toLowerCase() === 'não informado' || part.toLowerCase() === 'nao informado') return;
+          if (part.includes('@')) {
+            email = part;
+          } else if (/^\+?[\d\s()-.]{8,20}$/.test(part) && (part.replace(/\D/g, '').length >= 8)) {
+            phone = part;
+          } else if (/^[0-9.,$-]{4,12}$/.test(part) && !isNaN(parseFloat(part.replace(/[^\d.-]/g, '')))) {
+            const val = parseFloat(part.replace(/[^\d.-]/g, ''));
+            if (val > 10000) {
+              rawValue = part;
+            } else {
+              rawIncome = part;
+            }
+          } else if (part.length > 3 && name === '') {
+            name = part;
+          } else {
+            notesValue = notesValue ? `${notesValue} | ${part}` : part;
+          }
+        });
+      }
+
+      // Failsafe Regex Extractor: if 'name' contains typical email/phone/value/income patterns, separate them cleanly.
+      // Helps solve cases where the entire row text is accidentally digested inside the name column!
+      if (name) {
+        // 1. Extract email if present
+        const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,10})/;
+        const emailMatch = name.match(emailRegex);
+        if (emailMatch) {
+          if (!email) email = emailMatch[1];
+          name = name.replace(emailRegex, '').trim();
+        }
+
+        // 2. Extract phone number if present
+        const phoneRegex = /(\(?\+?\d{1,3}\)?\s?\(?\d{2,3}\)?\s?\d{4,5}[-\s]?\d{4})/;
+        const phoneMatch = name.match(phoneRegex);
+        if (phoneMatch) {
+          if (!phone) phone = phoneMatch[1];
+          name = name.replace(phoneRegex, '').trim();
+        }
+
+        // 3. Extract CPF
+        const cpfRegex = /(\d{3}\.\d{3}\.\d{3}-\d{2})/;
+        const cpfMatch = name.match(cpfRegex);
+        if (cpfMatch) {
+          if (!cpf) cpf = cpfMatch[1];
+          name = name.replace(cpfRegex, '').trim();
+        }
+
+        // 4. Extract monetary value/budget (e.g. R$ 250.000 or R$250000)
+        const valueRegex = /(R\$?\s?\d{1,3}(\.\d{3})*(,\d{2})?)/i;
+        const valueMatch = name.match(valueRegex);
+        if (valueMatch) {
+          const rawV = valueMatch[1];
+          const numericPart = parseFloat(rawV.replace(/[^\d]/g, ''));
+          if (numericPart > 20000) {
+            if (!rawValue) rawValue = rawV;
+          } else if (numericPart > 0) {
+            if (!rawIncome) rawIncome = rawV;
+          }
+          name = name.replace(valueRegex, '').trim();
+        }
+
+        // 5. Standalone budget/income numbers
+        const numericRegex = /\b(\d{5,8})\b/;
+        const numericMatch = name.match(numericRegex);
+        if (numericMatch) {
+          const valNum = parseInt(numericMatch[1], 10);
+          if (valNum >= 25000) {
+            if (!rawValue) rawValue = String(valNum);
+            name = name.replace(numericRegex, '').trim();
+          } else if (valNum > 900) {
+            if (!rawIncome) rawIncome = String(valNum);
+            name = name.replace(numericRegex, '').trim();
           }
         }
-      });
-    });
-  }
-  
-  // 2. Content-based matching for unmapped values
-  const maxScanRows = Math.min(rows.length, dataStartRow + 10);
-  const dataRows = rows.slice(dataStartRow, maxScanRows);
-  
-  if (dataRows.length > 0) {
-    for (let colIdx = 0; colIdx < numColumns; colIdx++) {
-      let emailMatches = 0;
-      let phoneMatches = 0;
-      let valueMatches = 0;
-      let statusMatches = 0;
-      
-      dataRows.forEach(row => {
-        const val = (row[colIdx] || '').trim();
-        if (!val) return;
-        
-        if (val.includes('@') && val.split('@')[1]?.includes('.')) {
-          emailMatches++;
-        }
-        
-        const digits = val.replace(/\D/g, '');
-        if (digits.length >= 8 && digits.length <= 15 && /^[\d\s+\-()]{7,22}$/.test(val)) {
-          phoneMatches++;
-        }
-        
-        const rawNum = val.replace(/R\$\s?|\$\s?/i, '').replace(/[^0-9,-]/g, '').replace(',', '.');
-        const numberVal = Number(rawNum);
-        if (!isNaN(numberVal) && numberVal > 1000) {
-          valueMatches++;
-        }
-        
-        const normVal = normalizeString(val);
-        if (['novo', 'contato', 'proposta', 'fechado', 'perdido', 'ganho', 'lost', 'won', 'new', 'proposal'].includes(normVal)) {
-          statusMatches++;
-        }
-      });
-      
-      const rate = (count: number) => count / dataRows.length;
-      
-      if (rate(emailMatches) > 0.4 && mapping.email === -1) mapping.email = colIdx;
-      if (rate(phoneMatches) > 0.4 && mapping.phone === -1) mapping.phone = colIdx;
-      if (rate(valueMatches) > 0.4 && mapping.value === -1) mapping.value = colIdx;
-      if (rate(statusMatches) > 0.4 && mapping.status === -1) mapping.status = colIdx;
-    }
-  }
-  
-  // Final fallback mappings
-  if (mapping.name === -1) {
-    for (let colIdx = 0; colIdx < numColumns; colIdx++) {
-      if (colIdx !== mapping.email && colIdx !== mapping.phone && colIdx !== mapping.value) {
-        mapping.name = colIdx;
-        break;
-      }
-    }
-    if (mapping.name === -1) mapping.name = 0;
-  }
-  
-  // Parse rows and generate items
-  for (let i = dataStartRow; i < rows.length; i++) {
-    const row = rows[i];
-    if (row.length === 0 || (row.length === 1 && !row[0])) continue;
-    
-    const rawName = mapping.name !== -1 ? row[mapping.name] : '';
-    const name = (rawName || '').trim();
-    if (!name) continue;
-    
-    // Check if duplicate of header
-    if (hasHeaders && i > dataStartRow && normalizeString(name) === normalizeString(rows[0][mapping.name])) {
-      continue;
-    }
-    
-    const email = mapping.email !== -1 ? (row[mapping.email] || '').trim() : '';
-    const phone = mapping.phone !== -1 ? (row[mapping.phone] || '').trim() : '';
-    
-    const rawVal = mapping.value !== -1 ? row[mapping.value] : '';
-    let value = 0;
-    if (rawVal) {
-      let valStr = rawVal.replace(/R\$\s?|\$\s?/i, '').trim();
-      if (valStr.includes(',') && valStr.includes('.')) {
-        const lastComma = valStr.lastIndexOf(',');
-        const lastDot = valStr.lastIndexOf('.');
-        if (lastComma > lastDot) {
-          valStr = valStr.replace(/\./g, '').replace(',', '.');
-        } else {
-          valStr = valStr.replace(/,/g, '');
-        }
-      } else if (valStr.includes(',')) {
-        const parts = valStr.split(',');
-        if (parts[parts.length - 1].length <= 2) {
-          valStr = valStr.replace(',', '.');
-        } else {
-          valStr = valStr.replace(/,/g, '');
-        }
-      }
-      value = Number(valStr.replace(/[^0-9.-]/g, '')) || 0;
-    }
-    
-    const company = mapping.company !== -1 ? (row[mapping.company] || '').trim() : '';
-    const origin = mapping.origin !== -1 ? (row[mapping.origin] || '').trim() : defaultOrigin;
-    const notes = mapping.notes !== -1 ? (row[mapping.notes] || '').trim() : 'Importado via Planilha';
-    
-    const rawStatus = mapping.status !== -1 ? (row[mapping.status] || '').trim() : 'novo';
-    let status: LeadStatus = 'novo';
-    const normStatus = normalizeString(rawStatus);
-    if (normStatus === 'novo' || normStatus === 'new' || normStatus === 'lead') status = 'novo';
-    else if (normStatus === 'emcontato' || normStatus === 'contato' || normStatus === 'contact' || normStatus === 'abordado' || normStatus === 'em_contato') status = 'em_contato';
-    else if (normStatus === 'proposta' || normStatus === 'proposal' || normStatus === 'negociacao') status = 'proposta';
-    else if (normStatus === 'fechado' || normStatus === 'ganho' || normStatus === 'won' || normStatus === 'fechando' || normStatus === 'sucesso') status = 'fechado';
-    else if (normStatus === 'perdido' || normStatus === 'lost' || normStatus === 'arquivado') status = 'perdido';
-    
-    parsedItems.push({
-      id: `lead-bulk-${Date.now()}-${i}-${Math.floor(Math.random() * 1000)}`,
-      name,
-      email: email || '',
-      phone: phone || '',
-      company,
-      value: value || 0,
-      status,
-      notes,
-      origin,
-      createdAt: new Date().toISOString().slice(0, 10)
-    });
-  }
-  
-  return { parsedItems, errors };
-}
 
-const getDaysSinceContact = (lastContactAt?: string): number | null => {
-  if (!lastContactAt) return null;
-  const cleanStr = lastContactAt.slice(0, 10);
-  const parts = cleanStr.split('-');
-  if (parts.length !== 3) return null;
-  const year = parseInt(parts[0], 10);
-  const month = parseInt(parts[1], 10) - 1;
-  const day = parseInt(parts[2], 10);
-  
-  const contactDate = new Date(year, month, day);
-  const today = new Date();
-  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  
-  const diffTime = todayMidnight.getTime() - contactDate.getTime();
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays;
-};
+        // Clean up remaining punctuation on name edges
+        name = name.replace(/^[\s,;:\-\/\\\[\]{}()]+/g, '').replace(/[\s,;:\-\/\\\[\]{}()]+$/g, '').trim();
+        
+        if (!name && email) {
+          name = email.split('@')[0];
+          name = name.charAt(0).toUpperCase() + name.slice(1);
+        }
+      }
+
+      // Cleanup filler values like "Não informado" to keep fields purely blank (editable)
+      const isNotFilled = (val: string) => {
+        const lower = val.toLowerCase().trim();
+        return !val || lower === 'nao informado' || lower === 'não informado' || lower === 'null' || lower === 'undefined' || lower === '-';
+      };
+
+      if (isNotFilled(name)) name = '';
+      if (isNotFilled(email)) email = '';
+      if (isNotFilled(phone)) phone = '';
+      if (isNotFilled(region)) region = '';
+      if (isNotFilled(propertyInterest)) propertyInterest = '';
+      if (isNotFilled(objection)) objection = '';
+      if (isNotFilled(gender)) gender = '';
+      if (isNotFilled(ageBracket)) ageBracket = '';
+      if (isNotFilled(cpf)) cpf = '';
+      if (isNotFilled(birthDate)) birthDate = '';
+      if (isNotFilled(maritalStatus)) maritalStatus = '';
+      if (isNotFilled(restricaoBacen)) restricaoBacen = '';
+      if (isNotFilled(possuiImovel)) possuiImovel = '';
+      if (isNotFilled(programaDesejado)) programaDesejado = '';
+
+      // Skip row if completely empty/unidentified
+      if (!name && !email && !phone) {
+        continue;
+      }
+
+      let parsedIncome: number | undefined = undefined;
+      if (rawIncome && !isNotFilled(rawIncome)) {
+        const cleanReg = rawIncome.replace(/[^\d.-]/g, '');
+        if (cleanReg) {
+          const val = parseFloat(cleanReg);
+          if (!isNaN(val)) parsedIncome = val;
+        }
+      }
+
+      let parsedValue = 0;
+      if (rawValue && !isNotFilled(rawValue)) {
+        const cleanValReg = rawValue.replace(/[^\d.-]/g, '');
+        if (cleanValReg) {
+          const val = parseFloat(cleanValReg);
+          if (!isNaN(val)) parsedValue = val;
+        }
+      }
+
+      let parsedFgts: number | undefined = undefined;
+      if (fgtsSaldo && !isNotFilled(fgtsSaldo)) {
+        const cleanReg = fgtsSaldo.replace(/[^\d.-]/g, '');
+        if (cleanReg) {
+          const val = parseFloat(cleanReg);
+          if (!isNaN(val)) parsedFgts = val;
+        }
+      }
+
+      // Normalize status and stages
+      let finalStatus = 'novo';
+      let finalStage = 'abordagem';
+      if (statusValue && !isNotFilled(statusValue)) {
+        const sv = statusValue.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (sv.includes('ganha') || sv.includes('fechado') || sv.includes('contrato')) {
+          finalStatus = 'ativo';
+          finalStage = 'fechamento';
+        } else if (sv.includes('perdid') || sv.includes('lost') || sv.includes('distrat') || sv.includes('arquiv') || sv.includes('recic')) {
+          finalStatus = 'arquivado';
+          finalStage = 'reciclagem';
+        } else if (sv.includes('negocia')) {
+          finalStatus = 'ativo';
+          finalStage = 'proposta';
+        } else if (sv.includes('analise') || sv.includes('bancari')) {
+          finalStatus = 'ativo';
+          finalStage = 'analise_perfil';
+        } else if (sv.includes('pasta') || sv.includes('montagem') || sv.includes('triagem')) {
+          finalStatus = 'ativo';
+          finalStage = 'triagem';
+        } else if (sv.includes('ativo')) {
+          finalStatus = 'ativo';
+          finalStage = 'abordagem';
+        }
+      }
+
+      // Handle checkbox checklist
+      const hasAprovVal = rawValue && !isNotFilled(rawValue) && rawValue.toLowerCase() !== 'nao informado' && rawValue.toLowerCase() !== 'não informado';
+      const checklist = {
+        interesse: true,
+        visitou: finalStage === 'fechamento' || finalStage === 'proposta',
+        aprov: hasAprovVal ? true : undefined
+      };
+
+      // Handle Marital Status types
+      let normalizedMarital: Lead['maritalStatus'] = undefined;
+      if (maritalStatus) {
+        const ms = maritalStatus.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (ms.includes('solteir')) normalizedMarital = 'Solteiro';
+        else if (ms.includes('casad')) normalizedMarital = 'Casado';
+        else if (ms.includes('estavel')) normalizedMarital = 'Uniao estavel';
+        else if (ms.includes('divorci')) normalizedMarital = 'Divorciado';
+        else if (ms.includes('viuv')) normalizedMarital = 'Viuvo';
+      }
+
+      // Handle Gender types
+      let normalizedGender: Lead['gender'] = undefined;
+      if (gender) {
+        const g = gender.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (g.startsWith('h') || g.includes('homem') || g.includes('masc')) normalizedGender = 'Homem';
+        else if (g.startsWith('m') || g.includes('mulher') || g.includes('fem')) normalizedGender = 'Mulher';
+        else if (g.startsWith('o') || g.includes('outro')) normalizedGender = 'Outro';
+        else normalizedGender = 'Prefiro nao informar';
+      }
+
+      // Handle Age Bracket types
+      let normalizedAge: Lead['ageBracket'] = undefined;
+      if (ageBracket) {
+        const a = ageBracket.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (a.includes('jovem') || a.includes('novo')) normalizedAge = 'Jovem';
+        else if (a.includes('meia') || a.includes('medio')) normalizedAge = 'Meia idade';
+        else if (a.includes('idoso') || a.includes('velho') || a.includes('aposent')) normalizedAge = 'Idoso';
+      }
+
+      // Handle Programa Desejado types
+      let normalizedPrograma: Lead['programaDesejado'] = undefined;
+      if (programaDesejado) {
+        const p = programaDesejado.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (p.includes('casa') || p.includes('vida') || p.includes('mcmv')) normalizedPrograma = 'Minha Casa Minha Vida';
+        else if (p.includes('sbpe')) normalizedPrograma = 'SBPE';
+        else normalizedPrograma = 'Indiferente';
+      }
+
+      parsedItems.push({
+        name,
+        email,
+        phone,
+        familyIncome: parsedIncome,
+        value: parsedValue,
+        status: finalStatus,
+        stage: finalStage,
+        origin: leadOrigin || origin,
+        notes: notesValue || '',
+        region: region || undefined,
+        propertyInterest: propertyInterest || undefined,
+        objection: objection || undefined,
+        gender: normalizedGender,
+        ageBracket: normalizedAge,
+        cpf: cpf || undefined,
+        birthDate: birthDate || undefined,
+        maritalStatus: normalizedMarital,
+        fgtsSaldo: parsedFgts,
+        restricaoBacen: restricaoBacen ? (restricaoBacen.toLowerCase().includes('sim') || restricaoBacen.toLowerCase().includes('s') ? 'Sim' : 'Não') : undefined,
+        possuiImovel: possuiImovel ? (possuiImovel.toLowerCase().includes('sim') || possuiImovel.toLowerCase().includes('s') ? 'Sim' : 'Não') as any : undefined,
+        programaDesejado: normalizedPrograma,
+        checklist
+      });
+    }
+
+    return { parsedItems, errors };
+  } catch (err: any) {
+    return { parsedItems: [], errors: [err.message] };
+  }
+}
 
 export default function LeadList({
   leads,
+  tableHeaderComponent,
   onOpenLeadDetails,
   onOpenEditModal,
   onDeleteLead,
   onOpenCreateModal,
   onMoveLead,
+  onNavigateToFollowUp,
   onAddBulkLeads,
   onDeleteMultipleLeads,
   onMoveMultipleLeads,
   onUpdateMultipleLeads,
+  onUpdateLeadField,
   onRequestConfirm,
   awardXP,
   addNotification,
@@ -425,13 +650,32 @@ export default function LeadList({
   setOriginFilter: propsSetOriginFilter,
   initialLetterFilter: propsInitialLetterFilter,
   setInitialLetterFilter: propsSetInitialLetterFilter,
+  regionFilter,
+  profileFilter,
+  stageFilter,
+  objectionFilter,
+  programaDesejadoFilter,
+  restricaoBacenFilter,
+  genderFilter,
+  familyIncomeFilter,
+  incomeTypeFilter,
+  deliveryExpectedFilter,
   externalShowImporter,
   setExternalShowImporter,
   externalShowPlanner,
   setExternalShowPlanner,
-  onlyImporter = false
+  onlyImporter = false,
+  onOpenAIAssistant,
+  onOpenRuleEngine,
+  hideRowActionButtons = false,
+  isTodosView = false,
+  isActiveLeadsView = false,
+  isCompactColumns = false,
+  maxRows,
+  theme = 'escuro'
 }: LeadListProps) {
   const localSearchState = useState('');
+  const [hideFictitiousWarning, setHideFictitiousWarning] = useState(false);
   const searchTerm = propsSearchTerm !== undefined ? propsSearchTerm : localSearchState[0];
   const setSearchTerm = propsSetSearchTerm || localSearchState[1];
 
@@ -454,8 +698,8 @@ export default function LeadList({
     } catch (_) {}
     return INITIAL_ACCESSIBILITY_SETTINGS;
   });
-  const [sortBy, setSortBy] = useState<'name' | 'value' | 'createdAt'>('name');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [sortBy, setSortBy] = useState<'name' | 'value' | 'createdAt'>('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // Multi-selection states
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
@@ -494,6 +738,7 @@ export default function LeadList({
   const [plannerAverageValue, setPlannerAverageValue] = useState<number>(275000);
   const [plannerCustomNiches, setPlannerCustomNiches] = useState<string>('Leads do Facebook Ads interessados em parcelamento facilitado Zona Leste');
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+  const [generatingScriptLeadId, setGeneratingScriptLeadId] = useState<string | null>(null);
   const [generatedPlanMarkdown, setGeneratedPlanMarkdown] = useState<string>('');
   const [schedulingProgress, setSchedulingProgress] = useState<'idle' | 'scheduling' | 'done'>('idle');
 
@@ -501,8 +746,8 @@ export default function LeadList({
     {
       id: 'template-boasvindas',
       title: '👋 Boas-vindas & Taxas Habitacionais',
-      subject: 'Assessoria de Crédito cicloCRED',
-      body: 'Olá, {{nome}}! Aqui é do atendimento cicloCRED. Identifiquei seu cadastro e gostaria de te apresentar as taxas especiais de financiamento habitacional da Caixa e bancos privados. Conseguimos financiar até 80% do valor do imóvel. Vamos simular um orçamento aproximado para você?'
+      subject: 'Assessoria de Crédito Habitacional',
+      body: 'Olá, {{nome}}! Aqui é do atendimento especializado. Identifiquei seu cadastro e gostaria de te apresentar as taxas especiais de financiamento habitacional da Caixa e bancos privados. Conseguimos financiar até 80% do valor do imóvel. Vamos simular um orçamento aproximado para você?'
     },
     {
       id: 'template-mcmv',
@@ -520,7 +765,7 @@ export default function LeadList({
       id: 'template-cartaocred',
       title: '💳 Crédito Facilitado / FGTS Habitação',
       subject: 'Redução de Juros e Amortização FGTS',
-      body: 'Prezado(a) {{nome}}, sabias que é possível usar 100% do saldo do seu FGTS para amortizar ou pagar a entrada do seu novo imóvel? Com a assessoria de crédito da cicloCRED, facilitamos toda a burocracia sem custos de intermediação. Retorne para que possamos fazer seu estudo prévio.'
+      body: 'Prezado(a) {{nome}}, sabias que é possível usar 100% do saldo do seu FGTS para amortizar ou pagar a entrada do seu novo imóvel? Com a assessoria de crédito credenciada, facilitamos toda a burocracia sem custos de intermediação. Retorne para que possamos fazer seu estudo prévio.'
     },
     {
       id: 'template-custom',
@@ -536,7 +781,7 @@ export default function LeadList({
     resolved = resolved.replace(/\{\{email\}\}/gi, lead.email || 'não informado');
     resolved = resolved.replace(/\{\{telefone\}\}/gi, lead.phone || 'não informado');
     resolved = resolved.replace(/\{\{valor\}\}/gi, lead.value ? lead.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }) : 'sob consulta');
-    resolved = resolved.replace(/\{\{empresa\}\}/gi, lead.company || 'cicloCRED');
+    resolved = resolved.replace(/\{\{empresa\}\}/gi, lead.company || 'Assessoria');
     resolved = resolved.replace(/\{\{origem\}\}/gi, lead.origin || 'Portal Digital');
     return resolved;
   };
@@ -575,21 +820,11 @@ export default function LeadList({
     const cleanPhone = (leadItem.phone || '').replace(/[^0-9]/g, '');
     const defaultPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
     
-    const waLink = campaignWhatsappChannel === 'app'
-      ? `whatsapp://send?phone=${defaultPhone}&text=${encodeURIComponent(resolvedText)}`
-      : `https://api.whatsapp.com/send?phone=${defaultPhone}&text=${encodeURIComponent(resolvedText)}`;
+    const waLink = `whatsapp://send?phone=${defaultPhone}&text=${encodeURIComponent(resolvedText)}`;
 
     if (leadItem.phone) {
       try {
-        if (campaignWhatsappChannel === 'app') {
-          const anchor = document.createElement('a');
-          anchor.href = waLink;
-          document.body.appendChild(anchor);
-          anchor.click();
-          document.body.removeChild(anchor);
-        } else {
-          window.open(waLink, '_blank');
-        }
+        window.location.href = waLink;
         
         setBatchLog(prev => [
           `[${new Date().toLocaleTimeString()}] ✅ Disparado para ${leadItem.name} (${leadItem.phone}) ✔️`,
@@ -727,28 +962,234 @@ export default function LeadList({
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [isImportSuccess, setIsImportSuccess] = useState(false);
 
-  const origins = Array.from(new Set(leads.map(l => l.origin)));
+  // Advanced Multi-Source Importer state values
+  const [importSource, setImportSource] = useState<'local' | 'paste' | 'g_sheets'>('local');
+  const [googleToken, setGoogleToken] = useState<string | null>(null);
+  const [gSheetsList, setGSheetsList] = useState<any[]>([]);
+  const [isLoadingGSheets, setIsLoadingGSheets] = useState(false);
+  const [selectedGSheetId, setSelectedGSheetId] = useState('');
+  const [gSheetUrlInput, setGSheetUrlInput] = useState('');
 
-  // File Import Processor
-  const handleFileImport = (file: File) => {
-    setImportedFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      if (text) {
-        setIsImportSuccess(false);
-        setImportErrors([]);
-        
-        const { parsedItems, errors } = processFileOrPasteContent(text, 'Planilha Importada');
-        setImportPreview(parsedItems);
-        setImportErrors(errors);
-        
-        if (parsedItems.length > 0) {
-          setRawPasteData(text);
-        }
+  // Proclaim and look up Google Workspace token changes
+  useEffect(() => {
+    const handleCheckToken = () => {
+      const user = auth.currentUser;
+      if (user) {
+        const t = localStorage.getItem(`ciclocred_workspace_token_${user.uid}`);
+        setGoogleToken(t);
+      } else {
+        setGoogleToken(null);
       }
     };
-    reader.readAsText(file);
+    
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (user) {
+        const t = localStorage.getItem(`ciclocred_workspace_token_${user.uid}`);
+        setGoogleToken(t);
+      } else {
+        setGoogleToken(null);
+      }
+    });
+
+    handleCheckToken();
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch lists of spreadsheets from user Google Drive
+  const handleFetchGoogleSheets = async () => {
+    if (!googleToken) return;
+    setIsLoadingGSheets(true);
+    setImportErrors([]);
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=mimeType = 'application/vnd.google-apps.spreadsheet'&pageSize=15&fields=files(id, name, modifiedTime)`,
+        {
+          headers: { Authorization: `Bearer ${googleToken}` }
+        }
+      );
+      if (res.status === 401) {
+        setGoogleToken(null);
+        setImportErrors(['Sua sessão do Google Workspace expirou. Reative-a no painel do Google Workspace.']);
+        return;
+      }
+      const data = await res.json();
+      setGSheetsList(data.files || []);
+      if (addNotification) {
+        addNotification('📊 GOOGLE SHEETS', `Encontradas ${data.files?.length || 0} planilhas no seu Google Drive.`, 'success');
+      }
+    } catch (err: any) {
+      setImportErrors([`Erro ao ler planilhas do Google Drive: ${err.message}`]);
+    } finally {
+      setIsLoadingGSheets(false);
+    }
+  };
+
+  // Preview leads directly from a given Google Sheet ID (Private OAuth or Public Web csv format fallback)
+  const handleLoadLeadsFromGoogleSheet = async (sheetId: string) => {
+    setSelectedGSheetId(sheetId);
+    setIsLoadingGSheets(true);
+    setImportPreview([]);
+    setImportErrors([]);
+
+    // 1. If we have a Google Workspace OAuth Token, try authenticating
+    if (googleToken) {
+      try {
+        const res = await fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/A1:I100`,
+          {
+            headers: { Authorization: `Bearer ${googleToken}` }
+          }
+        );
+
+        if (res.ok) {
+          const data = await res.json();
+          const rows = data.values || [];
+
+          if (rows.length >= 2) {
+            // Convert rows into tab-separated values to digest through same core processFileOrPasteContent
+            const tsvLines = rows.map((row: any[]) => {
+              return row.map(cell => {
+                if (cell === null || cell === undefined) return '';
+                return String(cell).replace(/\t/g, ' ').replace(/\r|\n/g, ' ');
+              }).join('\t');
+            }).filter((line: string) => line.trim() !== '').join('\n');
+
+            const { parsedItems, errors } = processFileOrPasteContent(tsvLines, 'Google Sheets Privado');
+            if (parsedItems.length > 0) {
+              setImportPreview(parsedItems);
+              setImportErrors(errors);
+              if (addNotification) {
+                addNotification(
+                  '📥 CONVERSOR GOOGLE SHEETS',
+                  `Mapeados ${parsedItems.length} leads da planilha privada do Drive!`,
+                  'success'
+                );
+              }
+              setIsLoadingGSheets(false);
+              return;
+            }
+          }
+        }
+      } catch (err) {
+        // Fallback silently to public fetch attempt
+        console.warn('OAuth Sheets fetch failed, rolling over to public CSV viewer fallback...', err);
+      }
+    }
+
+    // 2. PUBLIC SPREADSHEET READER (Supports public Google Sheets instant load without authentication tokens)
+    try {
+      const res = await fetch(
+        `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`
+      );
+
+      if (!res.ok) {
+        throw new Error('Planilha não encontrada. Certifique-se de que o ID ou o link esteja correto e as permissões estejam corretas.');
+      }
+
+      const text = await res.text();
+
+      // Check if we received HTML (meaning a Google login page) instead of CSV data
+      if (text.includes('id="signin-container"') || text.includes('ServiceLogin') || text.includes('<!DOCTYPE html>')) {
+        throw new Error('Esta planilha é Privada. Por favor, acesse o Sheets, clique em Compartilhar e mude para "Qualquer pessoa com o link como Leitor", ou faça login com sua conta no Google Workspace.');
+      }
+
+      const { parsedItems, errors } = processFileOrPasteContent(text, 'Google Sheets Público');
+      if (parsedItems.length > 0) {
+        setImportPreview(parsedItems);
+        setImportErrors(errors);
+        if (addNotification) {
+          addNotification(
+            '🌐 PLANILHA COMPARTILHADA',
+            `Sincronizados ${parsedItems.length} leads de planilha pública de forma instantânea!`,
+            'success'
+          );
+        }
+      } else {
+        setImportErrors(['Sem registros legíveis. Certifique-se de conter colunas fundamentais como "Nome", "Telefone" ou similar.']);
+      }
+    } catch (err: any) {
+      setImportErrors([
+        `Falha ao importar: ${err.message || err}. Dica: certifique-se de que a planilha foi configurada para ser visível a Qualquer Pessoa Com o Link.`
+      ]);
+    } finally {
+      setIsLoadingGSheets(false);
+    }
+  };
+
+  // Extract Sheet ID and read leads by Sheet URL
+  const handleLoadGoogleSheetByUrl = async () => {
+    if (!gSheetUrlInput.trim()) return;
+    const match = gSheetUrlInput.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    if (!match || !match[1]) {
+      setImportErrors(['URL de planilha Google Sheets inválida. Forneça o link completo ou o ID da planilha.']);
+      return;
+    }
+    const spreadsheetId = match[1];
+    await handleLoadLeadsFromGoogleSheet(spreadsheetId);
+  };
+
+  const origins = Array.from(new Set(leads.map(l => l.origin)));
+
+  // File Import Processor (Excel .xlsx/.xls, CSV, TXT, TSV)
+  const handleFileImport = (file: File) => {
+    setImportedFileName(file.name);
+    setIsImportSuccess(false);
+    setImportErrors([]);
+    
+    if (file.name.endsWith('.pdf') || file.name.endsWith('.docx')) {
+      alert("Módulo OCR Simulado: Documento carregado. Extraindo informações financeiras para tabela de Leads...");
+      // Simulate extraction of 2 leads for demo backend limits:
+      const fakeLeads: Omit<Lead, "id">[] = [
+        {name: "Lead Faturamento (Extraído DOC)", email: "doc1@pdf.com", phone: "11999990000", value: 250000, status: "novo", origin: "Importação OCR", fluxoId: "financiamento", createdAt: new Date().toISOString(), tags: ["pdf", "ocr"], notes: ""},
+        {name: "Lead Portabilidade (Extraído DOC)", email: "doc2@pdf.com", phone: "11988880000", value: 450000, status: "novo", origin: "Importação OCR", fluxoId: "portabilidade", createdAt: new Date().toISOString(), tags: ["docs", "ocr"], notes: ""}
+      ];
+      setImportPreview(fakeLeads as Lead[]);
+      return;
+    }
+
+    const reader = new FileReader();
+
+    if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          
+          const jsonRows = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1 });
+          if (jsonRows.length < 2) {
+            setImportErrors(['Planilha Excel sem dados suficientes. Requer pelo menos cabeçalho e 1 registro.']);
+            return;
+          }
+
+          const tsvLines = jsonRows.map((row: any) => {
+            if (!Array.isArray(row)) return '';
+            return row.map(cell => {
+              if (cell === null || cell === undefined) return '';
+              return String(cell).replace(/\t/g, ' ').replace(/\r|\n/g, ' ');
+            }).join('\t');
+          }).filter(line => line.trim() !== '').join('\n');
+
+          const { parsedItems, errors } = processFileOrPasteContent(tsvLines, 'Planilha Excel Local');
+          setImportPreview(parsedItems);
+          setImportErrors(errors);
+        } catch (excelErr: any) {
+          setImportErrors([`Erro na leitura do arquivo Excel: ${excelErr.message || excelErr}`]);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      reader.onload = (e) => {
+        const text = e.target?.result as string;
+        if (text) {
+          const { parsedItems, errors } = processFileOrPasteContent(text, 'Planilha Importada');
+          setImportPreview(parsedItems);
+          setImportErrors(errors);
+        }
+      };
+      reader.readAsText(file);
+    }
   };
 
   // Bulk Paste Excel/CSV parser
@@ -766,7 +1207,7 @@ export default function LeadList({
   const runSimulationPortability = (fileName: string, presetLead?: any) => {
     setIsSimulatingExtraction(true);
     setSimulationProgress(0);
-    setSimulationLogs([`📡 [CONNECTED] Inicializando Gateway de Portabilidade cicloCRED...`]);
+    setSimulationLogs([`📡 [CONNECTED] Inicializando Gateway de Portabilidade do Sistema...`]);
     setExtractedSimulationLead(null);
     
     // Step by step extraction simulation
@@ -775,7 +1216,7 @@ export default function LeadList({
       { prg: 35, log: `🔍 [ANALYZING] Escaneando metadados habitacionais e tabelas de simulação de fomento Caixa...` },
       { prg: 55, log: `🔑 [PARSING] Mapeando chaves do formulário habitacional Cury e subsídios MCMV...` },
       { prg: 75, log: `👤 [FOUND] Proponente localizado! Extraindo dados pessoais e renda líquida auferida...` },
-      { prg: 90, log: `⚙️ [AUTOMATION] Cruzando com heurísticas de elegibilidade cicloCRED & Banco de Imóveis...` },
+      { prg: 90, log: `⚙️ [AUTOMATION] Cruzando com heurísticas de elegibilidade do sistema & Banco de Imóveis...` },
       { prg: 100, log: `🚀 [CRM_SYNC] Portabilidade concluída! Ficha cadastral pré-preenchida com inteligência preditiva.` }
     ];
     
@@ -798,7 +1239,7 @@ export default function LeadList({
           value: 315000,
           familyIncome: 4350,
           origin: 'Gateway Simulação Local',
-          notes: 'Ficha portada via Portal de Portabilidade cicloCRED. Proponente possui interesse direto no Cury Eko Guarulhos. Financiamento pré-aprovado Caixa Econômica de 80% do valor.'
+          notes: 'Ficha portada via Portal de Portabilidade de Crédito. Proponente possui interesse direto no Cury Eko Guarulhos. Financiamento pré-aprovado Caixa Econômica de 80% do valor.'
         };
         setExtractedSimulationLead(details);
         if (triggerSensoryFeedback && accSettings) {
@@ -814,13 +1255,24 @@ export default function LeadList({
       const cleanPhone = (item.phone || '').trim();
       const isDummy = isFictitiousPhone(cleanPhone);
       if (isDummy) {
-        const { extractedPhone, cleanedEmail } = extractPhoneFromEmail(item.email || '');
+        let { extractedPhone, cleanedText: cleanedEmail } = extractPhoneFromString(item.email || '');
+        let cleanedName = item.name;
+        
+        if (!extractedPhone && item.name) {
+          const res = extractPhoneFromString(item.name);
+          if (res.extractedPhone) {
+            extractedPhone = res.extractedPhone;
+            cleanedName = res.cleanedText; // Name without the phone number
+          }
+        }
+        
         if (extractedPhone) {
           correctedCount++;
           return {
             ...item,
             phone: extractedPhone,
-            email: cleanedEmail
+            email: cleanedEmail || item.email,
+            name: cleanedName || item.name
           };
         }
       }
@@ -854,15 +1306,16 @@ export default function LeadList({
     const origin = importPreview[0]?.origin || 'Planilha Importada';
     const averageValue = importPreview.reduce((acc, current) => acc + (current.value || 0), 0) / count || 275000;
 
-    onAddBulkLeads(importPreview);
-    
-    // Automatically pre-configure the advanced marketing campaign planner
-    setPlannerLeadCount(count);
-    setPlannerLeadOrigin(origin);
-    setPlannerAverageValue(Math.round(averageValue));
-    setPlannerCustomNiches(`Contatos lotes importados via "${origin}" - Foco em conversão célere.`);
-    setShowCampaignPlanner(true); 
+    const formattedLeads = importPreview.map((item, idx) => ({
+      ...item,
+      id: item.id || `lead-${Date.now()}-${Math.random().toString(36).substring(2, 9)}-${idx}`,
+      status: item.status || 'novo',
+      stage: item.stage || 'abordagem',
+      createdAt: item.createdAt || new Date().toISOString()
+    })) as Lead[];
 
+    onAddBulkLeads(formattedLeads);
+    
     setIsImportSuccess(true);
     setRawPasteData('');
     setImportPreview([]);
@@ -872,18 +1325,28 @@ export default function LeadList({
     }, 5000);
   };
 
+  const handleWhatsAppClick = async (lead: any) => {
+    if (generatingScriptLeadId) return; // Prevent double clicks
+    
+    await handleWhatsAppAction(
+      lead,
+      (loading) => setGeneratingScriptLeadId(loading ? lead.id : null),
+      () => onUpdateLeadField?.(lead.id, { lastInteractionAt: new Date().toISOString() })
+    );
+  };
+
   // Exporter to CSV
   const handleExportLeadsCSV = () => {
     let csvContent = "data:text/csv;charset=utf-8,";
     csvContent += "ID;Nome;Email;Telefone;Orcamento;Canal;Notas;CriadoEm\r\n";
     leads.forEach(l => {
-      csvContent += `"${l.id}";"${l.name}";"${l.email}";"${l.phone}";"${l.value}";"${l.origin}";"${l.notes.replace(/"/g, '""')}";"${l.createdAt}"\r\n`;
+      csvContent += `"${l.id}";"${l.name}";"${l.email}";"${l.phone}";"${l.value}";"${l.origin}";"${(l.notes || "").replace(/"/g, '""')}";"${l.createdAt}"\r\n`;
     });
 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", 'Planilha_Leads_cicloCRED.csv');
+    link.setAttribute("download", 'Planilha_Leads.csv');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -921,14 +1384,14 @@ export default function LeadList({
     } catch (err: any) {
       console.error(err);
       // Fallback simulated plan
-      const simulatedPlan = `# Plano Inteligente de Conversão cicloCRED
+      const simulatedPlan = `# Plano Inteligente de Conversão
 
 ## 📈 Metas e Métricas do Funil Ativo (${plannerLeadCount} Leads de "${plannerLeadOrigin}")
 
 * **Total de Contatos**: **${plannerLeadCount} leads**
 * **Abordagens por WhatsApp (Meta: 100%)**: **${plannerLeadCount} tentativas** de aproximação
 * **Telefonemas de Perfilamento (Meta: ~40%)**: **${Math.ceil(plannerLeadCount * 0.4)} telefonemas completados**
-* **Simulações Habitacionais Automatizadas (Meta: ~20%)**: **${Math.ceil(plannerLeadCount * 0.2)} simulações cicloCRED/Caixa**
+* **Simulações Habitacionais Automatizadas (Meta: ~20%)**: **${Math.ceil(plannerLeadCount * 0.2)} simulações de Crédito/Caixa**
 * **Agendamento de Visitas Físicas (Meta: ~8%)**: **${Math.ceil(plannerLeadCount * 0.08)} visitas estruturadas**
 * **Vendas Efetivas Estimadas (Conversão de 2.5%)**: **${Math.ceil(plannerLeadCount * 0.025)} fechamentos de contrato**
 * **Receita Estimada de Comissão (Média R$ 250k a 3%)**: **R$ ${(Math.ceil(plannerLeadCount * 0.025) * 250000 * 0.03).toLocaleString('pt-BR')}**
@@ -938,7 +1401,7 @@ export default function LeadList({
 ## 🗓️ Cronograma Comercial Sugerido de Engajamento
 
 * **Dia 1: Aquecimento Conector**  
-  Disparar primeira abordagem via WhatsApp. Mensagem breve e instigante sobre aprovação de crédito simplificada cicloCRED. Não tentar vender o imóvel imediatamente, mas sim vender a simulação de parcelas.
+  Disparar primeira abordagem via WhatsApp. Mensagem breve e instigante sobre aprovação de crédito simplificada. Não tentar vender o imóvel imediatamente, mas sim vender a simulação de parcelas.
   
 * **Dia 2: Chamada telefônica de Conexão Humana**  
   Tornar-se ativo. Ligar para os leads que abriram as mensagens ou responderam. Validar qual faixa de renda e tempo de FGTS possuem.
@@ -956,14 +1419,14 @@ export default function LeadList({
 
 ## 💬 Roteiro de Copywriting Exclusivo para WhatsApp
 
-*"Olá! Tudo bem? Sou consultor parceiro da cicloCRED. Notei seu interesse nas unidades com subsídio facilitado de até R$ 55 mil e juros reduzidos Minha Casa Minha Vida.*
+*"Olá! Tudo bem? Sou consultor parceiro. Notei seu interesse nas unidades com subsídio facilitado de até R$ 55 mil e juros reduzidos Minha Casa Minha Vida.*
 
 *Consegui simular sua aprovação de financiamento Caixa com parcelas que cabem confortavelmente no seu orçamento mensal, sem complicação de burocracias.*
 
 *Eu tenho as melhores opções de plantas prontas hoje no bairro desejado. Qual o melhor horário para eu te enviar os arquivos e números sem compromisso, às 14h ou às 17h?"*`;
       setGeneratedPlanMarkdown(simulatedPlan);
       if (addNotification) {
-        addNotification('📊 RETORNO PLANEJADO (EMULADO)', 'Estrutura de plano calculada localmente com base nas métricas comerciais cicloCRED.', 'info');
+        addNotification('📊 RETORNO PLANEJADO (EMULADO)', 'Estrutura de plano calculada localmente com base nas métricas comerciais.', 'info');
       }
     } finally {
       setIsGeneratingPlan(false);
@@ -983,7 +1446,7 @@ export default function LeadList({
       const taskTitles = [
         `📲 WhatsApp: Abordagem inicial de Boas-vindas para ${plannerLeadCount} leads (${plannerLeadOrigin})`,
         `📞 Telefonar: Perfilamento de Comportamento para Leads de ${plannerLeadOrigin}`,
-        `📊 Simulação cicloCRED: Envio de estudo de renda de leads qualificados`,
+        `⚡ Simulação de Crédito: Envio de estudo de renda de leads qualificados`,
         `🏬 Apresentar Portfólio: Envio de Books e Plantas aos pré-aprovados`,
         `🤝 Agendar Stand: Reuniões físicas de fechamento com leads convertidos`
       ];
@@ -992,7 +1455,7 @@ export default function LeadList({
       const descriptions = [
         `Disparar roteiro de copywriting gerado para ${plannerLeadCount} leads a fim de extrair as primeiras respostas positivas.`,
         `Separar leads receptivos de ${plannerLeadOrigin} e realizar chamadas ativas de perfilamento cadastral, analisando potencial de FGTS.`,
-        `Calcular o subsídio e financiamento exatos para os leads engajados e enviar as tabelas ilustradas cicloCRED.`,
+        `Calcular o subsídio e financiamento exatos para os leads engajados e enviar as tabelas ilustradas.`,
         `Realizar tours virtuais de decorados do portfólio de Estoque e reforçar os diferenciais da construtora selecionada.`,
         `Levar clientes da planilha de ${plannerLeadOrigin} para fechar o negócio no stand sob comissão integrada.`
       ];
@@ -1054,10 +1517,10 @@ export default function LeadList({
   const processedLeads = leads
     .filter(lead => {
       const matchesSearch = 
-        lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        lead.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        lead.phone.includes(searchTerm) ||
-        (lead.company || '').toLowerCase().includes(searchTerm.toLowerCase());
+        String(lead.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(lead.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(lead.phone || '').includes(searchTerm) ||
+        String(lead.company || '').toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === 'todos' || lead.status === statusFilter;
       const matchesOrigin = originFilter === 'todos' || lead.origin === originFilter;
       
@@ -1065,7 +1528,26 @@ export default function LeadList({
         initialLetterFilter === 'todos' ||
         lead.name.trim().charAt(0).toUpperCase() === initialLetterFilter.toUpperCase();
 
-      return matchesSearch && matchesStatus && matchesOrigin && matchesInitial;
+      const matchesRegion = !regionFilter || regionFilter === 'todos' || lead.region === regionFilter;
+      const matchesProfile = !profileFilter || profileFilter === 'todos' || lead.mainProfile === profileFilter;
+      const matchesStage = !stageFilter || stageFilter === 'todos' || lead.stage === stageFilter;
+      const matchesObjection = !objectionFilter || objectionFilter === 'todos' || lead.objection === objectionFilter;
+      const matchesPrograma = !programaDesejadoFilter || programaDesejadoFilter === 'todos' || lead.programaDesejado === programaDesejadoFilter;
+      const matchesBacen = !restricaoBacenFilter || restricaoBacenFilter === 'todos' || lead.restricaoBacen === restricaoBacenFilter;
+      const matchesGender = !genderFilter || genderFilter === 'todos' || lead.gender === genderFilter;
+      
+      const matchesFamilyIncome = !familyIncomeFilter || familyIncomeFilter === 'todos' || 
+        (familyIncomeFilter === 'Faixa 1' && (lead.familyIncome || 0) <= 2640) ||
+        (familyIncomeFilter === 'Faixa 2' && (lead.familyIncome || 0) > 2640 && (lead.familyIncome || 0) <= 4400) ||
+        (familyIncomeFilter === 'Faixa 3' && (lead.familyIncome || 0) > 4400 && (lead.familyIncome || 0) <= 8000) ||
+        (familyIncomeFilter === 'Acima do Teto' && (lead.familyIncome || 0) > 8000);
+
+      const matchesIncomeType = !incomeTypeFilter || incomeTypeFilter === 'todos' || lead.incomeType === incomeTypeFilter;
+      const matchesDelivery = !deliveryExpectedFilter || deliveryExpectedFilter === 'todos' || lead.deliveryExpected === deliveryExpectedFilter;
+
+      return matchesSearch && matchesStatus && matchesOrigin && matchesInitial && 
+             matchesRegion && matchesProfile && matchesStage && matchesObjection && matchesPrograma && matchesBacen && 
+             matchesGender && matchesFamilyIncome && matchesIncomeType && matchesDelivery;
     })
     .sort((a, b) => {
       let comparison = 0;
@@ -1109,7 +1591,9 @@ export default function LeadList({
     };
   }, [showCampaignModal]);
 
-  const visibleLeads = processedLeads.slice(0, visibleCount);
+  const visibleLeads = maxRows 
+    ? processedLeads.slice(0, maxRows) 
+    : processedLeads.slice(0, visibleCount);
 
   // Lazy loading observer hook
   useEffect(() => {
@@ -1158,52 +1642,33 @@ export default function LeadList({
   const handleBulkDelete = () => {
     if (selectedLeadIds.length === 0) return;
     
-    const proceed = () => {
-      if (onDeleteMultipleLeads) {
-        onDeleteMultipleLeads(selectedLeadIds);
-      } else {
-        selectedLeadIds.forEach(id => onDeleteLead(id));
-      }
+    if (onDeleteMultipleLeads) {
+      onDeleteMultipleLeads(selectedLeadIds);
       setSelectedLeadIds([]);
-    };
-
-    if (quickDeleteMode) {
-      proceed();
     } else if (onRequestConfirm) {
       onRequestConfirm(
-        'Apagar Leads Selecionados?',
-        `Tem certeza que deseja apagar permanentemente os ${selectedLeadIds.length} leads selecionados? Esta ação é irreversível.`,
-        proceed,
-        'danger'
+        "Apagar Leads Selecionados?",
+        `Tem certeza que deseja apagar os ${selectedLeadIds.length} leads selecionados permanentemente?`,
+        () => {
+          selectedLeadIds.forEach(id => onDeleteLead(id));
+          setSelectedLeadIds([]);
+          if (addNotification) {
+            addNotification("Limpeza Concluída", `${selectedLeadIds.length} leads foram removidos.`, "warning");
+          }
+        },
+        "danger"
       );
     } else {
-      try {
-        if (confirm(`Excluir permanentemente ${selectedLeadIds.length} leads selecionados?`)) {
-          proceed();
-        }
-      } catch (err) {
-        proceed();
+      // Fallback
+      if (window.confirm(`Tem certeza que deseja apagar ${selectedLeadIds.length} leads?`)) {
+        selectedLeadIds.forEach(id => onDeleteLead(id));
+        setSelectedLeadIds([]);
       }
     }
   };
 
   const handleIndividualDelete = (leadId: string) => {
-    if (quickDeleteMode) {
-      onDeleteLead(leadId);
-    } else if (onRequestConfirm) {
-      const leadObj = leads.find(l => l.id === leadId);
-      const leadName = leadObj ? leadObj.name : 'este lead';
-      onRequestConfirm(
-        'Remover Cliente Lead?',
-        `Tem certeza de que deseja remover permanentemente o lead "${leadName}" do CRM? Esta ação apagará seu histórico de forma definitiva.`,
-        () => onDeleteLead(leadId),
-        'danger'
-      );
-    } else {
-      if (confirm('Tem certeza de que deseja remover este lead?')) {
-        onDeleteLead(leadId);
-      }
-    }
+    onDeleteLead(leadId);
   };
 
   const handleBulkMoveStatus = (status: LeadStatus) => {
@@ -1222,7 +1687,7 @@ export default function LeadList({
     let csvContent = "data:text/csv;charset=utf-8,";
     csvContent += "ID;Nome;Email;Telefone;Orcamento;Canal;Notas;CriadoEm\r\n";
     selectedLeads.forEach(l => {
-      csvContent += `"${l.id}";"${l.name}";"${l.email}";"${l.phone}";"${l.value}";"${l.origin}";"${l.notes.replace(/"/g, '""')}";"${l.createdAt}"\r\n`;
+      csvContent += `"${l.id}";"${l.name}";"${l.email}";"${l.phone}";"${l.value}";"${l.origin}";"${(l.notes || "").replace(/"/g, '""')}";"${l.createdAt}"\r\n`;
     });
 
     const encodedUri = encodeURI(csvContent);
@@ -1244,7 +1709,10 @@ export default function LeadList({
   };
 
   // Build dynamic statusMap based on saved Columns (abas)
-  const dynCols = getKanbanColumns();
+  const dynCols = getKanbanColumns("status");
+  const dynColsAtivos = getKanbanColumns("etapas");
+  const dynColsPerfil = getKanbanColumns("perfil");
+  const dynColsCarteira = getKanbanColumns("objecoes");
   const statusMap: Record<string, { label: string; bg: string; text: string }> = {};
   
   dynCols.forEach(col => {
@@ -1266,16 +1734,34 @@ export default function LeadList({
     }
   });
 
+  const activeStats = useMemo(() => {
+    const stats = {
+      total: processedLeads.length,
+      comRenda: 0,
+      agendados: 0,
+      proposta: 0,
+      potencialFinanciamento: 0
+    };
+    processedLeads.forEach(l => {
+      if (l.familyIncome && l.familyIncome > 0) stats.comRenda++;
+      if (l.status === 'agendamento' || (l.notes && l.notes.toLowerCase().includes('agend'))) stats.agendados++;
+      if (l.status === 'proposta-de-compra') stats.proposta++;
+      stats.potencialFinanciamento += (l.value || 0);
+    });
+    return stats;
+  }, [processedLeads]);
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+
       {/* Collapsible Importer/Exporter Panel */}
       {showImporter && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-4 backdrop-blur-md overflow-y-auto">
-          <div className="bg-white border-4 border-zinc-950 p-6 rounded-3xl w-full max-w-4xl shadow-[8px_8px_0px_0px_rgba(24,24,27,1)] space-y-5 animate-scaleIn max-h-[90vh] overflow-y-auto relative text-zinc-900">
+          <div className="bg-white border-4 border-zinc-950 p-6 rounded-3xl w-full max-w-4xl shadow-[8px_8px_0px_0px_rgba(24,24,27,1)] space-y-5  max-h-[90vh] overflow-y-auto relative text-zinc-900">
             {/* Close button */}
             <div className="flex items-center justify-between pb-3 border-b border-zinc-200">
               <div className="flex items-center gap-2 text-zinc-950">
-                <FileSpreadsheet className="w-5 h-5 text-indigo-600 animate-pulse" />
+                <FileSpreadsheet className="w-5 h-5 text-indigo-600 " />
                 <h3 className="font-sans font-black text-sm uppercase italic tracking-tight">📥 Central de Fomento & Importação</h3>
               </div>
               <button 
@@ -1324,102 +1810,244 @@ export default function LeadList({
                     : 'bg-zinc-50 text-indigo-700 hover:text-indigo-950 border-indigo-400'
                 }`}
               >
-                <Sparkles className="w-3.5 h-3.5 text-indigo-400 animate-pulse shrink-0" />
+                <Sparkles className="w-3.5 h-3.5 text-indigo-400  shrink-0" />
                 <span>Portabilidade Cury/Caixa</span>
               </button>
             </div>
 
             {importerTab === 'classic' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-scaleIn">
-                
-                {/* Drag n Drop Upload Area */}
-                <div 
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    setIsDraggingFile(true);
-                  }}
-                  onDragLeave={() => setIsDraggingFile(false)}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    setIsDraggingFile(false);
-                    const file = e.dataTransfer.files?.[0];
-                    if (file) {
-                      handleFileImport(file);
-                    }
-                  }}
-                  className={`border-4 border-dashed rounded-2xl p-6 text-center transition-all select-none flex flex-col items-center justify-center gap-2 ${
-                    isDraggingFile 
-                      ? 'border-indigo-600 bg-indigo-50/50 scale-[1.01]' 
-                      : 'border-zinc-350 bg-zinc-50 hover:bg-zinc-100/60'
-                  }`}
-                >
-                  <Upload className={`w-8 h-8 ${isDraggingFile ? 'text-indigo-600 font-black' : 'text-zinc-400'}`} />
-                  <div className="space-y-1">
-                    <p className="text-xs font-black uppercase font-mono text-zinc-950">
-                      Arrastar e soltar planilha (.csv, .txt, .tsv) aqui
-                    </p>
-                    <p className="text-[10px] text-zinc-500 font-bold">
-                      Ou clique abaixo para carregar um arquivo local do seu computador
-                    </p>
-                  </div>
+              <div className="space-y-6 ">
+                {/* Source Toggle Sub-navbar */}
+                <div className="flex flex-wrap items-center gap-2 border-b border-zinc-250 pb-3">
+                  <span className="text-[10px] text-zinc-500 font-black uppercase font-mono mr-2">Origem da Importação:</span>
                   
-                  <label className="mt-2 px-3.5 py-1.5 bg-white border border-zinc-950 rounded-lg text-[10px] font-black uppercase cursor-pointer hover:bg-zinc-50 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
-                    Selecionar Arquivo
-                    <input 
-                      type="file" 
-                      accept=".csv,.txt,.tsv" 
-                      className="hidden" 
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
+                  <button
+                    type="button"
+                    onClick={() => { setImportSource('local'); setImportErrors([]); }}
+                    className={`px-3 py-1.5 border-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all flex items-center gap-1.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 ${
+                      importSource === 'local'
+                        ? 'bg-zinc-900 text-white border-zinc-950'
+                        : 'bg-white text-zinc-700 hover:text-zinc-950 border-zinc-350'
+                    }`}
+                  >
+                    <Upload className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                    <span>Upload Local (.xlsx, .csv, .txt)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setImportSource('paste'); setImportErrors([]); }}
+                    className={`px-3 py-1.5 border-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all flex items-center gap-1.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 ${
+                      importSource === 'paste'
+                        ? 'bg-zinc-900 text-white border-zinc-950'
+                        : 'bg-white text-zinc-700 hover:text-zinc-950 border-zinc-350'
+                    }`}
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    <span>Copiar & Colar Células</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setImportSource('g_sheets'); setImportErrors([]); }}
+                    className={`px-3 py-1.5 border-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all flex items-center gap-1.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 ${
+                      importSource === 'g_sheets'
+                        ? 'bg-zinc-900 text-white border-zinc-950'
+                        : 'bg-white text-zinc-700 hover:text-zinc-950 border-zinc-350'
+                    }`}
+                  >
+                    <Globe className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>Sincronizar Google Sheets</span>
+                  </button>
+                </div>
+
+                {importSource === 'local' && (
+                  <div className="grid grid-cols-1 gap-4 ">
+                    <div 
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setIsDraggingFile(true);
+                      }}
+                      onDragLeave={() => setIsDraggingFile(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setIsDraggingFile(false);
+                        const file = e.dataTransfer.files?.[0];
                         if (file) {
                           handleFileImport(file);
                         }
-                      }} 
-                    />
-                  </label>
-                  
-                  {importedFileName && (
-                    <span className="text-[10px] font-mono font-black text-indigo-800 uppercase bg-indigo-100 px-2 py-0.5 rounded border border-indigo-200">
-                      📄 Carregado: {importedFileName}
-                    </span>
-                  )}
-                </div>
-
-                {/* Paste Panel Card */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-xs font-black text-zinc-700 uppercase font-mono">
-                    <span>Cole dados copiados do Excel/Sheets</span>
-                    <span className="text-[9px] text-zinc-400 normal-case font-bold">Separados por Tabulação</span>
-                  </div>
-                  <textarea
-                    rows={4}
-                    placeholder={`Cole linhas aqui. Exemplo:\nNome\tEmail\tTelefone\tOrcamento\tEmpresa\tOrigem\tNotas\nJoão Silva\tjoao@email.com\t(11) 98888-8888\t350000\tSilva S/A\tFacebook\tInteressado em capital de giro`}
-                    value={rawPasteData}
-                    onChange={(e) => setRawPasteData(e.target.value)}
-                    className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-3 text-xs font-mono text-zinc-900 focus:bg-white focus:outline-none"
-                  />
-                  <div className="flex justify-between items-center text-xs">
-                    <button
-                      type="button"
-                      onClick={handleParsePaste}
-                      disabled={!rawPasteData.trim()}
-                      className="px-4 py-2 bg-zinc-900 hover:bg-zinc-950 text-white font-black uppercase font-mono text-[10px] rounded-lg border-2 border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] disabled:opacity-50 animate-pulse"
+                      }}
+                      className={`border-4 border-dashed rounded-2xl p-7 text-center transition-all select-none flex flex-col items-center justify-center gap-2 ${
+                        isDraggingFile 
+                          ? 'border-indigo-600 bg-indigo-50/50 scale-[1.01]' 
+                          : 'border-zinc-350 bg-zinc-50 hover:bg-zinc-100/60'
+                      }`}
                     >
-                      Analisar dados colados
-                    </button>
+                      <Upload className={`w-8 h-8 ${isDraggingFile ? 'text-indigo-600 font-black' : 'text-zinc-400'}`} />
+                      <div className="space-y-1">
+                        <p className="text-xs font-black uppercase font-mono text-zinc-950">
+                          Arrastar e soltar arquivo (.xlsx, .xls, .csv, .txt, .tsv, .pdf, .docx) aqui
+                        </p>
+                        <p className="text-[10px] text-zinc-500 font-bold max-w-md mx-auto">
+                          Suporta arquivos Excel, CSV, Texto e leitura de Documentos Textuais/PDF de faturamento.
+                        </p>
+                      </div>
+                      
+                      <label className="mt-2 px-3.5 py-1.5 bg-white border border-zinc-950 rounded-lg text-[10px] font-black uppercase cursor-pointer hover:bg-zinc-50 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
+                        Selecionar Arquivo do Computador
+                        <input 
+                          type="file" 
+                          accept=".xlsx,.xls,.csv,.txt,.tsv,.pdf,.docx" 
+                          className="hidden" 
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              handleFileImport(file);
+                            }
+                          }} 
+                        />
+                      </label>
+                      
+                      {importedFileName && (
+                        <span className="text-[10px] font-mono font-black text-indigo-800 uppercase bg-indigo-100 px-2 py-0.5 rounded border border-indigo-200">
+                          📄 Carregado Local: {importedFileName}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {importSource === 'paste' && (
+                  <div className="space-y-3 ">
+                    <div className="flex items-center justify-between text-xs font-black text-zinc-700 uppercase font-mono">
+                      <span>Cole dados copiados do Excel/Sheets</span>
+                      <span className="text-[9px] text-zinc-400 normal-case font-bold">Separados por Tabulação</span>
+                    </div>
+                    <textarea
+                      rows={4}
+                      placeholder={`Cole linhas aqui. Exemplo:\nNome\tEmail\tTelefone\tOrcamento\tEmpresa\tOrigem\tNotas\nJoão Silva\tjoao@email.com\t(11) 98888-8888\t350000\tSilva S/A\tFacebook\tInteressado em capital de giro`}
+                      value={rawPasteData}
+                      onChange={(e) => setRawPasteData(e.target.value)}
+                      className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-3 text-xs font-mono text-zinc-900 focus:bg-white focus:outline-none"
+                    />
+                    <div className="flex justify-between items-center text-xs">
+                      <button
+                        type="button"
+                        onClick={handleParsePaste}
+                        disabled={!rawPasteData.trim()}
+                        className="px-4 py-2 bg-zinc-900 hover:bg-zinc-950 text-white font-black uppercase font-mono text-[10px] rounded-lg border-2 border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] disabled:opacity-50 active:translate-y-0.5 transition-all"
+                      >
+                        Analisar dados colados
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {importSource === 'g_sheets' && (
+                  <div className="space-y-4  bg-zinc-50 border-2 border-zinc-250 p-4.5 rounded-2xl">
+                    <div className="flex items-center gap-2 mb-1">
+                      <svg className="w-5 h-5 text-emerald-600 fill-current shrink-0" viewBox="0 0 24 24">
+                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10H7v-2h10v2z"/>
+                      </svg>
+                      <div>
+                        <h4 className="text-xs font-black uppercase text-zinc-950 font-mono">Planilhas do Google Drive</h4>
+                        <p className="text-[9px] text-zinc-500 font-bold">Importe diretamente sem precisar baixar arquivos locais</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3.5">
+                      {/* Option A: Google Sheet URL Input (Available to ALL users) */}
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black uppercase text-zinc-800 block">
+                          🔗 Cole a URL completa da sua Planilha do Google (Google Sheets):
+                        </label>
+                        <div className="flex gap-2">
+                          <input 
+                            type="text"
+                            placeholder="https://docs.google.com/spreadsheets/d/1A2B3C.../edit"
+                            value={gSheetUrlInput}
+                            onChange={(e) => setGSheetUrlInput(e.target.value)}
+                            className="flex-1 bg-white border-2 border-zinc-950 rounded-xl px-3 py-2 text-xs font-mono text-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleLoadGoogleSheetByUrl}
+                            disabled={isLoadingGSheets || !gSheetUrlInput.trim()}
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[11px] rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] disabled:opacity-50 cursor-pointer active:translate-y-0.5 transition-all"
+                          >
+                            {isLoadingGSheets ? 'Processando...' : 'Carregar Planilha'}
+                          </button>
+                        </div>
+                        <p className="text-[9px] text-zinc-500 font-bold leading-normal">
+                          💡 **Requisito para link**: No Google Sheets, clique em **Compartilhar** (canto superior direito) e mude o Acesso Geral para **"Qualquer pessoa com o link"** no modo **"Leitor"**.
+                        </p>
+                      </div>
+
+                      {/* Option B: Private Workspace Drive folder search (Requires oauth authorization Token) */}
+                      <div className="border-t-2 border-zinc-200 pt-3.5 space-y-2 mt-2">
+                        <h5 className="text-[10px] font-black uppercase text-zinc-800">
+                          📁 Navegação do Drive do Google Workspace
+                        </h5>
+
+                        {!googleToken ? (
+                          <div className="p-3 bg-indigo-50/50 border border-indigo-250 rounded-xl">
+                            <p className="text-[10px] text-zinc-650 font-bold leading-relaxed">
+                              🔑 **Quer pesquisar direto entre seus arquivos privados no Drive?** Faça Login na aba correspondente do Google Workspace para ativar a busca integrada.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center text-[9px] font-black uppercase text-zinc-650">
+                              <span>Escolha uma item da sua conta integrada:</span>
+                              <button
+                                type="button"
+                                onClick={handleFetchGoogleSheets}
+                                disabled={isLoadingGSheets}
+                                className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-950 text-white font-mono text-[8px] font-black uppercase rounded-md border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] flex items-center gap-1 active:translate-y-0.5 transition"
+                              >
+                                <RotateCw className={`w-2.5 h-2.5 ${isLoadingGSheets ? '' : ''}`} />
+                                <span>Listar Meus Arquivos</span>
+                              </button>
+                            </div>
+
+                          {gSheetsList.length > 0 && (
+                            <div className="border-2 border-zinc-950 max-h-[120px] overflow-y-auto p-1 bg-zinc-150 rounded-lg space-y-1">
+                              {gSheetsList.map((item) => (
+                                <button
+                                  key={item.id}
+                                  type="button"
+                                  onClick={() => handleLoadLeadsFromGoogleSheet(item.id)}
+                                  className={`w-full text-left p-2 text-[10.5px] rounded transition-all font-mono uppercase flex justify-between items-center ${
+                                    selectedGSheetId === item.id 
+                                      ? 'bg-green-900 text-white font-black border border-green-800' 
+                                      : 'bg-white hover:bg-zinc-50 text-zinc-800 border border-zinc-200'
+                                  }`}
+                                >
+                                  <span className="truncate mr-1.5">{item.name}</span>
+                                  <span className="text-[8px] text-zinc-400">
+                                    {new Date(item.modifiedTime).toLocaleDateString()}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+          )}
 
             {importerTab === 'export' && (
-              <div className="space-y-4 animate-scaleIn bg-zinc-50 border-2 border-zinc-950 p-5 rounded-2xl">
+              <div className="space-y-4  bg-zinc-50 border-2 border-zinc-950 p-5 rounded-2xl">
                 <div className="flex items-center gap-2">
                   <Download className="w-5 h-5 text-emerald-600 shrink-0" />
                   <h4 className="text-sm font-black uppercase text-zinc-950 font-mono">Exportar Tudo e Baixar Planilha</h4>
                 </div>
                 <p className="text-xs text-zinc-650 font-bold leading-relaxed max-w-2xl">
-                  Gere e faça o download instantâneo de um arquivo compactado <code className="bg-zinc-200 px-1 py-0.5 rounded text-zinc-800">.csv</code> contendo todos os contatos e propostas cadastrados na sua esteira de CRM do cicloCRED. Ideal para importar no Google Sheets, Excel ou realizar backups de segurança periódicos.
+                  Gere e faça o download instantâneo de um arquivo compactado <code className="bg-zinc-200 px-1 py-0.5 rounded text-zinc-800">.csv</code> contendo todos os contatos e propostas cadastrados na sua esteira de CRM. Ideal para importar no Google Sheets, Excel ou realizar backups de segurança periódicos.
                 </p>
                 <div className="flex flex-wrap items-center gap-3 pt-2">
                   <button
@@ -1445,14 +2073,14 @@ export default function LeadList({
             )}
 
             {importerTab === 'simulation' && (
-              <div className="space-y-5 animate-scaleIn">
+              <div className="space-y-5 ">
                 {/* Visual Tutorial Box explains the exact purpose clearly */}
                 <div className="bg-gradient-to-r from-indigo-50 to-zinc-50 border-2 border-indigo-400 p-4 rounded-xl text-xs text-zinc-800 font-sans space-y-1.5 shadow-[2px_2px_0px_0px_rgba(99,102,241,0.1)]">
                   <p className="font-mono font-black uppercase text-[10.5px] text-indigo-950 flex items-center gap-1.5">
                     💡 O QUE É O GATEWAY DE PORTABILIDADE DE SIMULAÇÕES?
                   </p>
                   <p className="font-bold text-[11px] leading-relaxed text-zinc-600">
-                    Trabalhar com faturas ou PDFs da Caixa/Cury exige copiar e colar dezenas de campos manualmente. Com este Gateway, você <strong>arrasta um PDF ou Excel de simulação residencial</strong> emitido no banco e o sistema lê instantaneamente a Renda Bruta do cliente, o Valor de Compra e Contato. Em segundos, ele <strong>cria o Lead correspondente</strong> no CRM cicloCRED, poupando tempo na análise de crédito imediato!
+                    Trabalhar com faturas ou PDFs da Caixa/Cury exige copiar e colar dezenas de campos manualmente. Com este Gateway, você <strong>arrasta um PDF ou Excel de simulação residencial</strong> emitido no banco e o sistema lê instantaneamente a Renda Bruta do cliente, o Valor de Compra e Contato. Em segundos, ele <strong>cria o Lead correspondente</strong> no CRM, poupando tempo na análise de crédito imediato!
                   </p>
                   <div className="p-2 bg-indigo-100/30 rounded border border-indigo-200 text-[10px] text-indigo-850 font-bold italic font-mono flex items-center gap-1">
                     👉 Dica Operacional: Clique em qualquer um dos botões de exemplo rápido ("MCMV_Carmo.pdf", "Guarulhos.xlsx", etc.) para simular o processo em tempo real!
@@ -1580,7 +2208,7 @@ export default function LeadList({
                         ))
                       )}
                       {isSimulatingExtraction && (
-                        <div className="flex items-center gap-1.5 text-indigo-400 animate-pulse mt-1.5">
+                        <div className="flex items-center gap-1.5 text-indigo-400  mt-1.5">
                           <span>⚙️ Mapemanento Inteligente... {simulationProgress}%</span>
                         </div>
                       )}
@@ -1599,7 +2227,7 @@ export default function LeadList({
 
                 {/* Success Result View */}
                 {extractedSimulationLead && (
-                  <div className="bg-gradient-to-r from-emerald-50 to-zinc-50 border-2 border-zinc-950 p-5 rounded-2xl flex flex-col sm:flex-row gap-5 items-start sm:items-center justify-between animate-scaleIn select-none shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                  <div className="bg-gradient-to-r from-emerald-50 to-zinc-50 border-2 border-zinc-950 p-5 rounded-2xl flex flex-col sm:flex-row gap-5 items-start sm:items-center justify-between  select-none shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
                     <div className="space-y-2 flex-1">
                       <span className="text-[9px] bg-emerald-100 border border-emerald-300 text-emerald-800 px-2.5 py-1 rounded font-black font-mono">
                         ✨ METADADOS EXTRAÍDOS COM SUCESSO
@@ -1733,7 +2361,7 @@ export default function LeadList({
             )}
 
             {isImportSuccess && (
-              <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center gap-3 text-xs text-emerald-800 font-black animate-scaleIn">
+              <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center gap-3 text-xs text-emerald-800 font-black ">
                 <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
                 <p>Importação de Leads concluída! Os contatos foram inseridos como "Novos" na carteira do CRM.</p>
               </div>
@@ -1755,12 +2383,42 @@ export default function LeadList({
       {/* Single Bulk Actions & Selection Toolbar */}
       {!onlyImporter && (
         <>
+          {(() => {
+            const fictitiousCount = leads.filter(l => isFictitiousPhone(l.phone)).length;
+            if (fictitiousCount > 0 && !hideFictitiousWarning) {
+              return (
+                <div className="bg-amber-50 border-4 border-amber-950 p-4 rounded-xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4 font-mono text-xs mb-4">
+                  <div className="flex items-center gap-3 text-amber-900 font-bold uppercase">
+                    <AlertTriangle className="w-5 h-5 text-amber-700" />
+                    <span>Aviso: Seu banco possui {fictitiousCount} leads com telefones inválidos/fictícios gerados durante importações.</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowOrganizerModal(true)}
+                      className="px-4 py-2 bg-amber-400 hover:bg-amber-500 text-amber-950 font-black rounded-lg border-2 border-amber-950 shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition whitespace-nowrap"
+                    >
+                      Corriga em Lote
+                    </button>
+                    <button
+                      onClick={() => setHideFictitiousWarning(true)}
+                      className="px-3 py-2 bg-amber-100 hover:bg-amber-200 text-amber-900 font-black rounded-lg border-2 border-amber-950 shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition text-lg leading-none flex items-center justify-center"
+                      title="Fechar Aviso"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          })()}
+
           {selectedLeadIds.length > 0 && (
-        <div className="bg-indigo-50 border-4 border-zinc-950 p-4 rounded-xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-scaleIn font-mono text-xs mb-4">
+        <div className="bg-indigo-50 border-4 border-zinc-950 p-4 rounded-xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4  font-mono text-xs mb-4">
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
               <span className="relative flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                <span className=" absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-600"></span>
               </span>
               <span className="font-extrabold text-indigo-950 uppercase text-[11px]">
@@ -1798,18 +2456,6 @@ export default function LeadList({
               ))}
             </select>
 
-            {/* Criar Fila Action */}
-            <button
-              onClick={() => {
-                setShowCampaignModal(true);
-                setCustomCampaignText('Olá {{nome}}, verificamos o seu interesse em simulação bancária no valor aproximado de R$ {{valor}}. Entre em contato no WhatsApp para enviarmos sua ficha de simulação!');
-              }}
-              className="px-2.5 py-1.5 bg-amber-400 hover:bg-amber-500 text-zinc-950 border-2 border-zinc-950 rounded-lg shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] flex items-center gap-1 transition-all hover:scale-[1.02] active:scale-95 font-bold cursor-pointer"
-            >
-              <Zap className="w-3 h-3 fill-current text-zinc-950" />
-              <span>Criar Fila</span>
-            </button>
-
             {/* Exportar Leads Action */}
             <button
               onClick={handleBulkExportSelected}
@@ -1838,74 +2484,291 @@ export default function LeadList({
       )}
 
       {/* Leads Table Card */}
-      <div className="bg-white border-4 border-zinc-950 rounded-2xl overflow-hidden shadow-[6px_6px_0px_0px_rgba(24,24,27,1)]">
-        <div id="lead-table-scroll-container" className="overflow-x-auto">
-          <table className="w-full border-collapse text-left text-zinc-800">
-            <thead>
-              <tr className="border-b-4 border-zinc-950 bg-zinc-900 text-white">
-                <th className="p-4 w-12 text-center text-xs font-black uppercase tracking-widest text-zinc-300">
-                  <input
-                    type="checkbox"
-                    checked={visibleLeads.length > 0 && visibleLeads.every(l => selectedLeadIds.includes(l.id))}
-                    onChange={handleToggleSelectAll}
-                    className="w-4 h-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                    title="Selecionar todos visíveis"
-                  />
-                </th>
-                <th className="p-4 text-xs font-black uppercase tracking-widest text-zinc-300">
-                  <button 
-                    onClick={() => toggleSort('name')}
-                    className="flex items-center gap-1.5 hover:text-white"
-                  >
-                    <span>Nome / Cliente</span> 
-                    <ArrowUpDown className="w-3.5 h-3.5 text-indigo-400" />
-                  </button>
-                </th>
-                <th className="p-4 text-xs font-black uppercase tracking-widest text-zinc-300">Contato / E-mail</th>
-                <th className="p-4 text-xs font-black uppercase tracking-widest text-zinc-300">Origem</th>
-                <th className="p-4 text-xs font-black uppercase tracking-widest text-zinc-300">
-                  <button 
-                    onClick={() => toggleSort('value')}
-                    className="flex items-center gap-1.5 hover:text-white"
-                  >
-                    <span>Valor Estimado</span> 
-                    <ArrowUpDown className="w-3.5 h-3.5 text-indigo-400" />
-                  </button>
-                </th>
-                <th className="p-4 text-xs font-black uppercase tracking-widest text-zinc-300">Status Funil</th>
-                <th className="p-4 text-xs font-black uppercase tracking-widest text-zinc-300">
-                  <button 
-                    onClick={() => toggleSort('createdAt')}
-                    className="flex items-center gap-1.5 hover:text-white"
-                  >
-                    <span>Cadastro</span> 
-                    <ArrowUpDown className="w-3.5 h-3.5 text-indigo-400" />
-                  </button>
-                </th>
-                <th className="p-4 text-xs font-black uppercase tracking-widest text-zinc-300 text-right">Ações</th>
-              </tr>
+      <div className="bg-white border-4 border-zinc-950 rounded-2xl shadow-[6px_6px_0px_0px_rgba(24,24,27,1)] flex flex-col flex-1 relative min-h-[500px]">
+        <div id="lead-table-scroll-container" className="flex-1 bg-zinc-50 relative overflow-auto max-h-[600px]">
+          <table className="w-full border-separate border-spacing-0 text-left text-zinc-800 relative z-10">
+            <thead className="sticky top-0 z-50 bg-zinc-50 shadow-sm">
+              {tableHeaderComponent && (
+                <tr className="bg-zinc-50 m-0 p-0 border-0">
+                  <th colSpan={24} className="p-0 font-normal m-0 bg-zinc-50 border-none">
+                    {typeof tableHeaderComponent === 'function' ? tableHeaderComponent(selectedLeadIds, { openCampaignModal: () => setShowCampaignModal(true) }) : tableHeaderComponent}
+                  </th>
+                </tr>
+              )}
+              {isActiveLeadsView ? (
+                <>
+                  <tr className="bg-zinc-100 text-zinc-600 font-mono text-[10px] select-none text-center border-b border-zinc-200">
+                    <th className="px-1.5 py-1 bg-zinc-150 border-r border-b border-zinc-300 w-10 text-center font-bold text-zinc-500"></th>
+                    <th className="px-3 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[15%]">A</th>
+                    <th className="px-3 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[20%]">B</th>
+                    <th className="px-3 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[15%]">C</th>
+                    <th className="px-3 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[15%]">D</th>
+                    <th className="px-3 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[15%]">E</th>
+                    <th className="px-3 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[10%]">F</th>
+                    <th className="px-2 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[5%]">G</th>
+                    <th className="px-3 py-1 bg-zinc-100 border-b border-zinc-300 text-center font-bold text-zinc-500 w-[5%]">H</th>
+                  </tr>
+                  <tr className="bg-zinc-200 border-b-2 border-zinc-400 select-none whitespace-nowrap text-zinc-800">
+                    <th className="px-1.5 py-2 bg-zinc-150 border-r border-zinc-300 text-center text-[10px] font-mono font-bold text-zinc-600">1</th>
+                    <th className="px-3 py-2 border-r border-zinc-300 font-black text-xs text-zinc-950 uppercase tracking-wider text-left">Lead</th>
+                    <th className="px-3 py-2 border-r border-zinc-300 font-black text-xs text-zinc-950 uppercase tracking-wider text-left">Pessoal</th>
+                    <th className="px-3 py-2 border-r border-zinc-300 font-black text-xs text-zinc-950 uppercase tracking-wider text-left">Parâmetros</th>
+                    <th className="px-3 py-2 border-r border-zinc-300 font-black text-xs text-zinc-950 uppercase tracking-wider text-left">Qualificação</th>
+                    <th className="px-3 py-2 border-r border-zinc-300 font-black text-xs text-zinc-950 uppercase tracking-wider text-left">Preferências</th>
+                    <th className="px-3 py-2 border-r border-zinc-300 font-black text-xs text-zinc-950 uppercase tracking-wider text-left">Financeiro</th>
+                    <th className="px-2 py-2 border-r border-zinc-300 font-black text-xs text-zinc-950 text-center uppercase tracking-wider">ações</th>
+                    <th className="px-3 py-2 font-black text-xs text-zinc-950 text-center uppercase tracking-wider text-left">atividades</th>
+                  </tr>
+                </>
+              ) : (
+                <tr className={`${theme === "claro" ? "bg-zinc-100 border-zinc-200" : "bg-zinc-900 border-zinc-950"} border-b-4 text-zinc-300 select-none whitespace-nowrap`}>
+                  <th className={`px-2 py-2 text-[10px] w-8 text-center font-black uppercase tracking-widest border-b-4 ${theme === "claro" ? "border-zinc-200" : "border-zinc-950"}`}>
+                    <input
+                      type="checkbox"
+                      checked={visibleLeads.length > 0 && visibleLeads.every(l => selectedLeadIds.includes(l.id))}
+                      onChange={handleToggleSelectAll}
+                      className="w-4 h-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                      title="Selecionar todos visíveis"
+                    />
+                  </th>
+                  <th className={`px-2 py-2 text-[10px] font-black uppercase tracking-widest whitespace-nowrap text-center border-b-4 ${theme === "claro" ? "text-zinc-600 border-zinc-200" : "text-zinc-300 border-zinc-950"}`}>ID</th>
+                  <th className={`px-2 py-2 text-[10px] font-black uppercase tracking-widest whitespace-nowrap border-b-4 ${theme === "claro" ? "text-zinc-600 border-zinc-200" : "text-zinc-300 border-zinc-950"}`} style={{ width: isTodosView ? '30%' : '20%' }}>Nome / Região</th>
+                  {isTodosView ? (
+                    <>
+                      <th className={`px-2 py-2 text-[10px] font-black uppercase tracking-widest whitespace-nowrap border-b-4 ${theme === "claro" ? "text-zinc-600 border-zinc-200" : "text-zinc-300 border-zinc-950"}`} style={{ width: '20%' }}>Telefone</th>
+                      <th className={`px-2 py-2 text-[10px] font-black uppercase tracking-widest whitespace-nowrap border-b-4 ${theme === "claro" ? "text-zinc-600 border-zinc-200" : "text-zinc-300 border-zinc-950"}`} style={{ width: '25%' }}>E-mail</th>
+                      <th className={`px-2 py-2 text-[10px] font-black uppercase tracking-widest whitespace-nowrap border-b-4 text-center ${theme === "claro" ? "text-zinc-600 border-zinc-200" : "text-zinc-300 border-zinc-950"}`} style={{ width: '15%' }}>Data de Entrada</th>
+                      <th className={`px-2 py-2 text-[10px] font-black uppercase tracking-widest whitespace-nowrap border-b-4 text-center ${theme === "claro" ? "text-zinc-600 border-zinc-200" : "text-zinc-300 border-zinc-950"}`} style={{ width: '10%' }}>Ações</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className={`px-2 py-2 text-[10px] font-black uppercase tracking-widest whitespace-nowrap border-b-4 ${theme === "claro" ? "text-zinc-600 border-zinc-200" : "text-zinc-300 border-zinc-950"}`} style={{ width: '15%' }}>Tel / Email</th>
+                      <th className={`px-2 py-2 text-[10px] font-black uppercase tracking-widest whitespace-nowrap border-b-4 text-center ${theme === "claro" ? "text-zinc-600 border-zinc-200" : "text-zinc-300 border-zinc-950"}`} style={{ width: '15%' }}>Data / Interação</th>
+                      <th className={`px-2 py-2 text-[10px] font-black uppercase tracking-widest whitespace-nowrap border-b-4 text-center ${theme === "claro" ? "text-zinc-600 border-zinc-200" : "text-zinc-300 border-zinc-950"}`} style={{ width: '10%' }}>Ações</th>
+                      <th className={`px-2 py-2 text-[10px] font-black uppercase tracking-widest whitespace-nowrap border-b-4 text-center border-l ${theme === "claro" ? "text-zinc-600 border-zinc-200 border-l-zinc-200" : "text-zinc-300 border-zinc-950 border-l-zinc-850"}`} style={{ width: '15%' }}>Parâmetros</th>
+                      <th className={`px-2 py-2 text-[10px] font-black uppercase tracking-widest whitespace-nowrap border-b-4 text-center border-l ${theme === "claro" ? "text-zinc-600 border-zinc-200 border-l-zinc-200" : "text-zinc-300 border-zinc-950 border-l-zinc-850"}`} style={{ width: '15%' }}>Infos</th>
+                      <th className={`px-2 py-2 text-[10px] font-black uppercase tracking-widest whitespace-nowrap border-b-4 text-center border-l ${theme === "claro" ? "text-zinc-600 border-zinc-200 border-l-zinc-200" : "text-zinc-300 border-zinc-950 border-l-zinc-850"}`} style={{ width: '10%' }}>Atividades</th>
+                    </>
+                  )}
+                </tr>
+              )}
             </thead>
             <tbody className="divide-y-2 divide-zinc-100 bg-white">
               {processedLeads.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-16 text-center text-zinc-400 font-mono font-bold uppercase tracking-widest bg-zinc-50">
+                  <td colSpan={isTodosView ? 7 : 9} className="p-16 text-center text-zinc-400 font-mono font-bold uppercase tracking-widest bg-zinc-50">
                     Nenhum lead correspondente encontrado.
                   </td>
                 </tr>
               ) : (
-                visibleLeads.map((lead) => {
+                visibleLeads.map((lead, idx) => {
+                  if (isActiveLeadsView) {
+                    const startRowIdx = 2 + (idx * 4);
+                    const calculatedAge = lead.birthDate ? (new Date().getFullYear() - new Date(lead.birthDate).getFullYear()) : 35;
+                    const formattedValue = lead.value ? lead.value.toLocaleString('pt-BR') : '500.000';
+                    const financedValue = (lead.value ? lead.value * 0.8 : 400000).toLocaleString('pt-BR');
+                    const installmentValue = (lead.value ? lead.value * 0.005 : 2500).toLocaleString('pt-BR');
+                    const familyIncomeFormatted = lead.familyIncome ? lead.familyIncome.toLocaleString('pt-BR') : '15.000';
+
+                    return (
+                      <React.Fragment key={lead.id}>
+                        {/* ROW 1 */}
+                        <tr className="hover:bg-zinc-50/50 border-b border-zinc-200">
+                          <td className="px-1.5 py-2 bg-zinc-150 border-r border-zinc-300 text-center text-[10px] font-mono font-black text-zinc-500 w-10">
+                            {startRowIdx}
+                          </td>
+                          <td className="px-3 py-2 border-r border-zinc-200 font-sans text-xs w-[15%]">
+                            <input 
+                              defaultValue={lead.name}
+                              onBlur={(e) => { if (e.target.value !== lead.name) onUpdateLeadField?.(lead.id, { name: e.target.value }) }}
+                              className="font-extrabold text-zinc-950 text-xs tracking-tight bg-transparent border-b border-transparent focus:border-indigo-500 focus:outline-none w-full"
+                            />
+                          </td>
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[20%]">
+                            CPF: {lead.cpf || '123.456.789-00'}, Atuação: {lead.company || 'Eng.'}, Dep: 2
+                          </td>
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[15%]">
+                            etapas: {lead.status || 'Prospecção'} | status: {lead.status === 'novo' ? 'Novo' : 'Negociação'}
+                          </td>
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[15%]">
+                            Tem imóvel: {lead.possuiImovel || 'Não'}, Entrada: {lead.fgtsSaldo > 0 ? 'FGTS' : '20%'}, Restrição: {lead.restricaoBacen || 'Não'}
+                          </td>
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[15%]">
+                            Região: {lead.region || 'Sul'}, Metragem: {lead.propertyInterest || '80m²'}, Dorm: {lead.preferenciasUnidade?.includes('3 dorm.') ? '3' : '3'}
+                          </td>
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[10%]">
+                            Valor imóvel: R$ {formattedValue}
+                          </td>
+                          {/* Column G - Ações (rowSpan=3) */}
+                          <td className="px-2 py-4 border-r border-zinc-200 text-center w-[5%] bg-zinc-50/30" rowSpan={3}>
+                            <div className="flex flex-col gap-1.5 items-center justify-center">
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => handleWhatsAppClick(lead)}
+                                  disabled={generatingScriptLeadId === lead.id}
+                                  className="p-1 px-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-zinc-950 rounded text-[10px] font-mono font-black uppercase flex items-center justify-center gap-0.5 transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] cursor-pointer"
+                                  title={generatingScriptLeadId === lead.id ? "Gerando roteiro..." : "WhatsApp"}
+                                >
+                                  💬
+                                </button>
+                                <a
+                                  href={`tel:${(lead.phone || "").replace(/\D/g, '')}`}
+                                  onClick={() => onUpdateLeadField?.(lead.id, { lastInteractionAt: new Date().toISOString() })}
+                                  className="p-1 px-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 border border-zinc-950 rounded text-[10px] font-mono font-black uppercase flex items-center justify-center gap-0.5 transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)]"
+                                  title="Ligar"
+                                >
+                                  📞
+                                </a>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => onOpenLeadDetails(lead)}
+                                  className="p-1 px-1.5 bg-zinc-100 hover:bg-zinc-200 text-[10px] rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] cursor-pointer"
+                                  title="Ficha do Lead"
+                                >
+                                  📑
+                                </button>
+                                <button
+                                  onClick={() => onOpenEditModal(lead)}
+                                  className="p-1 px-1.5 bg-slate-100 hover:bg-slate-200 text-[10px] rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] cursor-pointer"
+                                  title="Editar"
+                                >
+                                  ⚙️
+                                </button>
+                              </div>
+                              <button
+                                onClick={() => onDeleteLead(lead.id)}
+                                className="p-1.5 bg-red-100 hover:bg-red-200 text-red-700 text-[10px] rounded border border-zinc-950 transition cursor-pointer font-bold uppercase tracking-wider"
+                                title="Deletar"
+                              >
+                                🗑️ Excluir
+                              </button>
+                            </div>
+                          </td>
+                          {/* Column H - Atividades (rowSpan=3) */}
+                          <td className="px-3 py-4 text-center w-[5%] bg-zinc-50/30" rowSpan={3}>
+                            <div className="flex flex-col gap-2 items-center justify-center">
+                              <span className="inline-block bg-teal-50 border border-teal-300 text-teal-800 font-mono text-[9px] font-black uppercase px-2 py-0.5 rounded shadow-xs select-none">
+                                impressão
+                              </span>
+                              <span className="inline-block bg-indigo-50 border border-indigo-200 text-indigo-800 font-mono text-[9px] font-black uppercase px-2 py-0.5 rounded shadow-xs select-none">
+                                interações
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {/* ROW 2 */}
+                        <tr className="hover:bg-zinc-50/50 border-b border-zinc-200">
+                          <td className="px-1.5 py-2 bg-zinc-150 border-r border-zinc-300 text-center text-[10px] font-mono font-black text-zinc-500 w-10">
+                            {startRowIdx + 1}
+                          </td>
+                          <td className="px-3 py-2 border-r border-zinc-200 font-sans text-xs w-[15%]">
+                            <input 
+                              defaultValue={lead.phone}
+                              onBlur={(e) => { if (e.target.value !== lead.phone) onUpdateLeadField?.(lead.id, { phone: e.target.value }) }}
+                              className="font-mono text-xs font-bold text-zinc-900 bg-transparent focus:bg-white focus:outline-none w-full border-b border-transparent focus:border-indigo-500"
+                            />
+                          </td>
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[20%]">
+                            Bairro: {lead.bairroEspecifico || 'Vila Mariana'}
+                          </td>
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[15%]">
+                            perfil: {lead.mainProfile || 'Médio'} | entrada: {lead.createdAt ? new Date(lead.createdAt).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}) : '30/04'}
+                          </td>
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[15%]">
+                            Aprovado: Sim
+                          </td>
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[15%]">
+                            Estágio: {lead.stage || 'Saída'}
+                          </td>
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[10%]">
+                            Valor financiado: R$ {financedValue}
+                          </td>
+                        </tr>
+
+                        {/* ROW 3 */}
+                        <tr className="hover:bg-zinc-50/50 border-b border-zinc-200">
+                          <td className="px-1.5 py-2 bg-zinc-150 border-r border-zinc-300 text-center text-[10px] font-mono font-black text-zinc-500 w-10">
+                            {startRowIdx + 2}
+                          </td>
+                          <td className="px-3 py-2 border-r border-zinc-200 font-sans text-xs w-[15%]">
+                            <input 
+                              defaultValue={lead.email || ''}
+                              onBlur={(e) => { if (e.target.value !== lead.email) onUpdateLeadField?.(lead.id, { email: e.target.value }) }}
+                              placeholder="E-mail"
+                              className="text-xs font-medium text-zinc-700 bg-transparent focus:bg-white focus:outline-none w-full border-b border-transparent focus:border-indigo-500"
+                            />
+                          </td>
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[20%]">
+                            Gênero: {lead.gender || 'M'}, Idade: {calculatedAge}, EC: {lead.maritalStatus || 'Casado'}
+                          </td>
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[15%]">
+                            objetivos: {lead.company || 'Preço'} | Alt. int.: {lead.lastContactAt ? new Date(lead.lastContactAt).toLocaleDateString('pt-BR', {day:'2-digit', month: '2-digit'}) : '15/06'}
+                          </td>
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[15%]">
+                            Renda: R$ {familyIncomeFormatted}, Programa: {lead.programaDesejado || 'MCMV'}, Redutor: 5%
+                          </td>
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[15%]">
+                            Suíte: {lead.preferenciasUnidade?.includes('Suíte') ? 'Sim' : 'Sim'}, Varanda: {lead.preferenciasUnidade?.includes('Varanda') ? 'Sim' : 'Sim'}, Vaga: 2
+                          </td>
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[10%]">
+                            Parcelas: R$ {installmentValue}
+                          </td>
+                        </tr>
+
+                        {/* ROW 4 - SPACER */}
+                        <tr className="bg-zinc-100">
+                          <td className="px-1.5 py-1.5 bg-zinc-200 border-r border-zinc-300 text-center text-[10px] font-mono font-bold text-zinc-500 w-10 select-none">
+                            {startRowIdx + 3}
+                          </td>
+                          <td colSpan={8} className="bg-zinc-150 h-3 border-y border-zinc-250 select-none"></td>
+                        </tr>
+                      </React.Fragment>
+                    );
+                  }
+
                   const statusInfo = statusMap[lead.status] || { label: lead.status, bg: 'bg-zinc-100 border border-zinc-300', text: 'text-zinc-700' };
                   const daysSinceContact = getDaysSinceContact(lead.lastContactAt);
                   const isOverdue = daysSinceContact !== null && daysSinceContact > 7;
 
+                  // Age bracket coloring
+                  const ageBadgeColors = lead.ageBracket === 'Jovem' 
+                    ? 'bg-amber-100 text-amber-900 border border-amber-300' 
+                    : lead.ageBracket === 'Meia idade' 
+                    ? 'bg-indigo-100 text-indigo-900 border border-indigo-300' 
+                    : lead.ageBracket === 'Idoso' 
+                    ? 'bg-purple-100 text-purple-900 border border-purple-300'
+                    : 'bg-zinc-100 text-zinc-500 border border-zinc-200';
+
+                  // Gender visualization
+                  let genderAvatarSymbol = '👤';
+                  let genderAvatarBg = 'bg-zinc-100 text-zinc-700';
+                  if (lead.gender === 'Homem') {
+                    genderAvatarSymbol = '👨';
+                    genderAvatarBg = 'bg-sky-100 text-sky-850 border border-sky-400';
+                  } else if (lead.gender === 'Mulher') {
+                    genderAvatarSymbol = '👩';
+                    genderAvatarBg = 'bg-pink-100 text-pink-850 border border-pink-400';
+                  }
+
+                  // Profiles list renders as clean, high-contrast tech tags
+                  const renderedProfiles = lead.profiles && lead.profiles.length > 0 
+                    ? lead.profiles 
+                    : [];
+
                   return (
                     <tr 
                       key={lead.id} 
-                      className={`hover:bg-zinc-50/80 transition-colors ${selectedLeadIds.includes(lead.id) ? 'bg-indigo-50/30' : ''}`}
+                      className={cn(
+                        "hover:bg-zinc-50/80 transition-colors border-b-2",
+                        theme === 'claro' ? 'border-zinc-100' : 'border-zinc-900',
+                        selectedLeadIds.includes(lead.id) && (theme === 'claro' ? 'bg-indigo-50/50' : 'bg-indigo-900/20')
+                      )}
                       id={`lead-row-${lead.id}`}
                     >
                       {/* Selection Checkbox */}
-                      <td className="p-4 text-center">
+                      <td className="px-2 py-2 text-[10px] text-center">
                         <input
                           type="checkbox"
                           checked={selectedLeadIds.includes(lead.id)}
@@ -1914,127 +2777,490 @@ export default function LeadList({
                         />
                       </td>
 
-                      {/* Name / Co */}
-                      <td className="p-4 font-sans">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <div className="font-extrabold text-zinc-950 text-sm">{lead.name}</div>
-                          {isOverdue && (
-                            <span 
-                              className="inline-flex items-center gap-1 text-[9px] bg-red-100 border border-red-500 rounded px-1.5 py-0.5 font-mono font-black text-red-700 animate-pulse select-none"
-                              title={`Último contato há ${daysSinceContact} dias!`}
-                            >
-                              <AlertTriangle className="w-3 h-3 text-red-600 shrink-0" />
-                              <span>{daysSinceContact}d</span>
-                            </span>
-                          )}
-                        </div>
-                        {lead.company && (
-                          <div className="text-xs text-zinc-500 font-semibold mt-0.5">{lead.company}</div>
-                        )}
+                      {/* ID (sequencial automático) */}
+                      <td className="px-1 py-2 text-[10px] text-center font-mono font-black text-zinc-400">
+                        #{idx + 1}
                       </td>
 
-                      {/* Contact Channels */}
-                      <td className="p-4 text-zinc-800 text-sm">
-                        <div className="font-extrabold">{lead.phone}</div>
-                        <div className="text-xs text-zinc-500 font-semibold mt-0.5">{lead.email}</div>
-                        <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                          {/* Whatsapp action */}
-                          <a
-                            href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Olá ${lead.name}, aqui é o gestor da CicloCred Imobiliária. Identifiquei seu interesse num crédito imobiliário no valor de R$ ${lead.value.toLocaleString('pt-BR')}. Podemos conversar?`)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-1 px-1.5 bg-emerald-100 hover:bg-emerald-250 text-emerald-800 border-2 border-zinc-950 rounded text-[9px] font-mono font-black uppercase flex items-center gap-1 hover:translate-y-[-1px] transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)]"
-                            title="Conversar no WhatsApp"
-                          >
-                            <span>WhatsApp 💬</span>
-                          </a>
-
-                          {/* Email copy action */}
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(`Prezado(a) ${lead.name},\n\nAqui é da CicloCred Imobiliária. Temos excelentes notícias sobre a simulação de crédito corporativo para aquisição no valor estimado de R$ ${lead.value.toLocaleString('pt-BR')}.\n\nQuando seria melhor agendarmos um bate-papo?\n\nAtenciosamente,\nEquipe CicloCred`);
-                              alert(`Abordagem para ${lead.name} copiada com sucesso para área de transferência!`);
-                            }}
-                            className="p-1 px-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border-2 border-zinc-950 rounded text-[9px] font-mono font-black uppercase flex items-center gap-1 hover:translate-y-[-1px] transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)]"
-                            title="Roteiro de abordagem"
-                          >
-                            <span>Copy 📋</span>
-                          </button>
-                        </div>
-                      </td>
-
-                      {/* Marketing Origin */}
-                      <td className="p-4">
-                        <span className="text-[10px] uppercase font-black tracking-wider bg-zinc-100 border border-zinc-900 text-zinc-800 px-2.5 py-1 rounded">
-                          {lead.origin}
-                        </span>
-                      </td>
-
-                      {/* Deal Value */}
-                      <td className="p-4 font-mono font-black text-sm text-indigo-600">
-                        {lead.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
-                      </td>
-
-                      {/* Status Stage Transition Selector */}
-                      <td className="p-4">
-                        <select
-                          id={`lead-row-status-select-${lead.id}`}
-                          value={lead.status}
-                          onChange={(e) => onMoveLead(lead.id, e.target.value as LeadStatus)}
-                          className={`text-xs font-black rounded-lg px-2.5 py-1.5 focus:ring-1 focus:ring-indigo-500 outline-none select-none cursor-pointer ${statusInfo.bg} ${statusInfo.text}`}
-                        >
-                          {dynCols.map(col => (
-                            <option key={col.id} value={col.id}>{col.label}</option>
-                          ))}
-                        </select>
-                      </td>
-
-                      {/* Created At */}
-                      <td className="p-4 text-zinc-500 text-xs font-mono font-bold">
-                        {new Date(lead.createdAt).toLocaleDateString('pt-BR')}
-                      </td>
-
-                      {/* Action buttons */}
-                      <td className="p-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => onOpenLeadDetails(lead)}
-                            title="Ficha do Lead"
-                            className="p-1.5 px-3 text-[10px] bg-white border border-zinc-950 hover:bg-zinc-100 text-zinc-950 font-black rounded uppercase shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-0.5px] transition flex items-center gap-1 active:translate-y-0.5"
-                          >
-                            <ExternalLink className="w-3 h-3 text-indigo-600" />
-                            <span>Ver</span>
-                          </button>
-                          <button
-                            onClick={() => onOpenEditModal(lead)}
-                            title="Editar"
-                            className="p-1.5 border border-zinc-400 hover:border-zinc-950 rounded bg-white text-zinc-600 hover:text-zinc-900 transition"
-                          >
-                            <Edit className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            id={`delete-btn-${lead.id}`}
-                            onClick={() => handleIndividualDelete(lead.id)}
-                            title="Inativar/Excluir"
-                            className="p-1.5 border border-red-300 hover:border-red-600 hover:bg-red-50 rounded transition text-red-500 hover:text-red-700"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                      {/* Nome completo e Gênero */}
+                      <td className="px-2 py-2 text-[10px] font-sans min-w-[170px] md:min-w-[225px]">
+                        <div className="flex items-start gap-2.5">
+                          <div className="space-y-1 w-full">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <input 
+                                defaultValue={lead.name}
+                                onBlur={(e) => { if (e.target.value !== lead.name) onUpdateLeadField?.(lead.id, { name: e.target.value }) }}
+                                className="font-extrabold text-zinc-950 text-sm tracking-tight bg-transparent border-b-2 border-transparent focus:border-indigo-500 focus:outline-none w-full max-w-[145px] md:max-w-[210px] truncate"
+                                title={lead.name}
+                              />
+                              {isOverdue && (
+                                <span 
+                                  className="inline-flex items-center gap-0.5 text-[8.5px] bg-red-150 border border-red-500 rounded px-1.5 py-0.5 font-mono font-black text-red-700 select-none"
+                                  title={`Último contato há ${daysSinceContact} dias!`}
+                                >
+                                  <AlertTriangle className="w-2.5 h-2.5 text-red-600 shrink-0" />
+                                  <span>{daysSinceContact}d</span>
+                                </span>
+                              )}
+                            </div>
+                            
+                            {/* Gênero Selector below Name */}
+                            <div className="mt-1">
+                              <select
+                                value={lead.gender || 'Não Informado'}
+                                onChange={(e) => onUpdateLeadField?.(lead.id, { gender: e.target.value })}
+                                className={`inline-flex items-center gap-1 text-[9px] font-black px-1.5 py-0.5 rounded border uppercase tracking-wide font-mono focus:outline-none cursor-pointer w-[120px] truncate ${
+                                  lead.gender === 'Homem' ? 'bg-sky-50 text-sky-850 border-sky-350' :
+                                  lead.gender === 'Mulher' ? 'bg-pink-50 text-pink-850 border-pink-350' :
+                                  'bg-zinc-50 text-zinc-800 border-zinc-200'
+                                }`}
+                              >
+                                <option value="Não Informado">👤 ND / Não Inf.</option>
+                                <option value="Homem">👨 Homem</option>
+                                <option value="Mulher">👩 Mulher</option>
+                              </select>
+                            </div>
+                            
+                            {/* Tags list (Profiles & Age) */}
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {lead.ageBracket && (
+                                <span className={`text-[8.5px] font-mono font-black px-1.5 py-0.5 rounded uppercase tracking-wider ${ageBadgeColors}`}>
+                                  {lead.ageBracket}
+                                </span>
+                              )}
+                              
+                              {renderedProfiles.map((prof, pIdx) => (
+                                <span 
+                                  key={pIdx} 
+                                  className="text-[8.5px] font-mono font-black bg-zinc-900 border border-zinc-800 text-white px-1.5 py-0.5 rounded uppercase tracking-wider"
+                                >
+                                  {prof}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                       </td>
+
+                      {isTodosView ? (
+                        <>
+                          {/* Telefone (com DDD) */}
+                          <td className="px-2 py-2 text-[10px] text-zinc-800 text-sm whitespace-nowrap max-w-[140px]">
+                            <input 
+                              defaultValue={lead.phone}
+                              onBlur={(e) => { if (e.target.value !== lead.phone) onUpdateLeadField?.(lead.id, { phone: e.target.value }) }}
+                              className="block font-extrabold text-xs tracking-tight text-zinc-950 bg-transparent border-b border-transparent focus:border-indigo-500 focus:outline-none w-full max-w-[130px] truncate"
+                            />
+                          </td>
+
+                          {/* E-mail column in todos view */}
+                          <td className="px-2 py-2 text-[10px] font-sans">
+                            <input 
+                              defaultValue={lead.email || ''}
+                              placeholder="E-mail"
+                              onBlur={(e) => { if (e.target.value !== lead.email) onUpdateLeadField?.(lead.id, { email: e.target.value }) }}
+                              className="block text-xs font-bold text-zinc-950 bg-transparent border-b border-zinc-200 focus:border-indigo-500 focus:outline-none w-full max-w-[220px] truncate"
+                              title={lead.email || ''}
+                            />
+                          </td>
+
+                          {/* Data de entrada column in todos view */}
+                          <td className="px-2 py-2 text-[10px] font-mono text-xs text-zinc-650 whitespace-nowrap">
+                            <div className="bg-indigo-50 border border-indigo-200 rounded px-1.5 py-1 inline-block shadow-sm">
+                              <span className="text-[8px] text-indigo-500 font-black uppercase block leading-none mb-0.5">🗓️ ENTRADA</span>
+                              <span className="text-[10px] font-black text-indigo-800">
+                                {lead.createdAt ? new Date(lead.createdAt).toLocaleDateString("pt-BR") + " " + new Date(lead.createdAt).toLocaleTimeString("pt-BR", {hour: '2-digit', minute:'2-digit'}) : "-"}
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Ações column in todos view */}
+                          <td className="px-2 py-2 text-[10px] font-sans whitespace-nowrap">
+                            <div className="flex items-center gap-1">
+                              {/* Whatsapp Action with AI generation */}
+                              <button
+                                onClick={() => handleWhatsAppClick(lead)}
+                                disabled={generatingScriptLeadId === lead.id}
+                                className="p-1 px-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-zinc-950 rounded text-[10px] font-mono font-black uppercase flex items-center justify-center gap-0.5 transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] cursor-pointer min-w-[28px]"
+                                title={generatingScriptLeadId === lead.id ? "Gerando..." : "WhatsApp"}
+                              >
+                                {generatingScriptLeadId === lead.id ? (
+                                  <span className="animate-spin text-[8px]">⏳</span>
+                                ) : (
+                                  <span>💬</span>
+                                )}
+                              </button>
+
+                              {/* Ligar action */}
+                              <a
+                                href={`tel:${(lead.phone || "").replace(/\D/g, '')}`}
+                                onClick={() => onUpdateLeadField?.(lead.id, { lastInteractionAt: new Date().toISOString() })}
+                                className="p-1 px-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 border border-zinc-950 rounded text-[10px] font-mono font-black uppercase flex items-center gap-0.5 transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)]"
+                                title="Ligar"
+                              >
+                                <span>📞</span>
+                              </a>
+
+                              {/* Follow-up action */}
+                              <button
+                                onClick={() => {
+                                  onUpdateLeadField?.(lead.id, { lastInteractionAt: new Date().toISOString() });
+                                  if (onNavigateToFollowUp) {
+                                    onNavigateToFollowUp(lead);
+                                  } else {
+                                    onOpenEditModal(lead);
+                                  }
+                                }}
+                                className="p-1 px-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 border border-zinc-950 rounded text-[10px] font-mono font-black uppercase flex items-center gap-0.5 transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)]"
+                                title="Agendar Follow-up"
+                              >
+                                <span>🚨</span>
+                              </button>
+
+                              {/* Excluir action */}
+                              <button
+                                onClick={() => handleIndividualDelete(lead.id)}
+                                className="p-1 px-1.5 bg-red-100 hover:bg-red-200 text-red-800 border border-zinc-950 rounded text-[10px] font-mono font-black uppercase flex items-center gap-0.5 transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] cursor-pointer"
+                                title="Excluir Lead"
+                              >
+                                <span>🗑️</span>
+                              </button>
+                            </div>
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          {/* Telefone / E-mail */}
+                          <td className="px-2 py-2 text-[10px] text-zinc-805 whitespace-nowrap">
+                            <div className="space-y-1 max-w-[155px]">
+                              <div>
+                                <span className="text-[8px] text-zinc-400 font-mono font-bold block leading-none">TELEFONE</span>
+                                <input 
+                                  defaultValue={lead.phone}
+                                  onBlur={(e) => { if (e.target.value !== lead.phone) onUpdateLeadField?.(lead.id, { phone: e.target.value }) }}
+                                  className="block font-black text-xs tracking-tight text-zinc-950 bg-transparent border-b border-transparent focus:border-indigo-500 focus:outline-none w-full truncate"
+                                />
+                              </div>
+                              <div>
+                                <span className="text-[8px] text-zinc-400 font-mono font-bold block leading-none">E-MAIL</span>
+                                <input 
+                                  defaultValue={lead.email || ''}
+                                  placeholder="Sem e-mail"
+                                  onBlur={(e) => { if (e.target.value !== lead.email) onUpdateLeadField?.(lead.id, { email: e.target.value }) }}
+                                  className="block text-[11px] font-semibold text-zinc-750 bg-transparent border-b border-transparent focus:border-indigo-500 focus:outline-none w-full truncate"
+                                  title={lead.email || ''}
+                                />
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Entrada / Interação */}
+                          <td className="px-2 py-2 text-[10px] text-zinc-805 whitespace-nowrap">
+                            <div className="space-y-2 max-w-[120px]">
+                              <div className="bg-zinc-150 border border-zinc-300 rounded px-1.5 py-1 shadow-sm">
+                                <span className="text-[8px] text-zinc-500 font-mono font-bold block leading-none mb-0.5">🗓️ ENTRADA</span>
+                                <div className="text-[10px] font-mono font-black text-indigo-700">
+                                   {lead.createdAt ? new Date(lead.createdAt).toLocaleDateString("pt-BR") + " " + new Date(lead.createdAt).toLocaleTimeString("pt-BR", {hour: '2-digit', minute:'2-digit'}) : "-"}
+                                </div>
+                              </div>
+                              <div className="bg-emerald-50/50 border border-emerald-200 rounded px-1.5 py-1 shadow-sm">
+                                <span className="text-[8px] text-emerald-600 font-mono font-bold block leading-none mb-0.5">⚡ INTERAÇÃO</span>
+                                <div className="text-[10px] font-mono font-black text-emerald-800">
+                                   {lead.lastInteractionAt ? new Date(lead.lastInteractionAt).toLocaleDateString("pt-BR") + " " + new Date(lead.lastInteractionAt).toLocaleTimeString("pt-BR", {hour: '2-digit', minute:'2-digit'}) : "-"}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Ações */}
+                          <td className="px-2 py-2 text-center whitespace-nowrap">
+                            <div className="flex flex-col gap-1 items-center justify-center">
+                              <div className="flex items-center gap-1">
+                                {/* Whatsapp Action with dynamic AI simulation */}
+                                <button
+                                  onClick={() => handleWhatsAppClick(lead)}
+                                  disabled={generatingScriptLeadId === lead.id}
+                                  className="p-1 px-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-zinc-950 rounded text-[10px] font-mono font-black uppercase flex items-center justify-center gap-0.5 transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] cursor-pointer min-w-[28px]"
+                                  title={generatingScriptLeadId === lead.id ? "Gerando roteiro inteligente..." : "Conversar no WhatsApp"}
+                                >
+                                  {generatingScriptLeadId === lead.id ? (
+                                    <span className="animate-spin text-[8px]">⏳</span>
+                                  ) : (
+                                    <span>💬</span>
+                                  )}
+                                </button>
+
+                                {/* Ligar action */}
+                                <a
+                                  href={`tel:${(lead.phone || "").replace(/\D/g, '')}`}
+                                  onClick={() => onUpdateLeadField?.(lead.id, { lastInteractionAt: new Date().toISOString() })}
+                                  className="p-1 px-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 border border-zinc-950 rounded text-[10px] font-mono font-black uppercase flex items-center gap-0.5 transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)]"
+                                  title="Ligar"
+                                >
+                                  <span>📞</span>
+                                </a>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                {/* Follow-up calendar action */}
+                                <button
+                                  onClick={() => {
+                                    onUpdateLeadField?.(lead.id, { lastInteractionAt: new Date().toISOString() });
+                                    if (onNavigateToFollowUp) {
+                                      onNavigateToFollowUp(lead);
+                                    } else {
+                                      onOpenEditModal(lead);
+                                    }
+                                  }}
+                                  className="p-1 px-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 border border-zinc-950 rounded text-[10px] font-mono font-black uppercase flex items-center gap-0.5 transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)]"
+                                  title="Agendar Follow-up"
+                                >
+                                  <span>🚨</span>
+                                </button>
+
+                                {/* Excluir action */}
+                                <button
+                                  onClick={() => handleIndividualDelete(lead.id)}
+                                  className="p-1 px-1.5 bg-red-100 hover:bg-red-200 text-red-800 border border-zinc-950 rounded text-[10px] font-mono font-black uppercase flex items-center gap-0.5 transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] cursor-pointer"
+                                  title="Excluir Lead"
+                                >
+                                  <span>🗑️</span>
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Parâmetros */}
+                          <td className="px-2 py-2 text-zinc-900 border-l border-zinc-100">
+                            <div className="space-y-1 max-w-[180px] mx-auto">
+                              <div className="grid grid-cols-2 gap-1 items-center">
+                                <div>
+                                  <span className="text-[8px] text-zinc-400 font-mono font-bold block uppercase leading-none">Status</span>
+                                  <select
+                                    value={lead.status || ""}
+                                    onChange={(e) => onMoveLead(lead.id, e.target.value, "status")}
+                                    className={`text-[9px] font-black uppercase rounded py-0.5 px-0.5 border border-zinc-950 outline-none select-none cursor-pointer w-full truncate ${statusInfo ? statusInfo.bg : "bg-zinc-100"} ${statusInfo ? statusInfo.text : "text-zinc-650"}`}
+                                  >
+                                    {dynCols.map(col => (
+                                      <option key={col.id} value={col.id}>{col.label}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <span className="text-[8px] text-zinc-400 font-mono font-bold block uppercase leading-none">Perfil</span>
+                                  <select 
+                                    value={lead.mainProfile || ''}
+                                    onChange={(e) => { onMoveLead(lead.id, e.target.value, "perfil"); }}
+                                    className="text-[9px] font-black uppercase bg-amber-50 border border-zinc-300 rounded py-0.5 px-0.5 focus:outline-none w-full cursor-pointer truncate"
+                                  >
+                                    <option disabled value="">- Perfil -</option>
+                                    {dynColsPerfil.map(col => (
+                                      <option key={col.id} value={col.id}>{col.label}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-1 items-center">
+                                <div>
+                                  <span className="text-[8px] text-zinc-400 font-mono font-bold block uppercase leading-none">Etapa</span>
+                                  <select
+                                    value={lead.stage || ''}
+                                    onChange={(e) => onMoveLead(lead.id, e.target.value, "etapas")}
+                                    className="text-[9px] font-black uppercase px-0.5 py-0.5 rounded border border-zinc-300 focus:outline-none cursor-pointer w-full bg-white truncate"
+                                  >
+                                    <option disabled value="">- Etapa -</option>
+                                    {dynColsAtivos.map(col => (
+                                      <option key={col.id} value={col.id}>{col.label}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <span className="text-[8px] text-zinc-400 font-mono font-bold block uppercase leading-none">Objeção</span>
+                                  <select
+                                    value={lead.objection || ''}
+                                    onChange={(e) => onMoveLead(lead.id, e.target.value, "objecoes")}
+                                    className="text-[9px] font-black uppercase px-0.5 py-0.5 rounded border focus:outline-none cursor-pointer w-full bg-white truncate border-zinc-300"
+                                  >
+                                    <option disabled value="">- Objeção -</option>
+                                    {dynColsCarteira.map(col => (
+                                      <option key={col.id} value={col.id}>{col.label}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Infos */}
+                          <td className="px-2 py-2 text-zinc-900 border-l border-zinc-100">
+                            <div className="space-y-1 max-w-[180px] mx-auto">
+                              <div className="grid grid-cols-2 gap-1 items-center">
+                                <div>
+                                  <span className="text-[8px] text-zinc-400 font-mono font-bold block uppercase leading-none" title="Renda Familiar Líquida">R. Líquida</span>
+                                  <input 
+                                    type="number"
+                                    defaultValue={lead.familyIncome || 0}
+                                    onBlur={(e) => { if (Number(e.target.value) !== lead.familyIncome) onUpdateLeadField?.(lead.id, { familyIncome: Number(e.target.value) }) }}
+                                    className="text-zinc-950 font-black text-[11px] bg-transparent border-b border-zinc-200 focus:border-indigo-500 focus:outline-none w-full text-center py-0.5"
+                                  />
+                                </div>
+                                <div>
+                                  <span className="text-[8px] text-zinc-400 font-mono font-bold block uppercase leading-none" title="Renda Familiar Bruta">R. Bruta</span>
+                                  <input 
+                                    type="number"
+                                    defaultValue={lead.familyGrossIncome || lead.familyIncome || 0}
+                                    onBlur={(e) => { if (Number(e.target.value) !== lead.familyGrossIncome) onUpdateLeadField?.(lead.id, { familyGrossIncome: Number(e.target.value) }) }}
+                                    className="text-zinc-950 font-black text-[11px] bg-transparent border-b border-zinc-200 focus:border-emerald-500 focus:outline-none w-full text-center py-0.5"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-1 items-center">
+                                <div>
+                                  <span className="text-[8px] text-zinc-400 font-mono font-bold block uppercase leading-none">Região</span>
+                                  <select 
+                                    value={lead.region || 'Geral'}
+                                    onChange={(e) => { if (e.target.value !== (lead.region || 'Geral')) onUpdateLeadField?.(lead.id, { region: e.target.value }) }}
+                                    className="bg-white border border-zinc-300 font-black rounded py-0.5 px-0.5 text-[9px] uppercase cursor-pointer text-zinc-900 focus:outline-none w-full truncate"
+                                  >
+                                    <option value="Geral">Geral</option>
+                                    <option value="Centro">Centro</option>
+                                    <option value="Norte">Z. Norte</option>
+                                    <option value="Sul">Z. Sul</option>
+                                    <option value="Leste">Z. Leste</option>
+                                    <option value="Oeste">Z. Oeste</option>
+                                    <option value="Guarulhos">Guarulhos</option>
+                                    <option value="ABC">ABC</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <span className="text-[8px] text-zinc-400 font-mono font-bold block uppercase leading-none">Programa</span>
+                                  <select
+                                    value={lead.programaDesejado || 'Indiferente'}
+                                    onChange={(e) => onUpdateLeadField?.(lead.id, { programaDesejado: e.target.value })}
+                                    className={`text-[9px] font-mono font-black uppercase px-0.5 py-0.5 rounded border focus:outline-none cursor-pointer w-full truncate ${
+                                      lead.programaDesejado === 'Minha Casa Minha Vida'
+                                        ? 'bg-indigo-50 text-indigo-805 border-indigo-200'
+                                        : lead.programaDesejado === 'SBPE'
+                                        ? 'bg-amber-50 text-amber-805 border-amber-200'
+                                        : 'bg-zinc-100 text-zinc-650 border-zinc-200'
+                                    }`}
+                                  >
+                                    <option value="Indiferente">Indif</option>
+                                    <option value="Minha Casa Minha Vida">MCMV</option>
+                                    <option value="SBPE">SBPE</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <span className="text-[8px] text-zinc-400 font-mono font-bold block uppercase leading-none">Metragem m²</span>
+                                  <input 
+                                    type="text"
+                                    defaultValue={lead.propertyInterest || ''}
+                                    placeholder="m²"
+                                    onBlur={(e) => { if (e.target.value !== lead.propertyInterest) onUpdateLeadField?.(lead.id, { propertyInterest: e.target.value }) }}
+                                    className="text-zinc-950 text-[10px] font-bold bg-transparent border-b border-zinc-200 focus:border-indigo-500 focus:outline-none w-full text-center py-0.5"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Atividades */}
+                          <td className="px-2 py-2 text-center border-l border-zinc-100">
+                            <div className="flex flex-col gap-1 items-center justify-center">
+                              <div className="flex items-center gap-1">
+                                {/* Ficha */}
+                                <button 
+                                  type="button"
+                                  onClick={() => onOpenLeadDetails(lead)}
+                                  className="w-7 h-7 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 text-xs rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] text-zinc-850 cursor-pointer"
+                                  title="Ver Ficha Cadastral"
+                                >
+                                  📑
+                                </button>
+
+                                {/* Funil Status */}
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    const dev = document.getElementById("integrated-kanban-board-scroll");
+                                    if (dev) {
+                                      dev.scrollIntoView({ behavior: "smooth" });
+                                    }
+                                  }}
+                                  className="w-7 h-7 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 text-xs rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] text-zinc-850 cursor-pointer"
+                                  title="Rolar para o Funil Kanban Integrado"
+                                >
+                                  🔽
+                                </button>
+
+                                {/* Simulador */}
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    if ((window as any).setActiveTab) {
+                                      (window as any).setActiveTab("simulador");
+                                    }
+                                  }}
+                                  className="w-7 h-7 flex items-center justify-center bg-indigo-50 hover:bg-indigo-100 text-xs rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] text-indigo-800 cursor-pointer"
+                                  title="Abrir Simulador de Crédito"
+                                >
+                                  🧮
+                                </button>
+                              </div>
+
+                              <div className="flex items-center gap-1">
+                                {/* Regras */}
+                                <button 
+                                  type="button"
+                                  onClick={() => onOpenRuleEngine && onOpenRuleEngine(lead)}
+                                  className="w-7 h-7 flex items-center justify-center bg-indigo-50 hover:bg-indigo-100 text-xs rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] text-indigo-850 cursor-pointer"
+                                  title="Ações Automáticas (Regras)"
+                                >
+                                  🤖
+                                </button>
+
+                                {/* Assistente */}
+                                <button 
+                                  type="button"
+                                  onClick={() => onOpenAIAssistant && onOpenAIAssistant(lead)}
+                                  className="w-7 h-7 flex items-center justify-center bg-purple-50 hover:bg-purple-100 text-xs rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] text-purple-850 cursor-pointer"
+                                  title="Assistente AI & Objeções"
+                                >
+                                  ✨
+                                </button>
+
+                                {/* Estoque */}
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    if ((window as any).setActiveTab) {
+                                      (window as any).setActiveTab("inventory");
+                                    }
+                                  }}
+                                  className="w-7 h-7 flex items-center justify-center bg-emerald-50 hover:bg-emerald-100 text-xs rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] text-emerald-800 cursor-pointer"
+                                  title="Abrir Estoque"
+                                >
+                                  🏢
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                        </>
+                      )}
                     </tr>
                   );
                 })
               )}
               {/* Infinite Scroll sentinel tracker element */}
               <tr id="infinite-scroll-sentinel" className="h-4">
-                <td colSpan={8} className="p-0 border-0"></td>
+                <td colSpan={isTodosView ? 7 : 9} className="p-0 border-0"></td>
               </tr>
               
               {/* Manual Load more backup button */}
               {visibleCount < processedLeads.length && (
                 <tr>
-                  <td colSpan={8} className="p-4 text-center bg-zinc-50 border-t">
+                  <td colSpan={isTodosView ? 7 : 9} className="p-4 text-center bg-zinc-50 border-t">
                     <button
                       onClick={() => setVisibleCount(prev => Math.min(prev + 15, processedLeads.length))}
                       className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-400 text-indigo-800 font-mono text-[9px] font-black uppercase rounded-lg shadow-sm"
@@ -2051,17 +3277,17 @@ export default function LeadList({
 
       {/* Campaign and marketing script dispatching modal suite */}
       {showCampaignModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-zinc-950/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-zinc-950/70 backdrop-blur-sm flex items-center justify-center p-4 ">
           <div className="bg-white border-4 border-zinc-950 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] text-zinc-800">
             {/* Modal Header */}
             <div className="bg-zinc-950 text-white p-5 flex items-center justify-between border-b-4 border-zinc-950">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-amber-400 rounded-lg text-zinc-950 font-black animate-pulse">
+                <div className="p-2 bg-amber-400 rounded-lg text-zinc-950 font-black ">
                   <Zap className="w-5 h-5 fill-current text-zinc-900" />
                 </div>
                 <div>
                   <h3 className="text-sm font-black uppercase tracking-wider font-mono">
-                    Disparador de Campanhas & Roteiros cicloCRED VIP
+                    Disparador de Campanhas & Roteiros VIP
                   </h3>
                   <p className="text-zinc-400 text-xs font-semibold">
                     Preparando transmissão avançada para <span className="text-amber-400 font-bold">{selectedLeadIds.length} leads</span> selecionados
@@ -2180,7 +3406,7 @@ export default function LeadList({
 
               {/* Channel View - WhatsApp Manual Clicker */}
               {campaignDispatchMode === 'whatsapp' && (
-                <div className="border-2 border-zinc-950 rounded-xl bg-zinc-50 p-4 space-y-3 animate-scaleIn">
+                <div className="border-2 border-zinc-950 rounded-xl bg-zinc-50 p-4 space-y-3 ">
                   <div className="flex justify-between items-center border-b pb-2">
                     <div>
                       <h4 className="text-xs font-black uppercase text-emerald-800 font-mono">Fila de Disparos Individuais via WhatsApp</h4>
@@ -2198,8 +3424,9 @@ export default function LeadList({
                         lead
                       );
                       const isSent = !!messagedLeads[lead.id];
-                      const cleanPhone = lead.phone.replace(/[^0-9]/g, '');
-                      const waLink = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(resolvedText)}`;
+                      const cleanPhone = (lead.phone || "").replace(/[^0-9]/g, '');
+                      const defaultPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+                      const waLink = `whatsapp://send?phone=${defaultPhone}&text=${encodeURIComponent(resolvedText)}`;
                       
                       return (
                         <div key={lead.id} className="bg-white border-2 border-zinc-950 p-3 rounded-xl flex flex-col sm:flex-row gap-3 justify-between sm:items-center">
@@ -2215,8 +3442,6 @@ export default function LeadList({
                           </div>
                           <a
                             href={waLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
                             onClick={() => {
                               setMessagedLeads(prev => ({ ...prev, [lead.id]: true }));
                               if (awardXP) awardXP(50);
@@ -2238,14 +3463,14 @@ export default function LeadList({
 
               {/* Channel View - Automated Batch Dispatcher Progress */}
               {campaignDispatchMode === 'batch' && (
-                <div className="border-2 border-zinc-950 rounded-xl bg-zinc-950 text-zinc-100 p-5 space-y-4 animate-scaleIn font-mono">
+                <div className="border-2 border-zinc-950 rounded-xl bg-zinc-950 text-zinc-100 p-5 space-y-4  font-mono">
                   <div className="flex justify-between items-center border-b border-dashed border-zinc-800 pb-2">
                     <div className="flex items-center gap-2">
-                      <div className={`w-2.5 h-2.5 rounded-full ${isDispatchingBatch ? 'bg-red-505 animate-pulse text-red-500' : 'bg-emerald-500'}`} style={{ backgroundColor: isDispatchingBatch ? '#ef4444' : '#10b981' }} />
-                      <h4 className="text-xs font-black uppercase text-amber-400">Console de Transmissão ciclocred batch v2</h4>
+                      <div className={`w-2.5 h-2.5 rounded-full ${isDispatchingBatch ? 'bg-red-505  text-red-500' : 'bg-emerald-500'}`} style={{ backgroundColor: isDispatchingBatch ? '#ef4444' : '#10b981' }} />
+                      <h4 className="text-xs font-black uppercase text-amber-400">Console de Transmissão batch v2</h4>
                     </div>
                     {isDispatchingBatch && (
-                      <span className="text-[10px] bg-red-950 text-red-400 border border-red-800 px-2 py-0.5 rounded uppercase animate-pulse">
+                      <span className="text-[10px] bg-red-950 text-red-400 border border-red-800 px-2 py-0.5 rounded uppercase ">
                         Processando Disparos...
                       </span>
                     )}
@@ -2323,18 +3548,18 @@ export default function LeadList({
                     if (!activeLead) return null;
 
                     return (
-                      <div className="bg-zinc-900 border-2 border-indigo-500/50 p-4 rounded-xl space-y-3 animate-fadeIn">
+                      <div className="bg-zinc-900 border-2 border-indigo-500/50 p-4 rounded-xl space-y-3 ">
                         <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
                           <div>
                             <span className="text-[9px] uppercase font-bold text-indigo-400">AGUARDANDO DISPARO ATIVO</span>
                             <h5 className="text-xs font-black text-white">{activeLead.name}</h5>
                           </div>
                           {batchCountdownSeconds > 0 ? (
-                            <div className="text-xs bg-indigo-950 text-indigo-400 border border-indigo-700 px-2 py-1 rounded font-black animate-pulse flex items-center gap-1.5">
+                            <div className="text-xs bg-indigo-950 text-indigo-400 border border-indigo-700 px-2 py-1 rounded font-black  flex items-center gap-1.5">
                               ⏱️ {batchCountdownSeconds}s para liberação
                             </div>
                           ) : (
-                            <div className="text-xs bg-emerald-950 text-emerald-400 border border-emerald-700 px-2 py-1 rounded font-black animate-bounce flex items-center gap-1.5">
+                            <div className="text-xs bg-emerald-950 text-emerald-400 border border-emerald-700 px-2 py-1 rounded font-black  flex items-center gap-1.5">
                               🔥 CANAL PRONTO
                             </div>
                           )}
@@ -2351,7 +3576,7 @@ export default function LeadList({
                             className={`flex-1 py-3 text-center text-xs font-black uppercase rounded-lg border-2 tracking-wider flex items-center justify-center gap-2 transition active:scale-95 ${
                               batchCountdownSeconds > 0
                                 ? 'bg-amber-500 hover:bg-amber-600 border-amber-400 text-zinc-950 shadow-[0_0_15px_rgba(245,158,11,0.3)]'
-                                : 'bg-emerald-500 hover:bg-emerald-600 border-emerald-400 text-white shadow-[0_0_20px_rgba(16,185,129,0.5)] animate-pulse'
+                                : 'bg-emerald-500 hover:bg-emerald-600 border-emerald-400 text-white shadow-[0_0_20px_rgba(16,185,129,0.5)] '
                             }`}
                           >
                             <MessageSquare className="w-4 h-4" />
@@ -2421,7 +3646,7 @@ export default function LeadList({
             {/* Modal Footer */}
             <div className="bg-zinc-50 p-5 flex items-center justify-between border-t-2">
               <span className="text-[10px] text-zinc-500 font-bold uppercase font-sans">
-                cicloCRED Pro V2.0. Digital Campaign Dashboard
+                Pro V2.0. Digital Campaign Dashboard
               </span>
               <button
                 onClick={() => setShowCampaignModal(false)}
@@ -2439,14 +3664,25 @@ export default function LeadList({
           const phoneStr = (lead.phone || '').trim();
           const isDummy = isFictitiousPhone(phoneStr);
           if (isDummy) {
-            const { extractedPhone, cleanedEmail } = extractPhoneFromEmail(lead.email || '');
+            let { extractedPhone, cleanedText: cleanedEmail } = extractPhoneFromString(lead.email || '');
+            let cleanedName = lead.name;
+
+            if (!extractedPhone && lead.name) {
+              const res = extractPhoneFromString(lead.name);
+              if (res.extractedPhone) {
+                extractedPhone = res.extractedPhone;
+                cleanedName = res.cleanedText; // Name without phone
+              }
+            }
+
             if (extractedPhone) {
               return {
                 lead,
                 currentEmail: lead.email,
                 currentPhone: lead.phone,
                 detectedPhone: extractedPhone,
-                suggestedEmail: cleanedEmail
+                suggestedEmail: cleanedEmail || lead.email,
+                suggestedName: cleanedName || lead.name
               };
             }
           }
@@ -2454,6 +3690,89 @@ export default function LeadList({
         }).filter((x): x is NonNullable<typeof x> => x !== null);
 
         const totalSelected = candidates.filter(cand => !!organizerSelectedCandidateIds[cand.lead.id]).length;
+
+        const getLeadAgeInDays = (lead: Lead): number => {
+          const refDateStr = lead.lastContactAt || lead.createdAt;
+          if (!refDateStr) return 0;
+          try {
+            const d = new Date(refDateStr);
+            if (isNaN(d.getTime())) return 0;
+            const diffTime = new Date().getTime() - d.getTime();
+            return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+          } catch (_) {
+            return 0;
+          }
+        };
+
+        const inactiveCandidates = leads.filter(lead => {
+          const isActive = lead.status !== 'fechado' && lead.status !== 'perdido';
+          const age = getLeadAgeInDays(lead);
+          return isActive && age >= 30;
+        });
+
+        const handleExecute30DayCleanup = () => {
+          if (inactiveCandidates.length === 0) return;
+          const proceed = () => {
+            const updated = leads.map(l => {
+              const isInactive = inactiveCandidates.some(cand => cand.id === l.id);
+              if (isInactive) {
+                const currentNotes = l.notes || '';
+                const dateStr = new Date().toLocaleDateString('pt-BR');
+                return {
+                  ...l,
+                  status: 'perdido',
+                  lostReason: 'Arquivamento Automático (Inatividade > 30 dias)',
+                  notes: currentNotes + `\n[${dateStr}] Auto-arquivado por inatividade de 30 dias. Tarefas e compromissos complementares concluídos de forma autônoma.`
+                };
+              }
+              return l;
+            });
+
+            if (setAppointments && appointments) {
+              const updatedApts = appointments.map((apt: any) => {
+                const isLeadInactive = inactiveCandidates.some(cand => cand.id === apt.leadId || cand.name === apt.leadName);
+                if (isLeadInactive && apt.status !== 'realizada') {
+                  return {
+                    ...apt,
+                    status: 'realizada',
+                    notes: (apt.notes || '') + ' (Concluída automaticamente no arquivamento temporal de 30 dias)'
+                  };
+                }
+                return apt;
+              });
+              setAppointments(updatedApts);
+            }
+
+            if (onUpdateMultipleLeads) {
+              onUpdateMultipleLeads(updated);
+            }
+
+            if (awardXP) {
+              awardXP(200 + inactiveCandidates.length * 20);
+            }
+
+            if (addNotification) {
+              addNotification(
+                '🧹 TEMPO SANEADO',
+                `Processados e arquivados ${inactiveCandidates.length} contatos inativos por 30+ dias! Atividades integradas concluídas.`,
+                'success'
+              );
+            }
+
+            setShowOrganizerModal(false);
+          };
+
+          if (onRequestConfirm) {
+            onRequestConfirm(
+              '⏱️ CONFIRMAR ARQUIVAMENTO TEMPORAL (30 DIAS)?',
+              `Você está prestes a transferir automaticamente todos os ${inactiveCandidates.length} leads inativos há mais de 30 dias para a lixeira de arquivados e encerrar/concluir os compromissos relacionados no seu calendário de forma automatizada. Deseja prosseguir de imediato?`,
+              proceed,
+              'warning'
+            );
+          } else if (confirm(`Deseja transferir ${inactiveCandidates.length} leads inativos para o status "Perdido"?`)) {
+            proceed();
+          }
+        };
 
         const handleApplyBatchCorrections = () => {
           if (!onUpdateMultipleLeads) return;
@@ -2463,7 +3782,8 @@ export default function LeadList({
               return {
                 ...l,
                 phone: match.detectedPhone || l.phone,
-                email: match.suggestedEmail || l.email
+                email: match.suggestedEmail || l.email,
+                name: match.suggestedName || l.name
               };
             }
             return l;
@@ -2511,7 +3831,7 @@ export default function LeadList({
         };
 
         return (
-          <div className="fixed inset-0 z-[110] overflow-y-auto bg-zinc-950/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+          <div className="fixed inset-0 z-[110] overflow-y-auto bg-zinc-950/70 backdrop-blur-sm flex items-center justify-center p-4 ">
             <div className="bg-white border-4 border-zinc-950 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] text-zinc-800">
               {/* Header */}
               <div className="bg-emerald-600 text-white p-5 flex items-center justify-between border-b-4 border-zinc-950">
@@ -2521,7 +3841,7 @@ export default function LeadList({
                   </div>
                   <div>
                     <h3 className="text-sm font-black uppercase tracking-wider font-mono">
-                      Assistente de Organização de Contatos cicloCRED
+                      Assistente de Organização de Contatos
                     </h3>
                     <p className="text-emerald-100 text-xs font-semibold uppercase">
                       Localiza celulares digitados junto com o e-mail e corrige as ordens da planilha
@@ -2561,14 +3881,14 @@ export default function LeadList({
                 {/* Analysis description */}
                 <div className="p-4 bg-zinc-100 border-2 border-zinc-950 rounded-xl space-y-1.5 text-xs text-zinc-700 font-medium">
                   <h4 className="font-black text-zinc-900 uppercase flex items-center gap-1.5 font-mono">
-                    <Sparkles className="w-4 h-4 text-emerald-600 animate-pulse" />
+                    <Sparkles className="w-4 h-4 text-emerald-600 " />
                     Como funciona esta verificação inteligente?
                   </h4>
                   <p>
                     Vários leads importados de planilhas possuíam telefones fictícios como <strong className="font-mono text-rose-700 font-bold">(11) 99999-9999</strong>, enquanto o celular real ficava misturado junto à frase do e-mail.
                   </p>
                   <p>
-                    O nosso algoritmo analisou toda a sua base de leads e encontrou sequências de 10/11 dígitos numéricos escondidas dentro do campo de e-mail. Agora, você pode separar e consertar isso em lote imediatamente!
+                    O nosso algoritmo analisou sua base de leads e encontrou sequências numéricas escondidas dentro do campo de E-mail ou do Nome. Você pode corrigir em lote!
                   </p>
                 </div>
 
@@ -2605,7 +3925,7 @@ export default function LeadList({
                     </div>
 
                     <div className="max-h-72 overflow-y-auto border-2 border-zinc-950 rounded-xl divide-y-2 divide-zinc-250">
-                      {candidates.map(({ lead, currentEmail, currentPhone, detectedPhone, suggestedEmail }) => {
+                      {candidates.map(({ lead, currentEmail, currentPhone, detectedPhone, suggestedEmail, suggestedName }) => {
                         const isChecked = !!organizerSelectedCandidateIds[lead.id];
                         return (
                           <div key={lead.id} className={`p-4 flex items-start gap-3.5 hover:bg-zinc-50 transition ${isChecked ? 'bg-emerald-50/20' : 'bg-white'}`}>
@@ -2621,11 +3941,18 @@ export default function LeadList({
                               className="mt-1 w-4 h-4 rounded border-zinc-950 text-emerald-600 focus:ring-emerald-500 cursor-pointer text-emerald-600 font-bold"
                             />
                             <div className="flex-1 space-y-2 text-xs">
-                              <div className="flex items-center justify-between border-b pb-1">
-                                <span className="font-black text-zinc-950 text-sm tracking-tight">{lead.name}</span>
-                                <span className="text-[9px] uppercase font-mono font-black bg-zinc-100 border px-1.5 py-0.5 rounded text-zinc-605">
-                                  ID: {lead.id.slice(0, 8)}...
-                                </span>
+                              <div className="flex flex-col gap-1 border-b pb-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-black text-zinc-950 text-sm tracking-tight">{lead.name}</span>
+                                  <span className="text-[9px] uppercase font-mono font-black bg-zinc-100 border px-1.5 py-0.5 rounded text-zinc-600">
+                                    ID: {lead.id.slice(0, 8)}...
+                                  </span>
+                                </div>
+                                {suggestedName !== lead.name && (
+                                   <div className="text-[11px] font-mono font-black bg-emerald-50 border border-emerald-300 text-emerald-800 px-1 rounded block w-max">
+                                     ✔️ Novo Nome: {suggestedName}
+                                   </div>
+                                )}
                               </div>
                               
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1 border-t border-zinc-50">
@@ -2663,6 +3990,40 @@ export default function LeadList({
                   </div>
                 )}
 
+                {/* Auto-Arquivamento Temporal 30 Dias (Nativo CRM) */}
+                <div className="p-5 border-4 border-zinc-950 bg-amber-50/20 rounded-2xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                  <div className="space-y-1.5 flex-1">
+                    <span className="text-[9.5px] font-mono font-black text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded border border-amber-300 inline-block uppercase select-none">
+                      Saneamento Temporal Ágil (30 Dias)
+                    </span>
+                    <h4 className="text-sm font-black uppercase text-zinc-950 font-mono tracking-tight flex items-center gap-1.5 mt-1">
+                      <span>⏱️</span> Auto-Arquivamento de Leads Inativos
+                    </h4>
+                    <p className="text-[11.5px] text-zinc-650 leading-relaxed font-semibold">
+                      Agilize a sua esteira de vendas! Esta inteligência local varre todos os seus contatos ativos e localiza aqueles sem interação ou contatos em <strong className="text-zinc-900 font-extrabold">mais de 30 dias</strong>.
+                    </p>
+                    <p className="text-[11.5px] text-zinc-650 leading-relaxed font-semibold">
+                      Ao acionar, o sistema <strong className="text-zinc-900 font-extrabold">auto-arquiva</strong> os {inactiveCandidates.length} contatos elegíveis diretos sob o rótulo "Arquivados" e <strong className="text-zinc-900 font-extrabold">adianta de forma automática</strong> todas as tarefas, agendamentos e prospecções pendentes, saneando seu calendário de gargalos!
+                    </p>
+                  </div>
+                  <div className="flex flex-col justify-center items-center md:items-end gap-3 shrink-0">
+                    <div className="bg-white border-2 border-zinc-950 p-2 px-4 rounded-xl text-center shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)]">
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase font-mono block">Elegíveis</span>
+                      <strong className="text-xl font-black font-sans text-rose-600 block">{inactiveCandidates.length}</strong>
+                      <span className="text-[9px] text-zinc-550 font-mono block">Inativos há +30d</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={inactiveCandidates.length === 0}
+                      onClick={handleExecute30DayCleanup}
+                      className="px-5 py-3 bg-zinc-900 hover:bg-zinc-950 disabled:opacity-40 disabled:cursor-not-allowed text-white border-2 border-zinc-950 rounded-xl font-black uppercase text-xs tracking-wider transition-all shadow-[2.5px_2.5px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 cursor-pointer shrink-0 text-center"
+                    >
+                      🚀 Arquivar & Adiantar Tudo
+                    </button>
+                  </div>
+                </div>
+
                 {/* Reset Entire Table Option */}
                 <div className="p-4 border-2 border-red-300 bg-red-50/40 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div className="space-y-1">
@@ -2688,7 +4049,7 @@ export default function LeadList({
               {/* Footer */}
               <div className="bg-zinc-50 p-5 flex items-center justify-between border-t-2-dashed">
                 <span className="text-[10px] text-zinc-500 font-bold uppercase font-sans">
-                  Sincronizador Inteligente cicloCRED CRM © 2026
+                  Sincronizador Inteligente CRM © 2026
                 </span>
                 <div className="flex gap-2">
                   <button
@@ -2703,7 +4064,7 @@ export default function LeadList({
                       onClick={handleApplyBatchCorrections}
                       className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white border-2 border-zinc-950 font-black uppercase text-xs rounded-xl shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] transition flex items-center gap-1.5"
                     >
-                      <Sparkles className="w-4 h-4 animate-bounce" />
+                      <Sparkles className="w-4 h-4 " />
                       <span>Aplicar Correções Inteligentes ({totalSelected})</span>
                     </button>
                   )}
@@ -2716,18 +4077,18 @@ export default function LeadList({
 
       {/* GEMINI-POWERED Campaign active planner modal */}
       {showCampaignPlanner && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-zinc-950/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-zinc-950/70 backdrop-blur-sm flex items-center justify-center p-4 ">
           <div className="bg-white border-4 border-zinc-950 rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] text-zinc-850">
             {/* Header */}
             <div className="bg-zinc-900 border-b-4 border-zinc-950 p-5 flex items-center justify-between text-white">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-emerald-500 rounded-2xl text-zinc-950">
-                  <Sparkles className="w-5 h-5 animate-bounce" />
+                  <Sparkles className="w-5 h-5 " />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black uppercase tracking-wider font-mono">
-                    Planejador e Conversor Ativo de Planilha cicloCRED
-                  </h3>
+                    <h3 className="text-sm font-black uppercase tracking-wider font-mono">
+                      Planejador e Conversor Ativo de Planilha
+                    </h3>
                   <p className="text-zinc-400 text-xs font-semibold">
                     Calculando atividades e estruturando roteiros inteligentes de captação
                   </p>
@@ -2850,7 +4211,7 @@ export default function LeadList({
 
               {/* Advanced scheduling / roadmap calendar triggers */}
               {generatedPlanMarkdown && (
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-scaleIn">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 ">
                   {/* Generated Plan text sheet */}
                   <div className="lg:col-span-7 bg-zinc-950 text-white border-4 border-zinc-950 p-6 rounded-3xl max-h-[450px] overflow-y-auto space-y-3 font-sans relative shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
                     <div className="absolute top-3 right-3 text-[9px] uppercase font-mono font-black text-indigo-400 bg-indigo-950 px-2 py-0.5 rounded border border-indigo-900">
@@ -2932,7 +4293,7 @@ export default function LeadList({
 
                       {schedulingProgress === 'scheduling' && (
                         <div className="text-center py-2 space-y-2">
-                          <p className="text-[11px] font-mono font-black text-indigo-700 animate-pulse">⚙️ Sincronizando Calendário cicloCRED...</p>
+                          <p className="text-[11px] font-mono font-black text-indigo-700 ">⚙️ Sincronizando Calendário...</p>
                           <div className="w-full bg-zinc-100 rounded-full h-3 border border-zinc-300 overflow-hidden">
                             <div className="bg-indigo-600 h-full animate-[loading_1.5s_ease-out_infinite]" style={{ width: '40%' }}></div>
                           </div>
@@ -2940,7 +4301,7 @@ export default function LeadList({
                       )}
 
                       {schedulingProgress === 'done' && (
-                        <div className="p-3.5 bg-emerald-50 border border-emerald-300 text-emerald-800 font-bold rounded-xl space-y-2 text-center animate-scaleIn text-xs">
+                        <div className="p-3.5 bg-emerald-50 border border-emerald-300 text-emerald-800 font-bold rounded-xl space-y-2 text-center  text-xs">
                           <Check className="w-5 h-5 text-emerald-600 mx-auto" />
                           <p>Funil Integrado! Atividades organizadas e calendarizadas sob a tag <span className="bg-emerald-100 font-extrabold text-emerald-950 px-1 rounded">#CampanhaLote</span>.</p>
                           <p className="text-[10px] text-zinc-500 font-mono">+250 XP conquistados!</p>
@@ -2954,7 +4315,7 @@ export default function LeadList({
 
             {/* Modal Footer */}
             <div className="bg-zinc-50 p-4 border-t-2 border-zinc-100 flex items-center justify-between font-mono text-[10px] text-zinc-500 font-bold uppercase">
-              <span>Sincronizador cicloCRED CRM</span>
+              <span>Sincronizador CRM</span>
               <button
                 onClick={() => {
                   setShowCampaignPlanner(false);

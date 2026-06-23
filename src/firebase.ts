@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { initializeFirestore, disableNetwork, setLogLevel } from 'firebase/firestore';
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'firebase/auth';
+import { initializeFirestore, disableNetwork, enableNetwork, setLogLevel } from 'firebase/firestore';
 import { getAnalytics, isSupported, Analytics } from 'firebase/analytics';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -11,7 +11,65 @@ const app = initializeApp(firebaseConfig);
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true
 }, (firebaseConfig as any).firestoreDatabaseId); /* CRITICAL: The app will break without this line */
-export const auth = getAuth();
+export const auth = getAuth(app);
+
+// OAuth provider setup
+export const googleProvider = new GoogleAuthProvider();
+googleProvider.addScope('https://www.googleapis.com/auth/spreadsheets');
+googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
+
+let isSigningIn = false;
+let cachedAccessToken: string | null = null;
+
+export const initAuth = (
+  onAuthSuccess?: (user: User, token: string) => void,
+  onAuthFailure?: () => void
+) => {
+  return onAuthStateChanged(auth, async (user: User | null) => {
+    if (user) {
+      if (cachedAccessToken) {
+        if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
+      } else if (!isSigningIn) {
+        cachedAccessToken = null;
+        if (onAuthFailure) onAuthFailure();
+      }
+    } else {
+      cachedAccessToken = null;
+      if (onAuthFailure) onAuthFailure();
+    }
+  });
+};
+
+export const googleSignIn = async (): Promise<{ user: User; accessToken: string } | null> => {
+  try {
+    isSigningIn = true;
+    const result = await signInWithPopup(auth, googleProvider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    // Even if credential access token is missing, we fall back to null safely
+    if (credential?.accessToken) {
+      cachedAccessToken = credential.accessToken;
+    }
+    return { user: result.user, accessToken: cachedAccessToken || '' };
+  } catch (error: any) {
+    if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
+      console.warn('Sign in popup closed by user.');
+      return null;
+    }
+    console.error('Sign in error:', error);
+    throw error;
+  } finally {
+    isSigningIn = false;
+  }
+};
+
+export const getAccessToken = async (): Promise<string | null> => {
+  return cachedAccessToken;
+};
+
+export const logout = async () => {
+  await auth.signOut();
+  cachedAccessToken = null;
+};
 
 // Early local offline detection to prevent network request attempts if we previously hit the quota limit
 if (typeof window !== 'undefined') {
@@ -111,6 +169,15 @@ export async function disableFirestoreNetwork() {
     console.warn("Firestore network integration has been gracefully disabled due to quota limits to avoid console/network spam.");
   } catch (err) {
     console.error("Failed to disable Firestore network gracefully:", err);
+  }
+}
+
+export async function enableFirestoreNetwork() {
+  try {
+    await enableNetwork(db);
+    console.warn("Firestore network integration has been successfully enabled.");
+  } catch (err) {
+    console.error("Failed to enable Firestore network gracefully:", err);
   }
 }
 

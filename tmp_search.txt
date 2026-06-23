@@ -1,0 +1,50 @@
+131:  Search,
+187:  // Search and Filter visibility state (0 = Hidden, 1 = Search Only, 2 = Search + Filters)
+188:  const [searchFiltersVisibility, setSearchFiltersVisibility] = useState<0 | 1 | 2>(1);
+648:  const [scriptSearchTerm, setScriptSearchTerm] = useState<string>("");
+667:  const [searchTerm, setSearchTerm] = useState(() => localStorage.getItem("ciclocred_filter_search_term") || "");
+696:    localStorage.setItem("ciclocred_filter_search_term", searchTerm);
+717:    searchTerm,
+817:      const matchesSearch =
+818:        lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+819:        (lead.email || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+820:        lead.phone.includes(searchTerm) ||
+821:        (lead.company || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+822:        (lead.gender || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+823:        (lead.region || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+824:        (lead.stage || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+825:        (lead.status || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+826:        (lead.objection || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+827:        (lead.mainProfile || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+828:        (lead.programaDesejado || "").toLowerCase().includes(searchTerm.toLowerCase());
+904:        matchesSearch &&
+925:    searchTerm,
+3585:              <Search className="w-4 h-4 text-zinc-350 shrink-0" />
+3816:        {/* Global Search & Filters Bar Fixed Below Header */}
+3817:        {searchFiltersVisibility > 0 && (
+3820:            {/* Left Icons & Search */}
+3830:                    value={searchTerm}
+3835:                        setSearchTerm("");
+3840:                        setSearchTerm("");
+3843:                      setSearchTerm(val);
+3846:                      if (e.key === 'Enter' && searchTerm.trim() !== '') {
+3851:                            body: JSON.stringify({ query: searchTerm })
+3863:                          // Clear search term to show only the active filters
+3864:                          setSearchTerm("");
+3918:          {searchFiltersVisibility === 2 && (
+4070:        <div className="absolute right-4 top-[56px] z-40 transition-transform duration-300 pointer-events-none" style={{ transform: `translateY(${searchFiltersVisibility === 0 ? '-10px' : searchFiltersVisibility === 1 ? '50px' : '110px'})` }}>
+4076:                   setSearchFiltersVisibility(prev => prev === 0 ? 1 : prev === 1 ? 2 : 0);
+4078:                className={`bg-zinc-900 text-zinc-300 border-2 border-zinc-700 w-8 h-8 rounded-lg flex justify-center items-center shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition-colors hover:bg-zinc-800 hover:text-white ${searchFiltersVisibility !== 0 ? 'bg-indigo-950 border-indigo-700 text-indigo-300' : ''}`}
+4081:                <div className="text-[12px]">{searchFiltersVisibility === 0 ? '🔻' : searchFiltersVisibility === 1 ? '🔻' : '🔺'}</div>
+5504:                            searchTerm={searchTerm}
+5505:                          setSearchTerm={setSearchTerm}
+5593:                        searchTerm={searchTerm}
+5594:                      setSearchTerm={setSearchTerm}
+5684:                        searchTerm={searchTerm}
+5685:                        setSearchTerm={setSearchTerm}
+5852:                initialSearchTerm={scriptSearchTerm}
+5853:                onChangeSearchTerm={setScriptSearchTerm}
+5865:                  globalSearchTerm={searchTerm}
+5879:                    setScriptSearchTerm(leadName);
+5894:                  globalSearchTerm={searchTerm}
+5919:                  globalSearchTerm={searchTerm}

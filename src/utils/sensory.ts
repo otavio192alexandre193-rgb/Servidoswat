@@ -13,6 +13,7 @@ export interface AccessibilitySettings {
   soundsEnabled?: boolean;
   hapticsEnabled?: boolean;
   speakAloudEnabled?: boolean;
+  highLegibilityFont?: boolean;
 }
 
 export const INITIAL_ACCESSIBILITY_SETTINGS: AccessibilitySettings = {
@@ -24,7 +25,8 @@ export const INITIAL_ACCESSIBILITY_SETTINGS: AccessibilitySettings = {
   visualPulse: true,
   soundsEnabled: true,
   hapticsEnabled: true,
-  speakAloudEnabled: false
+  speakAloudEnabled: false,
+  highLegibilityFont: false
 };
 
 export type SensoryAction = 'click' | 'success' | 'warning' | 'alarm' | 'complete' | 'chime';

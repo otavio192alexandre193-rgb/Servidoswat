@@ -12,8 +12,8 @@ try {
   
   const memoryStore: Record<string, string> = {
     'ciclocred_auth_active': 'false',
-    'ciclocred_user_name': 'Operador CicloCred',
-    'ciclocred_user_email': 'operador@ciclocred.com',
+    'ciclocred_user_name': 'Operador cicloCRED',
+    'ciclocred_user_email': 'operador@sistema.com.br',
     'ciclocred_theme': 'escuro',
     'ciclocred_galaxy_preset': 'lineack'
   };
@@ -58,6 +58,7 @@ try {
 
 import App from './App.tsx';
 import './index.css';
+import { ConfigProvider } from "./context/ConfigContext";
 
 console.log('[main.tsx] Starting cicloCRED CRM mounting lifecycle...');
 
@@ -70,7 +71,9 @@ if (!rootElement) {
     const root = createRoot(rootElement);
     root.render(
       <StrictMode>
-        <App />
+        <ConfigProvider>
+          <App />
+        </ConfigProvider>
       </StrictMode>,
     );
     console.log('[main.tsx] React render has been dispatched to container.');
@@ -79,47 +82,18 @@ if (!rootElement) {
   }
 }
 
-// Register the PWA Service Worker to enable proper desktop install, standalone mode, and bypass white screens
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then((registration) => {
-        console.log('[PWA] Service Worker registered successfully with scope:', registration.scope);
-        
-        // Check for updates proactively
-        registration.update().catch((uErr) => console.log('[PWA] Sw update fail safe:', uErr));
+// @ts-ignore
+import { registerSW } from 'virtual:pwa-register';
 
-        if (registration.waiting) {
-          registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-        }
-
-        registration.addEventListener('updatefound', () => {
-          const installingWorker = registration.installing;
-          if (installingWorker) {
-            installingWorker.addEventListener('statechange', () => {
-              if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                console.log('[PWA] New service worker installed & waiting. Invoking skipWaiting.');
-                installingWorker.postMessage({ type: 'SKIP_WAITING' });
-              }
-            });
-          }
-        });
-      })
-      .catch((err) => {
-        console.warn('[PWA] Service Worker registration failed:', err);
-      });
-  });
-
-  // Hot refresh on controller change to ensure live cache-free assets are rendered immediately
-  let isRefreshing = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!isRefreshing) {
-      isRefreshing = true;
-      console.log('[PWA] Service worker controller has updated. Force reloading layout.');
-      window.location.reload();
-    }
-  });
-}
+const updateSW = registerSW({
+  onNeedRefresh() {
+    console.log('[PWA] New content available, ignore or prompt to refresh.');
+    updateSW(true);
+  },
+  onOfflineReady() {
+    console.log('[PWA] Ready to work offline');
+  },
+});
 
 if ('caches' in window) {
   caches.keys().then((keys) => {

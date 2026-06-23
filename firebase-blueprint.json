@@ -137,6 +137,59 @@
         "assignedToGoalId": { "type": "string" }
       },
       "required": ["id", "name", "description", "status", "progress", "xpReward"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile and settings.",
+      "type": "object",
+      "properties": {
+        "userName": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "creciNumber": { "type": "string" },
+        "userRole": { "type": "string" },
+        "agencyName": { "type": "string" },
+        "subscriptionPlan": { "type": "string" },
+        "theme": { "type": "string" },
+        "galaxyPreset": { "type": "string" },
+        "userXP": { "type": "integer" },
+        "userLevel": { "type": "integer" },
+        "updatedAt": { "type": "number" }
+      }
+    },
+    "FollowUp": {
+      "title": "FollowUp",
+      "description": "Record of a follow-up interaction with a lead.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "leadId": { "type": "string" },
+        "leadName": { "type": "string" },
+        "date": { "type": "string" },
+        "type": { "type": "string", "enum": ["ligacao", "whatsapp", "email", "reuniao", "proposta"] },
+        "notes": { "type": "string" }
+      }
+    },
+    "BrokerRanking": {
+      "title": "BrokerRanking",
+      "description": "Gamification ranking for brokers.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "level": { "type": "number" },
+        "xp": { "type": "number" }
+      }
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Global application and AI settings.",
+      "type": "object",
+      "properties": {
+        "active": { "type": "boolean" },
+        "model_name": { "type": "string" },
+        "system_instruction": { "type": "string" }
+      }
     }
   },
   "firestore": {
@@ -171,6 +224,22 @@
     "/gamificationProjects/{projectId}": {
       "schema": "Project",
       "description": "Interactive projects linked with gamification."
+    },
+    "/userProfiles/{userId}": {
+      "schema": "UserProfile",
+      "description": "User specific data and settings."
+    },
+    "/followups/{followUpId}": {
+      "schema": "FollowUp",
+      "description": "Record of follow-up interactions."
+    },
+    "/brokerRankings/{rankingId}": {
+      "schema": "BrokerRanking",
+      "description": "Gamification leaderboards."
+    },
+    "/settings/{settingsId}": {
+      "schema": "Settings",
+      "description": "Configuration store."
     }
   }
 }

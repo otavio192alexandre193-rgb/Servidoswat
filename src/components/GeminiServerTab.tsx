@@ -135,6 +135,77 @@ export default function GeminiServerTab({
   const [typedChatBotMessage, setTypedChatBotMessage] = useState('');
   const [isBotResponding, setIsBotResponding] = useState(false);
 
+  // Coprodução Gemini Leads Integration States
+  const [selectedLeadId, setSelectedLeadId] = useState<string>('');
+  const [coproductTab, setCoproductTab] = useState<'pitch' | 'dossier' | 'campaign'>('pitch');
+  const [coproductOutput, setCoproductOutput] = useState<string>('');
+  const [coproductLoading, setCoproductLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (selectedLeadId && !leads.some((l) => l.id === selectedLeadId)) {
+      setSelectedLeadId('');
+    }
+  }, [leads, selectedLeadId]);
+
+  const handleFetchCoproduct = async (leadId: string, action: 'pitch' | 'dossier' | 'campaign') => {
+    if (!leadId) return;
+    const lead = leads.find(l => l.id === leadId);
+    if (!lead) return;
+
+    setCoproductLoading(true);
+    setCoproductOutput('');
+
+    try {
+      const res = await fetch('/api/ai/coproduct', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action,
+          leadName: lead.name,
+          income: lead.income,
+          budget: lead.value,
+          propertyInterest: lead.propertyInterest || lead.interest,
+          notes: lead.notes,
+          agentName: 'Corretor Conectado',
+          agency: 'cicloCRED',
+          role: 'Consultor de Financiamento',
+          creci: 'CRECI-SP 245.981-F'
+        })
+      });
+
+      const data = await res.json();
+      setCoproductOutput(data.text || '');
+      if (awardXP) {
+        awardXP(80, `Geração de ${action === 'pitch' ? 'Roteiro WhatsApp' : action === 'dossier' ? 'Ficha de Dossiê' : 'Plano de Campanha'} Direct com o Gemini`);
+      }
+    } catch (e) {
+      console.error(e);
+      setCoproductOutput('Ocorreu um erro ao conectar-se diretamente com o motor do Gemini. Verifique sua conexão e chave de API.');
+    } finally {
+      setCoproductLoading(false);
+    }
+  };
+
+  const handleSaveDossierToLeadDoc = (leadId: string, dossierText: string) => {
+    if (!setLeads) return;
+    const lead = leads.find(l => l.id === leadId);
+    if (!lead) return;
+
+    setLeads(prev => prev.map(l => {
+      if (l.id === leadId) {
+        const updatedNotes = `${l.notes || ''}\n\n--- 🔬 DOSSIÊ DIGITAL DE QUALIFICAÇÃO (GEMINI DIRECT) ---\n${dossierText}`;
+        if (addNotification) {
+          addNotification("Dossiê Salvo", `O dossiê do Gemini foi anexado com sucesso na ficha cadastral de ${l.name}!`, "success");
+        }
+        if (awardXP) {
+          awardXP(120, "Dossiê Habitacional integrado às anotações com Gemini");
+        }
+        return { ...l, notes: updatedNotes };
+      }
+      return l;
+    }));
+  };
+
   const handleSendChatBotMessage = async (textToSend: string) => {
     const trimmed = textToSend.trim();
     if (!trimmed) return;
@@ -870,6 +941,248 @@ export default function GeminiServerTab({
         
         {/* Column Left: Server Configurations (Config e Instruções) */}
         <div className="xl:col-span-7 space-y-8">
+          
+          {/* 🧠 CENTRO DE COPRODUÇÃO E INTELIGÊNCIA DE LEADS (GEMINI DIRECT) */}
+          <div className="bg-zinc-900 border-4 border-zinc-950 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+            <div className="p-4 bg-zinc-950 flex items-center justify-between border-b-2 border-zinc-950">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+                <span className="font-mono text-xs font-black uppercase text-white">Central de Inteligência & Coprodução de Leads (Gemini Direct)</span>
+              </div>
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold font-mono bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">
+                GEMINI 3.5 CONECTADO
+              </span>
+            </div>
+
+            <div className="p-6 space-y-6">
+              <div className="space-y-2">
+                <label className="text-xs font-black text-zinc-300 uppercase tracking-wider block font-mono">
+                  Selecione um cliente para atendimento inteligente:
+                </label>
+                <select
+                  value={selectedLeadId}
+                  onChange={(e) => {
+                    const nextId = e.target.value;
+                    setSelectedLeadId(nextId);
+                    setCoproductOutput('');
+                    if (nextId) {
+                      handleFetchCoproduct(nextId, coproductTab);
+                    }
+                  }}
+                  className="w-full p-3.5 rounded-xl bg-zinc-950 text-white text-xs border-2 border-zinc-950 focus:border-indigo-500 focus:outline-none font-mono"
+                >
+                  <option value="">Selecione um Lead do CRM...</option>
+                  {leads.map(lead => (
+                    <option key={lead.id} value={lead.id}>
+                      👤 {lead.name} {lead.income ? ` - Renda: R$ ${Number(lead.income).toLocaleString('pt-BR')}` : ''} ({lead.status || 'Sem status'})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-zinc-500">
+                  Qualquer atividade ou simulação selecionada abaixo operará em conexão instantânea com o motor generativo do Gemini.
+                </p>
+              </div>
+
+              {selectedLeadId && (() => {
+                const lead = leads.find(l => l.id === selectedLeadId);
+                if (!lead) return null;
+
+                return (
+                  <div className="space-y-6 border-t-2 border-zinc-950/60 pt-6">
+                    {/* Ficha compacta block */}
+                    <div className="bg-zinc-950/40 border-2 border-zinc-950 p-4 rounded-xl grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-[9px] uppercase font-mono text-zinc-500 font-bold block">Valor Pretendido</span>
+                        <span className="text-sm font-black text-white font-mono">
+                          R$ {lead.value ? Number(lead.value).toLocaleString('pt-BR') : 'Não informado'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] uppercase font-mono text-zinc-500 font-bold block">Interesse</span>
+                        <span className="text-xs font-bold text-zinc-300 truncate block">
+                          {lead.propertyInterest || lead.interest || 'Portfólio Geral / Minha Casa Minha Vida'}
+                        </span>
+                      </div>
+                      <div className="md:col-span-2 border-t border-zinc-850/60 pt-2 mt-1">
+                        <span className="text-[9px] uppercase font-mono text-zinc-500 font-bold block">Anotações Internas do Lead</span>
+                        <p className="text-xs text-zinc-400 italic line-clamp-2">
+                          "{lead.notes || 'Nenhum histórico cadastrado para este cliente.'}"
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Coproduction tab switchers */}
+                    <div className="flex bg-zinc-950 p-1 rounded-xl border border-zinc-950 gap-1 select-none">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCoproductTab('pitch');
+                          handleFetchCoproduct(selectedLeadId, 'pitch');
+                        }}
+                        className={`flex-1 py-3 rounded-lg text-[9px] font-black uppercase tracking-wider font-mono transition-all flex items-center justify-center gap-1.5 ${
+                          coproductTab === 'pitch'
+                            ? 'bg-indigo-600 text-white'
+                            : 'text-zinc-400 hover:text-white'
+                        }`}
+                      >
+                        📱 Abordagem Rápida
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCoproductTab('dossier');
+                          handleFetchCoproduct(selectedLeadId, 'dossier');
+                        }}
+                        className={`flex-1 py-3 rounded-lg text-[9px] font-black uppercase tracking-wider font-mono transition-all flex items-center justify-center gap-1.5 ${
+                          coproductTab === 'dossier'
+                            ? 'bg-indigo-600 text-white'
+                            : 'text-zinc-400 hover:text-white'
+                        }`}
+                      >
+                        🔬 Dossiê Habitacional
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCoproductTab('campaign');
+                          handleFetchCoproduct(selectedLeadId, 'campaign');
+                        }}
+                        className={`flex-1 py-3 rounded-lg text-[9px] font-black uppercase tracking-wider font-mono transition-all flex items-center justify-center gap-1.5 ${
+                          coproductTab === 'campaign'
+                            ? 'bg-indigo-600 text-white'
+                            : 'text-zinc-400 hover:text-white'
+                        }`}
+                      >
+                        📅 Plano de Campanha
+                      </button>
+                    </div>
+
+                    {/* Output display section */}
+                    <div className="bg-zinc-950 border-2 border-zinc-950 p-5 rounded-2xl relative min-h-[160px] flex flex-col justify-between">
+                      {coproductLoading ? (
+                        <div className="py-12 flex flex-col items-center justify-center gap-3 my-auto w-full">
+                          <RefreshCw className="w-8 h-8 text-indigo-400 animate-spin" />
+                          <span className="text-xs text-zinc-400 font-mono uppercase tracking-widest animate-pulse">
+                            Gemini 3.5 interpretando ficha cadastral...
+                          </span>
+                        </div>
+                      ) : coproductOutput ? (
+                        <div className="space-y-4">
+                          <div className="prose text-zinc-200 text-xs leading-relaxed max-h-72 overflow-y-auto pr-2">
+                            {coproductOutput.split('\n').map((line, idx) => {
+                              let content = line;
+                              let valClass = "text-zinc-300 mb-2 leading-relaxed text-xs block";
+                              
+                              if (line.startsWith('###')) {
+                                content = line.replace('###', '').trim();
+                                valClass = "text-xs font-black uppercase text-indigo-400 mt-4 mb-2 tracking-wide font-mono block";
+                              } else if (line.startsWith('##')) {
+                                content = line.replace('##', '').trim();
+                                valClass = "text-sm font-black uppercase text-white mt-5 mb-3 border-b border-zinc-800 pb-1 font-mono block";
+                              } else if (line.startsWith('#')) {
+                                content = line.replace('#', '').trim();
+                                valClass = "text-md font-black italic uppercase text-emerald-400 mt-6 mb-4 block";
+                              } else if (line.startsWith('-') || line.startsWith('*')) {
+                                content = '• ' + line.substring(1).trim();
+                                valClass = "text-zinc-300 ml-4 mb-1.5 text-xs block";
+                              }
+                              
+                              const parts = [];
+                              const boldRegex = /\*\*([^*]+)\*\*/g;
+                              let lastIndex = 0;
+                              let match;
+                              
+                              while ((match = boldRegex.exec(content)) !== null) {
+                                if (match.index > lastIndex) {
+                                  parts.push(content.substring(lastIndex, match.index));
+                                }
+                                parts.push(<strong key={match.index} className="font-extrabold text-[#4E9F3D]">{match[1]}</strong>);
+                                lastIndex = boldRegex.lastIndex;
+                              }
+                              if (lastIndex < content.length) {
+                                parts.push(content.substring(lastIndex));
+                              }
+
+                              return <span key={idx} className={valClass}>{parts.length > 0 ? parts : content}</span>;
+                            })}
+                          </div>
+
+                          {/* ACTION BUTTON PACK */}
+                          <div className="border-t border-zinc-850 pt-4 flex flex-wrap gap-2.5">
+                            {coproductTab === 'pitch' && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(coproductOutput);
+                                    if (addNotification) addNotification("Copiado!", "Roteiro de Abordagem copiado para a área de transferência.", "success");
+                                  }}
+                                  className="py-2.5 px-4 bg-zinc-800 hover:bg-zinc-700 text-white border-2 border-zinc-950 font-mono text-[10px] font-black uppercase rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition cursor-pointer"
+                                >
+                                  Copiar Roteiro 📋
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const rawMsg = coproductOutput.split('---')[0] || coproductOutput;
+                                    const cleanPhone = (lead.phone || '').replace(/[^0-9]/g, '');
+                                    const defaultPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+                                    window.location.href = `whatsapp://send?phone=${defaultPhone}&text=${encodeURIComponent(rawMsg.trim())}`;
+                                  }}
+                                  className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-white border-2 border-zinc-950 font-mono text-[10px] font-black uppercase rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition cursor-pointer"
+                                >
+                                  Enviar no WhatsApp Local 📲
+                                </button>
+                              </>
+                            )}
+
+                            {coproductTab === 'dossier' && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(coproductOutput);
+                                    if (addNotification) addNotification("Copiado!", "Dossiê Habitacional copiado para a área de transferência.", "success");
+                                  }}
+                                  className="py-2.5 px-4 bg-zinc-800 hover:bg-zinc-700 text-white border-2 border-zinc-950 font-mono text-[10px] font-black uppercase rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition cursor-pointer"
+                                >
+                                  Copiar Dossiê 📋
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveDossierToLeadDoc(selectedLeadId, coproductOutput)}
+                                  className="py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white border-2 border-zinc-950 font-mono text-[10px] font-black uppercase rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition shrink-0 cursor-pointer"
+                                >
+                                  Salvar e Anexar na Ficha do CRM 🔬
+                                </button>
+                              </>
+                            )}
+
+                            {coproductTab === 'campaign' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                    navigator.clipboard.writeText(coproductOutput);
+                                    if (addNotification) addNotification("Copiado!", "Plano de Campanha copiado para a área de transferência.", "success");
+                                }}
+                                className="py-2.5 px-4 bg-zinc-800 hover:bg-zinc-700 text-white border-2 border-zinc-950 font-mono text-[10px] font-black uppercase rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition cursor-pointer"
+                              >
+                                Copiar Planejamento 📋
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="py-8 flex flex-col items-center justify-center text-center text-zinc-500 font-mono text-[11px] my-auto">
+                          <span>Clique em uma das opções acima para solicitar a inteligência direta ao Gemini.</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
           
           <div className="bg-zinc-900 border-4 border-zinc-950 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
             <div className="p-4 bg-zinc-950/30 border-b-2 border-zinc-950 flex items-center justify-between">
@@ -2054,7 +2367,7 @@ export default function GeminiServerTab({
                   placeholder="Filtro rápido: buscar por nome, telefone, mensagem ou retorno..."
                   value={logSearchQuery}
                   onChange={(e) => setLogSearchQuery(e.target.value)}
-                  className="w-full bg-zinc-950 border-2 border-zinc-950 hover:border-zinc-800 focus:border-purple-600 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white font-mono placeholder-zinc-500 focus:outline-none transition-all"
+                  className="w-full bg-zinc-950/25 border-2 border-zinc-800/60 hover:border-zinc-700 focus:border-purple-600 focus:bg-zinc-950/45 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white font-mono placeholder-zinc-500 focus:outline-none transition-all"
                 />
               </div>
 

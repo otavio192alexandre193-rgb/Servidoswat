@@ -5,10 +5,10 @@
 
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Trophy, Settings, Sliders, Shield, TrendingUp } from 'lucide-react';
+import { Trophy, Settings as SettingsIcon, Sliders, Shield, TrendingUp } from 'lucide-react';
 import { AccessibilitySettings, triggerSensoryFeedback, INITIAL_ACCESSIBILITY_SETTINGS } from '../utils/sensory';
 import GamificationView from './Gamification';
-import SettingsView from './Settings';
+import Settings from './Settings';
 import KidsTab from './KidsTab';
 import { Goal, Project, Lead } from '../types';
 
@@ -39,7 +39,6 @@ interface UserCentralTabProps {
   
   leads: Lead[];
   properties: any[];
-  followUpsCount: number;
   goals: Goal[];
   setGoals: React.Dispatch<React.SetStateAction<Goal[]>>;
   projects: Project[];
@@ -84,7 +83,6 @@ export default function UserCentralTab({
   setGalaxyPreset,
   leads,
   properties,
-  followUpsCount,
   goals,
   setGoals,
   projects,
@@ -104,6 +102,7 @@ export default function UserCentralTab({
   const [innerTab, setInnerTab] = useState<'gamification' | 'leveraging' | 'settings'>('gamification');
 
   const dealsClosed = leads.filter(l => l.status === 'fechado').length;
+  const followUpsCount = leads.filter(l => l.lastInteractionAt).length;
 
   return (
     <div className="space-y-6">
@@ -157,7 +156,7 @@ export default function UserCentralTab({
               : 'text-zinc-400 hover:text-white hover:bg-zinc-800 border-transparent'
           }`}
         >
-          <Settings className="w-4 h-4 shrink-0" />
+          <SettingsIcon className="w-4 h-4 shrink-0" />
           <span>Configurações & Administração</span>
         </button>
       </div>
@@ -187,7 +186,7 @@ export default function UserCentralTab({
             accSettings={accSettings}
           />
         ) : (
-          <SettingsView
+          <Settings
             theme={theme}
             setTheme={setTheme}
             galaxyPreset={galaxyPreset}

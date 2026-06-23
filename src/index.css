@@ -1,11 +1,65 @@
-@import "tailwindcss";
-
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700;800&display=swap');
+@import "tailwindcss";
 
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
-  --color-indigo-650: #4338ca;
+}
+
+/* HIGH-SPEED / NO-DELAY MODE (Aprimorado para Qualidade Máxima e Fluidez Suprema) */
+*, *::before, *::after {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.subpixel-antialiased {
+  -webkit-font-smoothing: subpixel-antialiased;
+}
+
+/* Paletas de Cores Personalizadas override do Indigo */
+[data-palette="vender"] {
+  --color-indigo-100: #dcfce7;
+  --color-indigo-300: #86efac;
+  --color-indigo-400: #4ade80;
+  --color-indigo-500: #22c55e;
+  --color-indigo-600: #16a34a;
+  --color-indigo-800: #166534;
+  --color-indigo-900: #14532d;
+  --color-indigo-950: #052e16;
+}
+
+[data-palette="bege"] {
+  --color-indigo-100: #fef3c7;
+  --color-indigo-300: #fcd34d;
+  --color-indigo-400: #fbbf24;
+  --color-indigo-500: #f59e0b;
+  --color-indigo-600: #d97706;
+  --color-indigo-800: #92400e;
+  --color-indigo-900: #78350f;
+  --color-indigo-950: #451a03;
+}
+
+[data-palette="azul"] {
+  --color-indigo-100: #dbeafe;
+  --color-indigo-300: #93c5fd;
+  --color-indigo-400: #60a5fa;
+  --color-indigo-500: #3b82f6;
+  --color-indigo-600: #2563eb;
+  --color-indigo-800: #1e40af;
+  --color-indigo-900: #1e3a8a;
+  --color-indigo-950: #172554;
+}
+
+[data-palette="lilas"] {
+  --color-indigo-100: #f3e8ff;
+  --color-indigo-300: #d8b4fe;
+  --color-indigo-400: #c084fc;
+  --color-indigo-500: #a855f7;
+  --color-indigo-600: #9333ea;
+  --color-indigo-800: #6b21a8;
+  --color-indigo-900: #581c87;
+  --color-indigo-950: #3b0764;
 }
 
 @keyframes fadeIn {
@@ -75,4 +129,93 @@
     display: flex !important;
   }
 }
+
+/* Removing the custom scrollbar hiding to normalize page and table scrolling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: #52525b; /* zinc-600 */
+  border-radius: 20px;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #52525b transparent;
+}
+
+/* FORÇA TEMA ESCURO NO FUNIL (KANBAN) E TABELA (LEADLIST) */
+.dark, [data-palette] {
+  color-scheme: dark;
+}
+
+.dark .bg-white,
+.dark .group.bg-white,
+.dark .bg-zinc-50,
+.dark .bg-zinc-50\/40,
+.dark .bg-zinc-50\/30 {
+  background-color: #121214 !important;
+  color: #f4f4f5 !important;
+}
+
+.dark .text-zinc-950,
+.dark .text-zinc-900,
+.dark .text-zinc-800,
+.dark .text-zinc-700 {
+  color: #e4e4e7 !important;
+}
+
+.dark .border-zinc-250,
+.dark .border-zinc-200,
+.dark .border-zinc-150 {
+  border-color: #27272a !important;
+}
+
+.dark .bg-zinc-200,
+.dark .bg-zinc-100 {
+  background-color: #1e1e20 !important; /* Refined background */
+  color: #f4f4f5 !important;
+}
+
+.dark .bg-indigo-50,
+.dark .bg-indigo-50\/50,
+.dark .bg-indigo-950\/40,
+.dark .bg-indigo-50\/40 {
+  background-color: #1a1738 !important;
+  color: #e2e8f0 !important;
+  border-color: #312e81 !important;
+}
+
+.dark .text-zinc-600,
+.dark .text-zinc-505,
+.dark .text-zinc-500 {
+  color: #a1a1aa !important;
+}
+
+.dark .border-zinc-950, 
+.dark [class*="border-[rgb(24,24,27)]"] {
+  border-color: #27272a !important; /* Softens brutalist black borders in dark mode */
+}
+
+/* Soften brutalist shadows in dark mode */
+.dark [class*="shadow-["] {
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4) !important;
+}
+
+.dark #kanban-columns-grid,
+.dark #integrated-kanban-board-scroll {
+  background-color: transparent !important;
+}
+
+.dark select,
+.dark input {
+  color-scheme: dark !important;
+  background-color: #18181b !important;
+  border-color: #3f3f46 !important;
+}
+
 

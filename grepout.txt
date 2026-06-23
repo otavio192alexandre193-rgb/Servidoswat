@@ -1,0 +1,46 @@
+116:    date: new Date().toISOString().substring(0, 10),
+187:      const provider = new GoogleAuthProvider();
+200:        throw new Error('Falha ao obter o token de acesso Google Workspace.');
+244:      const timeMin = new Date().toISOString();
+277:      const dateStartObj = new Date(calculatedStart);
+278:      const dateEndObj = new Date(dateStartObj.getTime() + apptForm.durationMinutes * 60000);
+315:        throw new Error('Falha ao registrar compromisso na API Google Calendar.');
+364:        date: new Date().toISOString().substring(0, 10),
+420:          date: new Date(dateRaw).toLocaleString('pt-BR')
+477:        throw new Error('Falha no envio de e-mail através da API do Gmail.');
+488:        sentAt: new Date().toISOString(),
+576:        throw new Error('Falha ao enviar arquivo de relatório para o Google Drive.');
+636:        throw new Error('Impossível ler linhas da planilha. Verifique as permissões de acesso do arquivo.');
+715:          createdAt: new Date().toISOString().substring(0, 10)
+768:      const title = `Exportação CRM cicloCRED - ${new Date().toLocaleDateString('pt-BR')}`;
+781:        throw new Error('Falha ao instanciar arquivo de planilha.');
+821:        throw new Error('Planilha criada, mas falhou ao gravar os registros de Leads.');
+906:        throw new Error('Falha ao registrar novo contato na API Google People.');
+947:      createdAt: new Date().toISOString().substring(0, 10)
+966:      const now = new Date();
+968:      const dateEndObj = new Date(now.getTime() + 60 * 60000); // 1 hour duration
+1002:        throw new Error('Falha ao instanciar o link no Google Calendar.');
+1026:        throw new Error('A API retornou sucesso mas não gerou o link do Meet.');
+1047:    setSyncLogs(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev.slice(0, 25)]);
+1074:        throw new Error('Falha ao instanciar o arquivo no Google Sheets via REST API.');
+1102:        if (!activeSheetId) throw new Error("Não foi possível gerar a planilha de sincronia.");
+1136:      if (!leadsRes.ok) throw new Error("Falha ao sincronizar aba Leads.");
+1165:      if (!apptsRes.ok) throw new Error("Falha ao sincronizar aba Agenda.");
+1192:      if (!logsRes.ok) throw new Error("Falha ao sincronizar aba Atividades.");
+1228:      if (!leadsRes.ok) throw new Error("Aba 'Leads' não encontrada na planilha ativa.");
+1240:        createdAt: row[8] || new Date().toISOString().slice(0, 10),
+1250:      if (!apptsRes.ok) throw new Error("Aba 'Agenda' não encontrada.");
+1256:        date: row[2] || new Date().toISOString().slice(0, 10),
+1270:      if (!logsRes.ok) throw new Error("Aba 'Atividades' não encontrada.");
+1280:        sentAt: row[5] || new Date().toISOString(),
+1399:          createdAt: new Date().toISOString().substring(0, 10)
+1875:                  const formattedStart = startStr ? new Date(startStr).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'Dia todo';
+2036:                        MODIFICADO EM: {new Date(file.modifiedTime).toLocaleDateString('pt-BR')}
+2617:                            {new Date(item.modifiedTime).toLocaleDateString()}
+2712:        throw new Error('Falha ao instanciar arquivo de planilha para sincronização realtime.');
+2736:      new Date().toLocaleString('pt-BR'),
+2814:    const startDateTime = new Date(`${date}T${time}:00`);
+2815:    const endDateTime = new Date(startDateTime.getTime() + durationMinutes * 60 * 1000);
+2901:    const form = new FormData();
+2902:    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+2903:    form.append('file', new Blob([content], { type: mimeType }));

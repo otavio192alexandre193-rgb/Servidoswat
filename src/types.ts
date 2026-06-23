@@ -3,7 +3,36 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export type LeadStatus = 'novo' | 'em_contato' | 'proposta' | 'fechado' | 'perdido';
+export type LeadStatus = string;
+
+export interface FlowStageTimer {
+  days: number;
+  hours: number;
+  minutes: number;
+}
+
+export interface FlowStage {
+  id: string;
+  name: string;
+  timer: FlowStageTimer;
+}
+
+export interface StatusTimer {
+  hours: number;
+  minutes: number;
+}
+
+export interface OperationalFlow {
+  id: string;
+  name: string;
+  description?: string;
+  stages?: FlowStage[];
+  statusTimers?: {
+    recentes?: StatusTimer;
+    ativos?: StatusTimer;
+  };
+  createdAt: string;
+}
 
 export interface Lead {
   id: string;
@@ -13,15 +42,70 @@ export interface Lead {
   company?: string;
   value: number;
   status: LeadStatus;
+  pipeline?: string; // legacy support
+  fluxoId?: string; // Operational flow id
+  stage?: string; // Etapa atual (para funil Ativos)
+  objection?: string; // Objeção (para funil Carteira)
   notes: string;
   origin: string;
   createdAt: string;
   lastContactAt?: string;
+  lastInteractionAt?: string;
   familyIncome?: number;
+  familyGrossIncome?: number;
   ai_muted?: boolean;
   propertyInterest?: string;
   tags?: string[];
   funnelPageId?: string;
+  lostReason?: string;
+  region?: string; // Zona de interesse
+  sqmMatters?: 'sim' | 'nao'; // Metragem importa?
+  incomeType?: 'fixa' | 'variavel';
+  deadlineMatters?: 'sim' | 'nao';
+  deliveryExpected?: 'sim' | 'nao';
+  objections?: string[];
+  gender?: 'Homem' | 'Mulher' | 'Outro' | 'Prefiro nao informar';
+  ageBracket?: 'Jovem' | 'Meia idade' | 'Idoso';
+  profiles?: string[];
+  funnelPlacements?: { pageId: string; status: string }[];
+  
+  // Custom user suggested columns & spreadsheet requirements
+  mainProfile?: 'Investidor' | 'Primeiro Imóvel' | 'Jovem' | 'Meia idade' | 'Idoso';
+  unitTypeMatters?: 'sim' | 'nao'; // Tipo de unidade importa?
+  deliveryMatters?: 'sim' | 'nao'; // Tempo de entrega importa?
+  firstImpression?: string; // Primeira impressão / Observação
+
+  // HIGH FIDELITY SPREADSHEET FORMULAE ATTRIBUTES
+  cpf?: string;
+  birthDate?: string;
+  maritalStatus?: 'Solteiro' | 'Casado' | 'Uniao estavel' | 'Divorciado' | 'Viuvo';
+  bairroEspecifico?: string;
+  cep?: string;
+  fgtsSaldo?: number;
+  restricaoBacen?: 'Sim' | 'Não';
+  possuiImovel?: 'Sim' | 'Não' | 'Em nome de terceiros';
+  programaDesejado?: 'Minha Casa Minha Vida' | 'SBPE' | 'Indiferente';
+  preferenciasUnidade?: string[]; // 1 dorm, 2 dorm, suite, varanda, vaga, etc.
+  comoSoube?: 'Instagram' | 'Facebook' | 'Google' | 'Indicacao' | 'Corretor' | 'Feira' | 'Outros';
+  score?: number; // Real-time composition formula score
+  lostDate?: string;
+  lostCompetitor?: string;
+  lostPotentialValue?: number;
+  recyclingStatus?: 'Arquivado' | 'Resgatado';
+
+  // Active follow-up calculations
+  suggestedUnit?: string;
+  suggestedValue?: number;
+  lastAction?: string;
+  nextAction?: string;
+  nextFollowUpDate?: string;
+
+  // Independent Card Checklist
+  checklist?: {
+    interesse?: boolean;
+    visitou?: boolean;
+    aprov?: boolean;
+  };
 }
 
 export interface EmailTemplate {
@@ -139,6 +223,13 @@ export interface FollowUpUpdate {
   nextStepDate?: string;
   nextStepTime?: string;
   userEmail?: string;
+
+  // SPREADSHEET ALIGNED FIELDS
+  attemptNo?: number; // Tentativa nº (1, 2, 3, Resgate)
+  scriptIdUsed?: string; // ID do script usado
+  result?: 'Atendeu' | 'Caixa postal' | 'Não respondeu' | 'Respondeu positivamente' | 'Respondeu negativamente';
+  newObjectionDetected?: string;
+  statusPostFollowUp?: 'Lead avançou' | 'Lead estagnou' | 'Lead retrocedeu';
 }
 
 

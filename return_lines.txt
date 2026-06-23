@@ -1,0 +1,13 @@
+885:    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+907:      return () => clearTimeout(timer);
+934:    return () => window.removeEventListener('keydown', handleKeyDown);
+985:    return () => unsubscribe();
+1568:    return () => {
+1597:    return () => {
+1756:  return (
+2418:              return (
+2597:                  return (
+3273:                      return (
+3394:                    return (
+3677:        return (
+3774:                        return (

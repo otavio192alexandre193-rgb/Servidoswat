@@ -1,0 +1,298 @@
+383-
+384-    return result;
+385-  };
+386-
+387-  // New States: Appointments and Inventory Stock
+388:  const [appointments, rawSetAppointments] = useState<Appointment[]>(() => {
+389:    const saved = localStorage.getItem("ciclocred_crm_appointments");
+390-    if (saved) {
+391-      try {
+392-        const parsed = JSON.parse(saved);
+393-        if (Array.isArray(parsed)) {
+394-          return parsed.map((item) => {
+--
+462-
+463-            return result;
+464-          });
+465-        }
+466-      } catch (err) {
+467:        console.error("Error loaded saved appointments:", err);
+468-      }
+469-    }
+470-
+471-    const todayStr = new Date().toISOString().slice(0, 10);
+472-    return [
+--
+1605-          return appt;
+1606-        });
+1607-
+1608-        if (hasChanges) {
+1609-          localStorage.setItem(
+1610:            "ciclocred_crm_appointments",
+1611-            JSON.stringify(updatedAppts),
+1612-          );
+1613-          return updatedAppts;
+1614-        }
+1615-        return prevAppts;
+--
+1649-    localStorage.setItem("ciclocred_crm_logs", JSON.stringify(emailLogs));
+1650-  }, [emailLogs]);
+1651-
+1652-  useEffect(() => {
+1653-    localStorage.setItem(
+1654:      "ciclocred_crm_appointments",
+1655:      JSON.stringify(appointments),
+1656-    );
+1657:  }, [appointments]);
+1658-
+1659-  useEffect(() => {
+1660-    localStorage.setItem("ciclocred_crm_inventory", JSON.stringify(inventory));
+1661-  }, [inventory]);
+1662-
+--
+1677-    const isAutosync =
+1678-      localStorage.getItem("ciclocred_sheets_autosync_enabled") === "true";
+1679-    if (!isAutosync) return;
+1680-
+1681-    const timer = setTimeout(() => {
+1682:      autoSyncWorkspaceDatabase(leads, appointments, emailLogs).catch((err) =>
+1683-        console.warn(
+1684-          "Background auto sync to Google Workspace failed silently:",
+1685-          err,
+1686-        ),
+1687-      );
+1688-    }, 4500); // 4.5s debounce to keep REST requests healthy and non-blocking
+1689-
+1690-    return () => clearTimeout(timer);
+1691:  }, [leads, appointments, emailLogs]);
+1692-
+1693-  // One-time startup sweep to zero the lead list and fulfill user intent safely (offline/local mode)
+1694-  useEffect(() => {
+1695-    const hasWiped =
+1696-      localStorage.getItem("ciclocred_leads_wiped_zero_v3") === "true";
+--
+1914-              );
+1915-            }
+1916-            const querySnapshot = await getDocs(collection(db, colName));
+1917-            if (querySnapshot.empty) {
+1918-              const cleanSeed =
+1919:                colName === "appointments"
+1920-                  ? initialSeed.map(
+1921-                      (item) => sanitizeAppointmentRecord(item) as unknown as T,
+1922-                    )
+1923-                  : initialSeed;
+1924-              for (const item of cleanSeed) {
+--
+1944-              idRef.current = uniqueSeed.map((i) => i.id);
+1945-            } else {
+1946-              const loaded: T[] = [];
+1947-              querySnapshot.forEach((docSnap) => {
+1948-                let data = docSnap.data();
+1949:                if (colName === "appointments") {
+1950-                  data = sanitizeAppointmentRecord(data);
+1951-                }
+1952-                loaded.push(data as T);
+1953-              });
+1954-              const seen = new Set<string>();
+--
+1980-            emailLogs,
+1981-            rawSetEmailLogs,
+1982-            lastLogsIdsRef,
+1983-          );
+1984-          await loadOrSeedCollection(
+1985:            "appointments",
+1986:            appointments,
+1987-            rawSetAppointments,
+1988-            lastApptsIdsRef,
+1989-          );
+1990-          await loadOrSeedCollection(
+1991-            "inventory",
+--
+2168-        }
+2169-      },
+2170-    );
+2171-
+2172-    const unsubscribeAppointments = onSnapshot(
+2173:      collection(db, "appointments"),
+2174-      (snapshot) => {
+2175-        if (isLocalApptsChangeRef.current) return;
+2176-        const loaded: Appointment[] = [];
+2177-        snapshot.forEach((docSnap) => {
+2178-          loaded.push(sanitizeAppointmentRecord(docSnap.data()));
+2179-        });
+2180-        localStorage.setItem(
+2181:          "ciclocred_crm_appointments",
+2182-          JSON.stringify(loaded),
+2183-        );
+2184-        rawSetAppointments(loaded);
+2185-        lastApptsIdsRef.current = loaded.map((a) => a.id);
+2186-      },
+--
+2423-    if (!isDbHydrated || !auth.currentUser || isQuotaExceeded) return;
+2424-    if (!isLocalApptsChangeRef.current) return;
+2425-    const syncAppts = async () => {
+2426-      try {
+2427-        const lastIds = lastApptsIdsRef.current;
+2428:        const currentIds = new Set(appointments.map((a) => a.id));
+2429-        for (const id of lastIds) {
+2430-          if (!currentIds.has(id)) {
+2431:            await deleteDoc(doc(db, "appointments", id));
+2432-          }
+2433-        }
+2434:        for (const appt of appointments) {
+2435:          await setDoc(doc(db, "appointments", appt.id), appt);
+2436-        }
+2437-        lastApptsIdsRef.current = Array.from(currentIds);
+2438-        isLocalApptsChangeRef.current = false;
+2439-      } catch (err) {
+2440:        handleFirestoreError(err, OperationType.WRITE, "appointments");
+2441-      }
+2442-    };
+2443-    syncAppts();
+2444:  }, [appointments, isDbHydrated, isQuotaExceeded]);
+2445-
+2446-  // Inventory Sync
+2447-  useEffect(() => {
+2448-    if (!isDbHydrated || !auth.currentUser || isQuotaExceeded) return;
+2449-    if (!isLocalInventoryChangeRef.current) return;
+--
+3106-      awardXP(200); // 200 XP for successfully finishing an operational task!
+3107-    }
+3108-  };
+3109-
+3110-  const handleDeleteAppointment = (id: string) => {
+3111:    const appObj = appointments.find((a) => a.id === id);
+3112-    const appTitle = appObj ? appObj.title : "compromisso";
+3113-    requestConfirmation(
+3114-      "Excluir Agendamento?",
+3115-      `Tem certeza que deseja apagar o compromisso comercial "${appTitle}"? Isto desativará o alarme em tempo real no CRM.`,
+3116-      () => {
+--
+3492-            {/* Tab 8: AGENDAMENTOS (Reallocated after Follow-up) */}
+3493-            <button
+3494-              type="button"
+3495-              onClick={() => {
+3496-                triggerSensoryFeedback("click", accSettings);
+3497:                setActiveTab("appointments");
+3498-              }}
+3499-              className={`px-3 py-1.5 text-[10px] font-black uppercase font-mono tracking-wider rounded-lg transition-all border-2 border-zinc-950 flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_0px_rgba(255,255,255,0.15)] shrink-0 h-9 ${
+3500:                activeTab === "appointments"
+3501-                  ? "bg-indigo-600 text-white shadow-none translate-y-[1px]"
+3502-                  : "bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-zinc-700"
+3503-              }`}
+3504-            >
+3505-              <Calendar className="w-3.5 h-3.5 text-rose-450 shrink-0" />
+--
+5054-                            </span>
+5055-                          </div>
+5056-                          <button
+5057-                            onClick={() => {
+5058-                              triggerSensoryFeedback("click", accSettings);
+5059:                              setActiveTab("appointments");
+5060-                            }}
+5061-                            className="w-full text-center py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-850 rounded text-[9.5px] font-mono font-black uppercase text-zinc-350 cursor-pointer"
+5062-                          >
+5063-                            Visualizar Escala
+5064-                          </button>
+--
+5385-                        );
+5386-                      }}
+5387-                      onRequestConfirm={requestConfirmation}
+5388-                      awardXP={awardXP}
+5389-                      addNotification={addNotification}
+5390:                      appointments={appointments}
+5391-                      setAppointments={setAppointments}
+5392-                      onOpenAIAssistant={handleOpenAIAssistant}
+5393-                      onOpenRuleEngine={handleOpenRuleEngine}
+5394-                    />
+5395-                    </div>
+--
+5473-                        );
+5474-                      }}
+5475-                      onRequestConfirm={requestConfirmation}
+5476-                      awardXP={awardXP}
+5477-                      addNotification={addNotification}
+5478:                      appointments={appointments}
+5479-                      setAppointments={setAppointments}
+5480-                      onOpenAIAssistant={handleOpenAIAssistant}
+5481-                      onOpenRuleEngine={handleOpenRuleEngine}
+5482-                    />
+5483-                    </div>
+--
+5597-                />
+5598-              </div>
+5599-            )}
+5600-
+5601-            {/* DEDICATED APPOINTMENTS TAB */}
+5602:            {activeTab === "appointments" && (
+5603-              <div
+5604-                className="w-full"
+5605-              >
+5606-                <Appointments
+5607-                  leads={leads}
+5608:                  appointments={appointments}
+5609-                  onAddAppointment={handleAddAppointment}
+5610-                  onUpdateAppointmentStatus={handleUpdateAppointmentStatus}
+5611-                  onDeleteAppointment={handleDeleteAppointment}
+5612-                  accSettings={accSettings}
+5613-                />
+--
+5664-              <div
+5665-                className="w-full"
+5666-              >
+5667-                <Reports
+5668-                  leads={leads}
+5669:                  appointments={appointments}
+5670-                  emailLogs={emailLogs}
+5671-                  goals={gamificationGoals}
+5672-                />
+5673-              </div>
+5674-            )}
+--
+5711-                  awardXP={awardXP}
+5712-                  addNotification={addNotification}
+5713-                  leads={leads}
+5714-                  setLeads={setLeads}
+5715-                  templates={templates}
+5716:                  appointments={appointments}
+5717-                  setAppointments={setAppointments}
+5718-                  emailLogs={emailLogs}
+5719-                  setEmailLogs={setEmailLogs}
+5720-                />
+5721-              </div>
+--
+5786-                className="w-full"
+5787-              >
+5788-                <GoogleWorkspace
+5789-                  leads={leads}
+5790-                  setLeads={setLeads}
+5791:                  appointments={appointments}
+5792-                  setAppointments={setAppointments}
+5793-                  templates={templates}
+5794-                  emailLogs={emailLogs}
+5795-                  setEmailLogs={setEmailLogs}
+5796-                  awardXP={awardXP}
+--
+6352-                  <BackupManager
+6353-                    leads={leads}
+6354-                    setLeads={setLeads}
+6355-                    properties={properties}
+6356-                    setProperties={setProperties}
+6357:                    appointments={appointments}
+6358-                    setAppointments={setAppointments}
+6359-                    inventory={inventory}
+6360-                    setInventory={setInventory}
+6361-                    templates={templates}
+6362-                    setTemplates={setTemplates}
+--
+6630-                </button>
+6631-                <button
+6632-                  type="button"
+6633-                  onClick={() => {
+6634-                    setActiveAlarm(null);
+6635:                    setActiveTab("appointments");
+6636-                    triggerSensoryFeedback("click", accSettings);
+6637-                  }}
+6638-                  className="text-[10px] font-mono font-black text-indigo-600 hover:text-indigo-800 transition uppercase"
+6639-                >
+6640-                  Ver compromisso na aba de agendamentos

@@ -1,0 +1,274 @@
+src/components/UserCentralModal.tsx:                        const reader = new FileReader();
+src/components/ArchivedLeadsSheet.tsx:    link.setAttribute("download", `planilha_seguimento_arquivados_${new Date().toISOString().slice(0,10)}.csv`);
+src/components/ScriptsAndFlows.tsx:        throw new Error(`Erro de rede ${response.status}`);
+src/components/ScriptsAndFlows.tsx:                            setSelectedLeadIds(prev => Array.from(new Set([...prev, ...filteredIds])));
+src/components/LeadList.tsx:  const contactDate = new Date(year, month, day);
+src/components/LeadList.tsx:  const today = new Date();
+src/components/LeadList.tsx:  const targetDate = new Date();
+src/components/LeadList.tsx:          `[${new Date().toLocaleTimeString()}] ✅ Disparado para ${leadItem.name} (${leadItem.phone}) ✔️`,
+src/components/LeadList.tsx:          `[${new Date().toLocaleTimeString()}] ❌ Erro ao abrir contato de ${leadItem.name}.`,
+src/components/LeadList.tsx:        `[${new Date().toLocaleTimeString()}] ⚠️ Pulado: ${leadItem.name} - Telefone ausente.`,
+src/components/LeadList.tsx:            `[${new Date().toLocaleTimeString()}] 👀 Retorno detectado! Redefinindo cronômetro de segurança para ${delay}s...`,
+src/components/LeadList.tsx:              `[${new Date().toLocaleTimeString()}] ⏳ Aguardando retorno ao CRM para retomar contagem...`,
+src/components/LeadList.tsx:          `[${new Date().toLocaleTimeString()}] 👉 [PRONTO] Canal quente! Abra o chat para enviar para ${activeLead.name}!`,
+src/components/LeadList.tsx:        throw new Error('Planilha não encontrada. Certifique-se de que o ID ou o link esteja correto e as permissões estejam corretas.');
+src/components/LeadList.tsx:        throw new Error('Esta planilha é Privada. Por favor, acesse o Sheets, clique em Compartilhar e mude para "Qualquer pessoa com o link como Leitor", ou faça login com sua conta no Google Workspace.');
+src/components/LeadList.tsx:  const origins = Array.from(new Set(leads.map(l => l.origin)));
+src/components/LeadList.tsx:        {name: "Lead Faturamento (Extraído DOC)", email: "doc1@pdf.com", phone: "11999990000", value: 250000, status: "novo", origin: "Importação OCR", fluxoId: "financiamento", createdAt: new Date().toISOString(), tags: ["pdf", "ocr"], notes: ""},
+src/components/LeadList.tsx:        {name: "Lead Portabilidade (Extraído DOC)", email: "doc2@pdf.com", phone: "11988880000", value: 450000, status: "novo", origin: "Importação OCR", fluxoId: "portabilidade", createdAt: new Date().toISOString(), tags: ["docs", "ocr"], notes: ""}
+src/components/LeadList.tsx:    const reader = new FileReader();
+src/components/LeadList.tsx:          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+src/components/LeadList.tsx:      createdAt: item.createdAt || new Date().toISOString()
+src/components/LeadList.tsx:      () => onUpdateLeadField?.(lead.id, { lastInteractionAt: new Date().toISOString() })
+src/components/LeadList.tsx:        throw new Error(data.error || 'Erro ao comunicar com a inteligência do Gemini.');
+src/components/LeadList.tsx:        const dateObj = new Date();
+src/components/LeadList.tsx:    const observer = new IntersectionObserver(
+src/components/LeadList.tsx:        const union = new Set([...prev, ...visibleIds]);
+src/components/LeadList.tsx:                                    {new Date(item.modifiedTime).toLocaleDateString()}
+src/components/LeadList.tsx:                          createdAt: new Date().toISOString().slice(0, 10)
+src/components/LeadList.tsx:                    const calculatedAge = lead.birthDate ? (new Date().getFullYear() - new Date(lead.birthDate).getFullYear()) : 35;
+src/components/LeadList.tsx:                                  onClick={() => onUpdateLeadField?.(lead.id, { lastInteractionAt: new Date().toISOString() })}
+src/components/LeadList.tsx:                            perfil: {lead.mainProfile || 'Médio'} | entrada: {lead.createdAt ? new Date(lead.createdAt).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}) : '30/04'}
+src/components/LeadList.tsx:                            objetivos: {lead.company || 'Preço'} | Alt. int.: {lead.lastContactAt ? new Date(lead.lastContactAt).toLocaleDateString('pt-BR', {day:'2-digit', month: '2-digit'}) : '15/06'}
+src/components/LeadList.tsx:                                {lead.createdAt ? new Date(lead.createdAt).toLocaleDateString("pt-BR") + " " + new Date(lead.createdAt).toLocaleTimeString("pt-BR", {hour: '2-digit', minute:'2-digit'}) : "-"}
+src/components/LeadList.tsx:                                onClick={() => onUpdateLeadField?.(lead.id, { lastInteractionAt: new Date().toISOString() })}
+src/components/LeadList.tsx:                                  onUpdateLeadField?.(lead.id, { lastInteractionAt: new Date().toISOString() });
+src/components/LeadList.tsx:                                   {lead.createdAt ? new Date(lead.createdAt).toLocaleDateString("pt-BR") + " " + new Date(lead.createdAt).toLocaleTimeString("pt-BR", {hour: '2-digit', minute:'2-digit'}) : "-"}
+src/components/LeadList.tsx:                                   {lead.lastInteractionAt ? new Date(lead.lastInteractionAt).toLocaleDateString("pt-BR") + " " + new Date(lead.lastInteractionAt).toLocaleTimeString("pt-BR", {hour: '2-digit', minute:'2-digit'}) : "-"}
+src/components/LeadList.tsx:                                  onClick={() => onUpdateLeadField?.(lead.id, { lastInteractionAt: new Date().toISOString() })}
+src/components/LeadList.tsx:                                    onUpdateLeadField?.(lead.id, { lastInteractionAt: new Date().toISOString() });
+src/components/LeadList.tsx:                              setBatchLog(prev => [`[${new Date().toLocaleTimeString()}] ➡️ Lead ${activeLead.name} pulado manualmente.`, ...prev]);
+src/components/LeadList.tsx:            const d = new Date(refDateStr);
+src/components/LeadList.tsx:            const diffTime = new Date().getTime() - d.getTime();
+src/components/LeadList.tsx:                const dateStr = new Date().toLocaleDateString('pt-BR');
+src/components/Sidebar.tsx:  currentDateTime = new Date()
+src/components/Reports.tsx:  const origins = Array.from(new Set(leads.map(l => l.origin)));
+src/components/Reports.tsx:                        <span>{new Date(log.sentAt).toLocaleTimeString('pt-BR')}</span>
+src/components/Reports.tsx:                        <span className="text-zinc-500">{new Date(ap.date).toLocaleDateString('pt-BR')} às {ap.time}</span>
+src/components/PublicPortal.tsx:  const neighborhoods = Array.from(new Set(properties.map(p => p.neighborhood)));
+src/components/PublicPortal.tsx:    // Create a real new Lead object linked directly to this public portal landing page capture!
+src/components/PublicPortal.tsx:      createdAt: new Date().toISOString().slice(0, 10)
+src/components/Login.tsx:      // 2. If it's a new database/user (auth/user-not-found or invalid or user not registered yet), self-register
+src/components/Login.tsx:      if (!result) throw new Error("A autenticação com o Google Workspace falhou.");
+src/components/FluxoManager.tsx:    // Create new array with updated stage
+src/components/FinanceSimulatorTab.tsx:    const blob = new Blob(["\uFEFF" + content], { type: 'text/csv;charset=utf-8;' });
+src/components/FinanceSimulatorTab.tsx:Simulado em ${new Date().toLocaleDateString('pt-BR')} via Central Credi CRM Inteligente.
+src/components/FinanceSimulatorTab.tsx:Simulado via CRM Inteligente em ${new Date().toLocaleDateString('pt-BR')}.
+src/components/FinanceSimulatorTab.tsx:                    <p>Emissão: <span className="text-zinc-950 font-black">{new Date().toLocaleDateString('pt-BR')}</span></p>
+src/components/FinanceSimulatorTab.tsx:              <p>Abertura: <span className="text-zinc-950 font-black">{new Date().toLocaleString('pt-BR')}</span></p>
+src/components/LeadDetailsModal.tsx:  const contactDate = new Date(year, month, day);
+src/components/LeadDetailsModal.tsx:  const today = new Date();
+src/components/LeadDetailsModal.tsx:  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+src/components/LeadDetailsModal.tsx:  const [googleCalendarDate, setGoogleCalendarDate] = useState<string>(new Date().toISOString().substring(0, 10));
+src/components/LeadDetailsModal.tsx:        throw new Error(data.error || 'Erro inesperado na geração de coprodução.');
+src/components/LeadDetailsModal.tsx:Gerado inteligentemente pelo Sistema em ${new Date().toLocaleDateString('pt-BR')}.`;
+src/components/LeadDetailsModal.tsx:                    <p className="text-[10px] text-zinc-400 font-mono mt-0.5">{new Date(lead.createdAt).toLocaleDateString('pt-BR')}</p>
+src/components/LeadDetailsModal.tsx:            <button onClick={() => handleWhatsAppAction(lead, undefined, () => onUpdateLeadFull?.(lead.id, { lastInteractionAt: new Date().toISOString() }))} title="WhatsApp Inteligente" className="p-2 px-3 bg-white hover:bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center transition border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-[0px_0px_0px_0px_rgba(0,0,0,1)] whitespace-nowrap">
+src/components/EmailAutomation.tsx:      sentAt: new Date().toISOString().replace("T", " ").slice(0, 16),
+src/components/EmailAutomation.tsx:      sentAt: new Date().toISOString().replace("T", " ").slice(0, 16),
+src/components/EmailAutomation.tsx:      sentAt: new Date().toISOString().replace("T", " ").slice(0, 16),
+src/components/GoogleWorkspace.tsx:    date: new Date().toISOString().substring(0, 10),
+src/components/GoogleWorkspace.tsx:      const provider = new GoogleAuthProvider();
+src/components/GoogleWorkspace.tsx:        throw new Error('Falha ao obter o token de acesso Google Workspace.');
+src/components/GoogleWorkspace.tsx:      const timeMin = new Date().toISOString();
+src/components/GoogleWorkspace.tsx:      const dateStartObj = new Date(calculatedStart);
+src/components/GoogleWorkspace.tsx:      const dateEndObj = new Date(dateStartObj.getTime() + apptForm.durationMinutes * 60000);
+src/components/GoogleWorkspace.tsx:        throw new Error('Falha ao registrar compromisso na API Google Calendar.');
+src/components/GoogleWorkspace.tsx:        date: new Date().toISOString().substring(0, 10),
+src/components/GoogleWorkspace.tsx:          date: new Date(dateRaw).toLocaleString('pt-BR')
+src/components/GoogleWorkspace.tsx:        throw new Error('Falha no envio de e-mail através da API do Gmail.');
+src/components/GoogleWorkspace.tsx:        sentAt: new Date().toISOString(),
+src/components/GoogleWorkspace.tsx:        throw new Error('Falha ao enviar arquivo de relatório para o Google Drive.');
+src/components/GoogleWorkspace.tsx:        throw new Error('Impossível ler linhas da planilha. Verifique as permissões de acesso do arquivo.');
+src/components/GoogleWorkspace.tsx:          createdAt: new Date().toISOString().substring(0, 10)
+src/components/GoogleWorkspace.tsx:      const title = `Exportação CRM cicloCRED - ${new Date().toLocaleDateString('pt-BR')}`;
+src/components/GoogleWorkspace.tsx:        throw new Error('Falha ao instanciar arquivo de planilha.');
+src/components/GoogleWorkspace.tsx:        throw new Error('Planilha criada, mas falhou ao gravar os registros de Leads.');
+src/components/GoogleWorkspace.tsx:        throw new Error('Falha ao registrar novo contato na API Google People.');
+src/components/GoogleWorkspace.tsx:      createdAt: new Date().toISOString().substring(0, 10)
+src/components/GoogleWorkspace.tsx:      const now = new Date();
+src/components/GoogleWorkspace.tsx:      const dateEndObj = new Date(now.getTime() + 60 * 60000); // 1 hour duration
+src/components/GoogleWorkspace.tsx:        throw new Error('Falha ao instanciar o link no Google Calendar.');
+src/components/GoogleWorkspace.tsx:        throw new Error('A API retornou sucesso mas não gerou o link do Meet.');
+src/components/GoogleWorkspace.tsx:    setSyncLogs(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev.slice(0, 25)]);
+src/components/GoogleWorkspace.tsx:        throw new Error('Falha ao instanciar o arquivo no Google Sheets via REST API.');
+src/components/GoogleWorkspace.tsx:        if (!activeSheetId) throw new Error("Não foi possível gerar a planilha de sincronia.");
+src/components/GoogleWorkspace.tsx:      if (!leadsRes.ok) throw new Error("Falha ao sincronizar aba Leads.");
+src/components/GoogleWorkspace.tsx:      if (!apptsRes.ok) throw new Error("Falha ao sincronizar aba Agenda.");
+src/components/GoogleWorkspace.tsx:      if (!logsRes.ok) throw new Error("Falha ao sincronizar aba Atividades.");
+src/components/GoogleWorkspace.tsx:      if (!leadsRes.ok) throw new Error("Aba 'Leads' não encontrada na planilha ativa.");
+src/components/GoogleWorkspace.tsx:        createdAt: row[8] || new Date().toISOString().slice(0, 10),
+src/components/GoogleWorkspace.tsx:      if (!apptsRes.ok) throw new Error("Aba 'Agenda' não encontrada.");
+src/components/GoogleWorkspace.tsx:        date: row[2] || new Date().toISOString().slice(0, 10),
+src/components/GoogleWorkspace.tsx:      if (!logsRes.ok) throw new Error("Aba 'Atividades' não encontrada.");
+src/components/GoogleWorkspace.tsx:        sentAt: row[5] || new Date().toISOString(),
+src/components/GoogleWorkspace.tsx:          createdAt: new Date().toISOString().substring(0, 10)
+src/components/GoogleWorkspace.tsx:                  const formattedStart = startStr ? new Date(startStr).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'Dia todo';
+src/components/GoogleWorkspace.tsx:                        MODIFICADO EM: {new Date(file.modifiedTime).toLocaleDateString('pt-BR')}
+src/components/GoogleWorkspace.tsx:                            {new Date(item.modifiedTime).toLocaleDateString()}
+src/components/GoogleWorkspace.tsx:        throw new Error('Falha ao instanciar arquivo de planilha para sincronização realtime.');
+src/components/GoogleWorkspace.tsx:      new Date().toLocaleString('pt-BR'),
+src/components/GoogleWorkspace.tsx:    const startDateTime = new Date(`${date}T${time}:00`);
+src/components/GoogleWorkspace.tsx:    const endDateTime = new Date(startDateTime.getTime() + durationMinutes * 60 * 1000);
+src/components/GoogleWorkspace.tsx:    const form = new FormData();
+src/components/GoogleWorkspace.tsx:    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+src/components/GoogleWorkspace.tsx:    form.append('file', new Blob([content], { type: mimeType }));
+src/components/BackupManager.tsx:    const backupName = labelStr || backupLabel.trim() || `Ponto de Restauração - ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`;
+src/components/BackupManager.tsx:      timestamp: new Date().toISOString(),
+src/components/BackupManager.tsx:      exportedAt: new Date().toISOString(),
+src/components/BackupManager.tsx:      const d = new Date();
+src/components/BackupManager.tsx:    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8;' });
+src/components/BackupManager.tsx:    const fileReader = new FileReader();
+src/components/BackupManager.tsx:    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+src/components/BackupManager.tsx:    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+src/components/BackupManager.tsx:    const fileReader = new FileReader();
+src/components/BackupManager.tsx:          createdAt: new Date().toISOString()
+src/components/BackupManager.tsx:    const fileReader = new FileReader();
+src/components/BackupManager.tsx:                          {new Date(snap.timestamp).toLocaleDateString('pt-BR')} às {new Date(snap.timestamp).toLocaleTimeString('pt-BR')}
+src/components/GeminiServerTab.tsx:      timestamp: new Date().toLocaleTimeString('pt-BR')
+src/components/GeminiServerTab.tsx:    const userMsg = { sender: 'user' as const, text: trimmed, timestamp: new Date().toLocaleTimeString('pt-BR') };
+src/components/GeminiServerTab.tsx:          timestamp: new Date().toLocaleTimeString('pt-BR')
+src/components/GeminiServerTab.tsx:          timestamp: new Date().toLocaleTimeString('pt-BR')
+src/components/GeminiServerTab.tsx:        timestamp: new Date().toLocaleTimeString('pt-BR')
+src/components/GeminiServerTab.tsx:        throw new Error('Falha ao atualizar parâmetros.');
+src/components/GeminiServerTab.tsx:          timestamp: new Date().toISOString()
+src/components/GeminiServerTab.tsx:          timestamp: new Date().toISOString()
+src/components/GeminiServerTab.tsx:    })).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+src/components/GeminiServerTab.tsx:          time: new Date(log.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+src/components/GeminiServerTab.tsx:            time: new Date(log.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+src/components/GeminiServerTab.tsx:            time: new Date(log.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+src/components/GeminiServerTab.tsx:                                  {new Date(chat.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+src/components/GeminiServerTab.tsx:                                    <span className="text-[9px] text-zinc-500">{new Date(log.timestamp).toLocaleTimeString('pt-BR')} • {log.method}</span>
+src/components/GeminiServerTab.tsx:                          <span>{new Date(log.timestamp).toLocaleDateString('pt-BR')} {new Date(log.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} • {log.latency_ms} ms</span>
+src/components/RealEstateInventory.tsx:        const img = new Image();
+src/components/RealEstateInventory.tsx:        await new Promise((resolve, reject) => {
+src/components/RealEstateInventory.tsx:        const converted = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+src/components/RealEstateInventory.tsx:        new ClipboardItem({ 'image/png': pngBlob })
+src/components/RealEstateInventory.tsx:    setInventoryBatchLog(prev => [`[${new Date().toLocaleTimeString()}] ⏳ Modulando mídias (copiando imagem + baixando arquivo para ${leadItem.name})...`, ...prev]);
+src/components/RealEstateInventory.tsx:        `[${new Date().toLocaleTimeString()}] ✅ Disparo realizado com sucesso para ${leadItem.name} (${leadItem.phone}) ✔️`,
+src/components/RealEstateInventory.tsx:        `[${new Date().toLocaleTimeString()}] ❌ Erro ao abrir chat de ${leadItem.name}.`,
+src/components/RealEstateInventory.tsx:            `[${new Date().toLocaleTimeString()}] 👀 Retorno detectado! Redefinindo cronômetro de segurança para ${delay}s...`,
+src/components/RealEstateInventory.tsx:              `[${new Date().toLocaleTimeString()}] ⏳ Aguardando retorno ao CRM para retomar contagem...`,
+src/components/RealEstateInventory.tsx:          `[${new Date().toLocaleTimeString()}] 👉 [PRONTO] Linha de transmissão livre! Pressione 'DISPARAR FICHA AGORA' para contactar ${activeLead.name}!`,
+src/components/RealEstateInventory.tsx:      const file = new File([blob], `imovel_campanha.${extension}`, { type: mimeType });
+src/components/RealEstateInventory.tsx:            Este é um documento de oferta comercial expedido pelo CRM cicloCRED em ${new Date().toLocaleDateString('pt-BR')}. Sujeito a alterabilidade e disponibilidade comercial.
+src/components/RealEstateInventory.tsx:    const reader = new FileReader();
+src/components/RealEstateInventory.tsx:          createdAt: new Date().toISOString().slice(0, 10)
+src/components/RealEstateInventory.tsx:                                          const reader = new FileReader();
+src/components/RealEstateInventory.tsx:                      const now = new Date();
+src/components/RealEstateInventory.tsx:                      const now = new Date();
+src/components/RealEstateInventory.tsx:                          const now = new Date();
+src/components/RealEstateInventory.tsx:                          const now = new Date();
+src/components/RealEstateInventory.tsx:                          const now = new Date();
+src/components/RealEstateInventory.tsx:                          const now = new Date();
+src/components/RealEstateInventory.tsx:                    <p>Gerado em: {new Date().toLocaleDateString('pt-BR')}</p>
+src/components/RealEstateInventory.tsx:                              const reader = new FileReader();
+src/components/RealEstateInventory.tsx:                                  // Immediately import/apply the new preset
+src/components/RealEstateInventory.tsx:                      const reader = new FileReader();
+src/components/RealEstateInventory.tsx:                        const reader = new FileReader();
+src/components/LeadModal.tsx:      createdAt: lead ? lead.createdAt : new Date().toISOString().slice(0, 10),
+src/components/LeadModal.tsx:      lastContactAt: lead ? lead.lastContactAt : new Date().toISOString().slice(0, 10),
+src/components/AIAssistantChat.tsx:        throw new Error(`Servidor respondeu com código de status ${res.status}`);
+src/components/KanbanBoard.tsx:  const contactDate = new Date(year, month, day);
+src/components/KanbanBoard.tsx:  const today = new Date();
+src/components/KanbanBoard.tsx:  const todayMidnight = new Date(
+src/components/KanbanBoard.tsx:    window.dispatchEvent(new Event("kanban-columns-updated"));
+src/components/KanbanBoard.tsx:    window.dispatchEvent(new Event("kanban-columns-updated"));
+src/components/KanbanBoard.tsx:    window.dispatchEvent(new Event("kanban-columns-updated"));
+src/components/KanbanBoard.tsx:    window.dispatchEvent(new Event("kanban-columns-updated"));
+src/components/KanbanBoard.tsx:    window.dispatchEvent(new Event("kanban-columns-updated"));
+src/components/KanbanBoard.tsx:      window.dispatchEvent(new Event("kanban-columns-updated"));
+src/components/KanbanBoard.tsx:       window.dispatchEvent(new CustomEvent('ciclocred_cycle_tab_prev'));
+src/components/KanbanBoard.tsx:       window.dispatchEvent(new CustomEvent('ciclocred_cycle_tab_next'));
+src/components/Gamification.tsx:        { id: 'offline-self', name: userName || 'Você (Modo Local)', email: cleanEmail, level: Number(userLevel || 1), xp: Number(userXP || 0), dealsClosed: Number(dealsClosedCount || 0), actionsCount: Number(actionsCount || 0), lastActive: new Date().toISOString() }
+src/components/Gamification.tsx:          lastActive: new Date().toISOString()
+src/components/Gamification.tsx:          window.dispatchEvent(new CustomEvent('firestore-quota-exceeded'));
+src/components/SmartCalendar.tsx:  const [selectedDate, setSelectedDate] = useState(new Date());
+src/components/SmartCalendar.tsx:              const isToday = isSameDay(day, new Date());
+src/components/SmartNextSteps.tsx:        let date = new Date();
+src/firebase.ts:export const googleProvider = new GoogleAuthProvider();
+src/firebase.ts:      window.dispatchEvent(new CustomEvent('firestore-quota-exceeded'));
+src/firebase.ts:  throw new Error(JSON.stringify(errInfo));
+src/firebase.ts:      const controller = new AbortController();
+src/firebase.ts:          window.dispatchEvent(new CustomEvent('firestore-quota-exceeded'));
+src/context/ConfigContext.tsx:  settings: { version: '4.2.0', lastUpdated: new Date(), config: initialConfig },
+src/context/ConfigContext.tsx:    lastUpdated: new Date(), 
+src/lib/google-auth.ts:const provider = new GoogleAuthProvider();
+src/lib/google-auth.ts:      throw new Error('Failed to get access token from Firebase Auth');
+src/lib/google-calendar.ts:    throw new Error('User not authenticated with Google');
+src/lib/google-calendar.ts:    throw new Error('Failed to create Google Calendar event');
+src/utils/flow.ts:    createdAt: new Date().toISOString(),
+src/utils/sensory.ts:        const audioCtx = new AudioContextClass();
+src/App.tsx:  const [time, setTime] = useState(new Date());
+src/App.tsx:    const t = setInterval(() => setTime(new Date()), 30000);
+src/App.tsx:    console.log("[App.tsx] System datetime:", new Date().toISOString());
+src/App.tsx:            ? new Date(l.lastInteractionAt).getTime()
+src/App.tsx:              ? new Date(l.createdAt).getTime()
+src/App.tsx:              lastInteractionAt: new Date().toISOString(),
+src/App.tsx:    const todayStr = new Date().toISOString().slice(0, 10);
+src/App.tsx:            const todayStr = new Date().toISOString().slice(0, 10);
+src/App.tsx:      const seen = new Set<string>();
+src/App.tsx:            window.dispatchEvent(new CustomEvent("ciclocred_cycle_tab_next"));
+src/App.tsx:            window.dispatchEvent(new CustomEvent("ciclocred_cycle_tab_prev"));
+src/App.tsx:    const colIds = new Set(getKanbanColumns().map((c) => c.id));
+src/App.tsx:        timestamp: new Date().toISOString(),
+src/App.tsx:      const blob = new Blob([JSON.stringify(dataToExport, null, 2)], {
+src/App.tsx:      link.download = `ciclocred-backup-${new Date().toISOString().split("T")[0]}.json`;
+src/App.tsx:      timestamp: new Date().toLocaleTimeString("pt-BR", {
+src/App.tsx:        new Notification(title, {
+src/App.tsx:            date: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+src/App.tsx:                    const recognition = new SpeechRecognition();
+src/App.tsx:                        throw new Error("Erro na comunicação");
+src/App.tsx:      const now = new Date();
+src/App.tsx:            const lastInteractionTime = new Date(lastInteractionStr).getTime();
+src/App.tsx:                lastInteractionAt: new Date().toISOString(),
+src/App.tsx:            const controller = new AbortController();
+src/App.tsx:                    new CustomEvent("firestore-quota-exceeded"),
+src/App.tsx:              throw new Error(
+src/App.tsx:                throw new Error(
+src/App.tsx:              throw new Error(
+src/App.tsx:              const seen = new Set<string>();
+src/App.tsx:              window.dispatchEvent(new CustomEvent("firestore-quota-exceeded"));
+src/App.tsx:          const timeA = new Date(a.createdAt || 0).getTime();
+src/App.tsx:          const timeB = new Date(b.createdAt || 0).getTime();
+src/App.tsx:        const currentIds = new Set(leads.map((l) => l.id));
+src/App.tsx:        const currentIds = new Set(templates.map((t) => t.id));
+src/App.tsx:        const currentIds = new Set(emailLogs.map((l) => l.id));
+src/App.tsx:        const currentIds = new Set(appointments.map((a) => a.id));
+src/App.tsx:        const currentIds = new Set(inventory.map((i) => i.id));
+src/App.tsx:        const currentIds = new Set(properties.map((p) => p.id));
+src/App.tsx:        const currentIds = new Set(gamificationGoals.map((g) => g.id));
+src/App.tsx:        const currentIds = new Set(gamificationProjects.map((p) => p.id));
+src/App.tsx:            lastInteractionAt: new Date().toISOString(),
+src/App.tsx:            lastInteractionAt: new Date().toISOString(),
+src/App.tsx:      awardXP(50); // 50 XP for cataloging new prospective client
+src/App.tsx:      const existingIds = new Set(prev.map((p) => p.id));
+src/App.tsx:    const existingIds = new Set(currentLeadsList.map((l) => l.id));
+src/App.tsx:    // 3. Immediately sync new leads to Firestore in batch to prevent network delays or race conditions from dropping them!
+src/App.tsx:          const nextSet = new Set([
+src/App.tsx:        const picker = new (window as any).google.picker.PickerBuilder()
+src/App.tsx:        throw new Error("Não foi possível ler as colunas da primeira página.");
+src/App.tsx:          createdAt: new Date().toISOString(),
+src/App.tsx:                  const h = new Date().getHours();
+src/App.tsx:                  {new Date()
+src/App.tsx:                  {new Date().toLocaleTimeString("pt-BR", {
+src/App.tsx:                      const createdTime = new Date(
+src/App.tsx:                      const createdTime = new Date(
+src/App.tsx:                                const createdTime = new Date(
+src/App.tsx:                                const createdTime = new Date(
+src/App.tsx:                                  ? new Date(l.lastInteractionAt).getTime()
+src/App.tsx:                                const createdTime = new Date(
+src/App.tsx:                                  ? new Date(l.lastInteractionAt).getTime()
+src/App.tsx:                                                      🕒 <span className="opacity-70">Logado:</span> <span className="text-indigo-100">{l.createdAt ? new Date(l.createdAt).toLocaleDateString("pt-BR") + " " + new Date(l.createdAt).toLocaleTimeString("pt-BR", {hour: '2-digit', minute:'2-digit'}) : "N/I"}</span>
+src/App.tsx:                                                      🕒 <span className="opacity-70">Logado:</span> <span className="text-emerald-100">{l.createdAt ? new Date(l.createdAt).toLocaleDateString("pt-BR") + " " + new Date(l.createdAt).toLocaleTimeString("pt-BR", {hour: '2-digit', minute:'2-digit'}) : "N/I"}</span>
+src/App.tsx:                                                      🕒 <span className="opacity-70">Logado:</span> <span className="text-rose-100">{l.createdAt ? new Date(l.createdAt).toLocaleDateString("pt-BR") + " " + new Date(l.createdAt).toLocaleTimeString("pt-BR", {hour: '2-digit', minute:'2-digit'}) : "N/I"}</span>
+src/App.tsx:                              const reader = new FileReader();
+src/App.tsx:                                        createdAt: new Date().toISOString(),
+src/App.tsx:                                        createdAt: new Date().toISOString(),
+src/App.tsx:                                      createdAt: new Date().toISOString(),
+src/App.tsx:                                      createdAt: new Date().toISOString(),
+src/App.tsx:                            const reader = new FileReader();
+src/App.tsx:            const evt = new CustomEvent("ciclocred_global_prev_visibility", {
+src/App.tsx:            const evt = new CustomEvent("ciclocred_global_next_visibility", {
+src/App.tsx:            window.dispatchEvent(new CustomEvent("ciclocred_cycle_tab_prev"));
+src/App.tsx:            window.dispatchEvent(new CustomEvent("ciclocred_cycle_tab_next"));

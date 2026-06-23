@@ -3,59 +3,123 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Lead, EmailTemplate, EmailLog, LeadStatus, Appointment, InventoryItem, RealEstateProperty, Goal, Project, CRMNotification, FollowUpUpdate } from './types';
-import { 
-  INITIAL_LEADS, 
-  INITIAL_TEMPLATES, 
+import React, { useState, useEffect, useRef, useMemo, Suspense } from "react";
+
+import {
+  Lead,
+  EmailTemplate,
+  EmailLog,
+  LeadStatus,
+  Appointment,
+  InventoryItem,
+  RealEstateProperty,
+  Goal,
+  Project,
+  CRMNotification,
+  OperationalFlow,
+  FollowUpUpdate,
+} from "./types";
+import {
+  INITIAL_LEADS,
+  INITIAL_TEMPLATES,
   INITIAL_EMAIL_LOGS,
-  INITIAL_PROPERTIES
-} from './data/initialRecords';
-import { db, auth, handleFirestoreError, OperationType, disableFirestoreNetwork } from './firebase';
-import { collection, getDocs, doc, setDoc, deleteDoc, onSnapshot, getDoc } from 'firebase/firestore';
-import { signOut } from 'firebase/auth';
-import { getKanbanColumns } from './utils/kanban';
+  INITIAL_PROPERTIES,
+} from "./data/initialRecords";
+import {
+  db,
+  auth,
+  handleFirestoreError,
+  OperationType,
+  disableFirestoreNetwork,
+  enableFirestoreNetwork,
+  googleSignIn,
+  initAuth,
+  getAccessToken,
+} from "./firebase";
+import {
+  collection,
+  getDocs,
+  doc,
+  setDoc,
+  deleteDoc,
+  onSnapshot,
+  getDoc,
+  writeBatch,
+} from "firebase/firestore";
+import { signOut } from "firebase/auth";
+import { getKanbanColumns } from "./utils/kanban";
+import { createDefaultFlow } from "./utils/flow";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Legend,
+  FunnelChart,
+  Funnel,
+  LabelList,
+} from "recharts";
 
-import Sidebar from './components/Sidebar';
-import KanbanBoard from './components/KanbanBoard';
-import LeadList from './components/LeadList';
-import FollowUpManager from './components/FollowUpManager';
-import EmailAutomation from './components/EmailAutomation';
-import Reports from './components/Reports';
-import Appointments from './components/Appointments';
-import RealEstateInventory from './components/RealEstateInventory';
-import LeadModal from './components/LeadModal';
-import LeadDetailsModal from './components/LeadDetailsModal';
-import MultiLevelMarketingTab from './components/MultiLevelMarketingTab';
-import FinanceSimulatorTab from './components/FinanceSimulatorTab';
-import CicloCredInformTab from './components/CicloCredInformTab';
+import { ConfigProvider } from "./context/ConfigContext";
+import Sidebar from "./components/Sidebar";
+import LeadEditorForm from "./components/LeadEditorForm";
+import KanbanBoard from "./components/KanbanBoard";
+import LeadList, {
+  extractPhoneFromString,
+  isFictitiousPhone,
+  processFileOrPasteContent,
+} from "./components/LeadList";
+import ScriptsAndFlows from "./components/ScriptsAndFlows";
+import EmailAutomation from "./components/EmailAutomation";
+import Reports from "./components/Reports";
+import RealEstateInventory from "./components/RealEstateInventory";
+import LeadModal from "./components/LeadModal";
+import LeadDetailsModal from "./components/LeadDetailsModal";
+import MultiLevelMarketingTab from "./components/MultiLevelMarketingTab";
+import FinanceSimulatorTab from "./components/FinanceSimulatorTab";
+import CicloCredInformTab from "./components/CicloCredInformTab";
 
-import PublicPortal from './components/PublicPortal';
+import PublicPortal from "./components/PublicPortal";
+import RuleEnginePanel from "./components/RuleEnginePanel";
+import AIAssistantChat from "./components/AIAssistantChat";
 
 // Sensory & Custom Sub tabs imports
-import LoginView from './components/Login';
-import SettingsView from './components/Settings';
-import GamificationView from './components/Gamification';
-import BackupManager from './components/BackupManager';
-import UserCentralModal from './components/UserCentralModal';
-import KidsTab from './components/KidsTab';
-import AutomationFlowsTab from './components/AutomationFlowsTab';
-import UserCentralTab from './components/UserCentralTab';
-import GoogleWorkspace, { getWorkspaceToken, syncCRMMovementToGoogleSheet, autoSyncWorkspaceDatabase } from './components/GoogleWorkspace';
-import GeminiServerTab from './components/GeminiServerTab';
-import AnimatedCounter from './components/AnimatedCounter';
-import { AccessibilitySettings, triggerSensoryFeedback, INITIAL_ACCESSIBILITY_SETTINGS } from './utils/sensory';
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis } from 'recharts';
+import LoginView from "./components/Login";
+import SettingsView from "./components/Settings";
+import GamificationView from "./components/Gamification";
+import BackupManager from "./components/BackupManager";
+import UserCentralModal from "./components/UserCentralModal";
+import KidsTab from "./components/KidsTab";
+import AutomationFlowsTab from "./components/AutomationFlowsTab";
+import ArchivedLeadsSheet from "./components/ArchivedLeadsSheet";
+import UserCentralTab from "./components/UserCentralTab";
+import GoogleWorkspace, {
+  getWorkspaceToken,
+  syncCRMMovementToGoogleSheet,
+  autoSyncWorkspaceDatabase,
+} from "./components/GoogleWorkspace";
+import GeminiServerTab from "./components/GeminiServerTab";
+import AnimatedCounter from "./components/AnimatedCounter";
+import {
+  AccessibilitySettings,
+  triggerSensoryFeedback,
+  INITIAL_ACCESSIBILITY_SETTINGS,
+} from "./utils/sensory";
 
-import { 
-  Briefcase, 
-  Users, 
-  TrendingUp, 
-  Mail, 
-  ChevronRight, 
-  Plus, 
-  DollarSign, 
+import {
+  Briefcase,
+  Users,
+  TrendingUp,
+  Mail,
+  ChevronRight,
+  Plus,
+  DollarSign,
   Menu,
   X,
   FileSpreadsheet,
@@ -86,65 +150,285 @@ import {
   BarChart2,
   User,
   Download,
-  Upload
-} from 'lucide-react';
+  Upload,
+  Zap,
+  BookOpen,
+  Archive,
+  Database,
+  MessageSquare,
+  MoreVertical,
+  Shield,
+  ChevronLeft,
+  Edit3,
+} from "lucide-react";
+
+import SmartCalendar from "./components/SmartCalendar";
+import SmartNextSteps from "./components/SmartNextSteps";
+
+// Robust, in-app Markdown parser for CEO Copilot Insights
+function parseBoldText(text: string) {
+  const parts = text.split(/\*\*([^*]+)\*\*/g);
+  return parts.map((part, index) => {
+    if (index % 2 === 1) {
+      return (
+        <strong key={index} className="text-white font-black">
+          {part}
+        </strong>
+      );
+    }
+    return part;
+  });
+}
+
+function renderCeoMarkdown(txt: string) {
+  if (!txt) return null;
+  return txt.split("\n").map((line, i) => {
+    let trimmed = line.trim();
+    if (trimmed.startsWith("###")) {
+      return (
+        <h3
+          key={i}
+          className="text-zinc-100 font-extrabold text-xs uppercase mt-4 mb-2 tracking-wider flex items-center gap-2 border-l-4 border-purple-500 pl-2"
+        >
+          {trimmed.replace(/^###\s*/, "")}
+        </h3>
+      );
+    }
+    if (trimmed.startsWith("##")) {
+      return (
+        <h2
+          key={i}
+          className="text-purple-400 font-extrabold text-sm uppercase mt-5 mb-2 tracking-wide flex items-center gap-2"
+        >
+          {trimmed.replace(/^##\s*/, "")}
+        </h2>
+      );
+    }
+    if (trimmed.startsWith("#")) {
+      return (
+        <h1
+          key={i}
+          className="text-white font-black text-base uppercase mt-6 mb-3 tracking-widest border-b border-zinc-800 pb-1"
+        >
+          {trimmed.replace(/^#\s*/, "")}
+        </h1>
+      );
+    }
+    if (trimmed.startsWith("* ") || trimmed.startsWith("- ")) {
+      const text = trimmed.replace(/^[\*\-]\s*/, "");
+      return (
+        <div
+          key={i}
+          className="text-zinc-300 text-xs font-sans ml-4 pl-1 list-item mt-1.5 leading-relaxed"
+        >
+          {parseBoldText(text)}
+        </div>
+      );
+    }
+    if (/^\d+\.\s+/.test(trimmed)) {
+      const text = trimmed.replace(/^\d+\.\s+/, "");
+      const num = trimmed.match(/^\d+/)?.[0] || "";
+      return (
+        <div
+          key={i}
+          className="text-zinc-300 text-xs font-sans ml-4 pl-1 mt-1.5 leading-relaxed"
+        >
+          <span className="text-purple-400 font-mono font-bold mr-1.5">
+            {num}.
+          </span>
+          {parseBoldText(text)}
+        </div>
+      );
+    }
+    if (!trimmed) {
+      return <div key={i} className="h-2"></div>;
+    }
+    return (
+      <p
+        key={i}
+        className="text-zinc-300 text-xs font-mono mt-1.5 leading-relaxed"
+      >
+        {parseBoldText(line)}
+      </p>
+    );
+  });
+}
+
+interface FloatingButtonProps {
+  label: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+  active?: boolean;
+  colorClass?: string;
+  accSettings: any;
+}
+
+function FloatingButton({
+  label,
+  icon,
+  onClick,
+  active,
+  colorClass,
+  accSettings,
+}: FloatingButtonProps) {
+  return (
+    <div className="group relative flex items-center gap-2 select-none">
+      {/* Horizontal Label shown on hover */}
+      <span className="opacity-0 -translate-x-3 pointer-events-none group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200 block text-xs font-black font-mono uppercase bg-zinc-950 border-2 border-zinc-950 text-white px-3 py-1.5 rounded-lg shadow-[2px_2px_0px_0px_rgba(255,255,255,0.15)] whitespace-nowrap z-[100] absolute right-12">
+        {label}
+      </span>
+      <button
+        type="button"
+        onClick={() => {
+          triggerSensoryFeedback("click", accSettings);
+          onClick();
+        }}
+        className={`w-11 h-11 rounded-full flex items-center justify-center border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-2px] hover:shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] active:translate-y-[1px] active:shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] transition-all cursor-pointer ${
+          colorClass
+            ? colorClass
+            : active
+              ? "bg-indigo-600 text-white border-zinc-950"
+              : "bg-zinc-900 border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+        }`}
+        title={label}
+      >
+        <span className="text-base select-none leading-none flex items-center justify-center">
+          {icon}
+        </span>
+      </button>
+    </div>
+  );
+}
+
+function FloatingDashboardWidgets({ userName }: { userName: string }) {
+  const [time, setTime] = useState(new Date());
+
+  useEffect(() => {
+    const t = setInterval(() => setTime(new Date()), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  const h = time.getHours();
+  const greeting = h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite";
+
+  const dateStr = time
+    .toLocaleDateString("pt-BR", {
+      weekday: "short",
+      day: "numeric",
+      month: "long",
+    })
+    .replace("-feira", "");
+  const timeStr = time.toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  return (
+    <>
+      {/* Saudação (Esquerda) */}
+      <div className="absolute left-[30px] md:left-[38px] top-[64px] md:top-[68px] z-[43] pointer-events-none flex items-center">
+        <div className="bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 px-3 py-1.5 rounded-br-xl text-zinc-300 font-medium text-[9px] md:text-[10px] uppercase font-mono tracking-wider shadow-[2px_2px_0px_0px_rgba(0,0,0,0.5)]">
+          👋 {greeting},{" "}
+          <span className="font-black text-indigo-400">
+            {userName ? userName.split(" ")[0] : "Usuário"}
+          </span>
+        </div>
+      </div>
+      {/* Relógio e Clima (Direita) */}
+      <div className="absolute right-[30px] md:right-[38px] top-[64px] md:top-[68px] z-[43] pointer-events-none flex items-center">
+        <div className="bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 px-3 py-1.5 rounded-bl-xl text-zinc-300 font-medium text-[9px] md:text-[10px] shadow-[2px_2px_0px_0px_rgba(0,0,0,0.5)] flex items-center gap-2.5 uppercase font-mono tracking-wider">
+          <span>{dateStr}</span>
+          <span className="opacity-30">|</span>
+          <span className="text-emerald-400 font-bold">⏰ {timeStr}</span>
+          <span className="opacity-30">|</span>
+          <span className="text-indigo-300 font-bold">🌤️ 26°C</span>
+        </div>
+      </div>
+    </>
+  );
+}
 
 export default function App() {
   // Mounting Diagnostic logs & Telemetry
   useEffect(() => {
-    console.log('[App.tsx] cicloCRED CRM App Component has successfully MOUNTED in viewport DOM.');
-    console.log('[App.tsx] Navigator User Agent:', navigator.userAgent);
-    console.log('[App.tsx] System datetime:', new Date().toISOString());
+    console.log(
+      "[App.tsx] cicloCRED CRM App Component has successfully MOUNTED in viewport DOM.",
+    );
+    console.log("[App.tsx] Navigator User Agent:", navigator.userAgent);
+    console.log("[App.tsx] System datetime:", new Date().toISOString());
     let loggedLeadsCount = 0;
     try {
-      const savedLeads = localStorage.getItem('ciclocred_crm_leads');
+      const savedLeads = localStorage.getItem("ciclocred_crm_leads");
       if (savedLeads) {
         loggedLeadsCount = JSON.parse(savedLeads).length || 0;
       }
     } catch (_) {}
-    console.log('[App.tsx] Local storage status - leads count:', loggedLeadsCount);
-    
+    console.log(
+      "[App.tsx] Local storage status - leads count:",
+      loggedLeadsCount,
+    );
+
     const handleGlobalError = (event: ErrorEvent) => {
-      console.error('[App.tsx] Silent/Unhandled runtime error intercepted:', event.message, 'at', event.filename, ':', event.lineno);
+      console.error(
+        "[App.tsx] Silent/Unhandled runtime error intercepted:",
+        event.message,
+        "at",
+        event.filename,
+        ":",
+        event.lineno,
+      );
     };
-    window.addEventListener('error', handleGlobalError);
+    window.addEventListener("error", handleGlobalError);
     return () => {
-      window.removeEventListener('error', handleGlobalError);
+      window.removeEventListener("error", handleGlobalError);
     };
   }, []);
 
-  console.log('[App.tsx] App rendering lifecycle tick.');
+  console.log("[App.tsx] App rendering lifecycle tick.");
 
   // Universal Collapsible Side Drawer state
   const [isMenuDrawerOpen, setIsMenuDrawerOpen] = useState(false);
 
-  // Real-time Dynamic Header Clock, Temperature & Location
-  const [currentDateTime, setCurrentDateTime] = useState(new Date());
+  // Search and Filter visibility state (0 = Hidden, 1 = Search Only, 2 = Search + Filters)
+  const [searchFiltersVisibility, setSearchFiltersVisibility] = useState<
+    0 | 1 | 2
+  >(1);
+  const filterClickTimeoutRef = useRef<any>(null);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentDateTime(new Date());
-    }, 15000);
-    return () => clearInterval(timer);
-  }, []);
+  // Global Hyperfocus state
+  const [globalHyperfocus, setGlobalHyperfocus] = useState(false);
+  const [selectedSmartDay, setSelectedSmartDay] = useState("2026-06-13");
+  const [smartTaskTitle, setSmartTaskTitle] = useState("");
+  const [smartLeadName, setSmartLeadName] = useState("");
+  const [funnelAmbient, setFunnelAmbient] = useState(0); // 0 = Funnel CRM Columns, 1 = Calendário Inteligente Dashboard
+  const [rightSideStep, setRightSideStep] = useState(0); // 0 = Follow-up Calendar, 1 = Próximos Passos
+  const [leftSideStep, setLeftSideStep] = useState(0); // 0 = Todos os Leads (3 CRM Columns), 1 = Tabela de Disparos
+  const [pesquisaGeralStep, setPesquisaGeralStep] = useState(0); // 0 = Todos os Leads & Resultados, 1 = Resultados & Calendário, 2 = Calendário & Próximos Passos
+  const [localResultsMode, setLocalResultsMode] = useState<"busca" | "disparos">("busca");
 
   // Firebase Database Sync States
   const [isDbHydrated, setIsDbHydrated] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
-  const [forceLocalStorageMode, setForceLocalStorageMode] = useState<boolean>(() => {
-    return localStorage.getItem('ciclocred_force_local_offline') === 'true';
-  });
+  const [forceLocalStorageMode, setForceLocalStorageMode] = useState<boolean>(
+    () => {
+      return localStorage.getItem("ciclocred_force_local_offline") === "true";
+    },
+  );
   const [isQuotaExceeded, setIsQuotaExceeded] = useState<boolean>(() => {
-    const forced = localStorage.getItem('ciclocred_force_local_offline') === 'true';
+    const forced =
+      localStorage.getItem("ciclocred_force_local_offline") === "true";
     if (forced) return false; // Force Local Mode ignores Firestore Quota warnings
-    const quotaLogged = localStorage.getItem('firestore_quota_exceeded_status') === 'true';
+    const quotaLogged =
+      localStorage.getItem("firestore_quota_exceeded_status") === "true";
     return quotaLogged || !!(window as any).isFirestoreQuotaExceeded;
   });
 
-  // Gracefully disable Firestore server communication if quota limit is exceeded
+  // Gracefully disable/enable Firestore server communication
   useEffect(() => {
     if (isQuotaExceeded || forceLocalStorageMode) {
       disableFirestoreNetwork();
+    } else {
+      enableFirestoreNetwork();
     }
   }, [isQuotaExceeded, forceLocalStorageMode]);
 
@@ -153,14 +437,19 @@ export default function App() {
     const handleQuotaExceeded = () => {
       setIsQuotaExceeded(true);
     };
-    window.addEventListener('firestore-quota-exceeded', handleQuotaExceeded);
-    const forced = localStorage.getItem('ciclocred_force_local_offline') === 'true';
-    const quotaLogged = localStorage.getItem('firestore_quota_exceeded_status') === 'true';
+    window.addEventListener("firestore-quota-exceeded", handleQuotaExceeded);
+    const forced =
+      localStorage.getItem("ciclocred_force_local_offline") === "true";
+    const quotaLogged =
+      localStorage.getItem("firestore_quota_exceeded_status") === "true";
     if (forced || quotaLogged || (window as any).isFirestoreQuotaExceeded) {
       setIsQuotaExceeded(true);
     }
     return () => {
-      window.removeEventListener('firestore-quota-exceeded', handleQuotaExceeded);
+      window.removeEventListener(
+        "firestore-quota-exceeded",
+        handleQuotaExceeded,
+      );
     };
   }, []);
 
@@ -173,10 +462,8 @@ export default function App() {
   const lastPropertiesIdsRef = useRef<string[]>([]);
   const lastGoalsIdsRef = useRef<string[]>([]);
   const lastProjectsIdsRef = useRef<string[]>([]);
-  const lastFollowupsIdsRef = useRef<string[]>([]);
 
   const isLocalLeadsChangeRef = useRef<boolean>(false);
-  const isLocalFollowUpsChangeRef = useRef<boolean>(false);
   const isLocalTemplatesChangeRef = useRef<boolean>(false);
   const isLocalEmailLogsChangeRef = useRef<boolean>(false);
   const isLocalApptsChangeRef = useRef<boolean>(false);
@@ -188,7 +475,7 @@ export default function App() {
 
   // Core CRM States (Hydrated with LocalStorage or Seeded with defaults)
   const [leads, rawSetLeads] = useState<Lead[]>(() => {
-    const saved = localStorage.getItem('ciclocred_crm_leads');
+    const saved = localStorage.getItem("ciclocred_crm_leads");
     try {
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -203,60 +490,179 @@ export default function App() {
     rawSetLeads(val);
   }, []);
 
-  const [templates, rawSetTemplates] = useState<EmailTemplate[]>(() => {
-    const saved = localStorage.getItem('ciclocred_crm_templates');
+  const [operationalFlows, rawSetOperationalFlows] = useState<
+    OperationalFlow[]
+  >(() => {
+    const saved = localStorage.getItem("ciclocred_crm_operational_flows");
     try {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) return parsed;
       }
     } catch (_) {}
-    return INITIAL_TEMPLATES;
+    return [createDefaultFlow("flow-1", "Fluxo Padrão - Geral")];
   });
 
-  const setTemplates = React.useCallback((val: React.SetStateAction<EmailTemplate[]>) => {
-    isLocalTemplatesChangeRef.current = true;
-    rawSetTemplates(val);
-  }, []);
+  const setOperationalFlows = React.useCallback(
+    (val: React.SetStateAction<OperationalFlow[]>) => {
+      rawSetOperationalFlows((prev) => {
+        const next = typeof val === "function" ? val(prev) : val;
+        localStorage.setItem(
+          "ciclocred_crm_operational_flows",
+          JSON.stringify(next),
+        );
+        return next;
+      });
+    },
+    [],
+  );
+
+  // Background archiver for leads checking status timeouts
+  useEffect(() => {
+    if (!isDbHydrated || operationalFlows.length === 0) return;
+
+    const checkAndArchiveLeads = () => {
+      const now = Date.now();
+
+      setLeads((prevLeads) => {
+        let changed = false;
+        const updatedLeads = prevLeads.map((l) => {
+          if (
+            l.status === "arquivado" ||
+            l.status === "perdido" ||
+            l.status === "perdi"
+          ) {
+            return l;
+          }
+
+          const flow =
+            operationalFlows.find((f) => f.id === l.fluxoId) ||
+            operationalFlows[0];
+
+          let timeoutMs = 48 * 60 * 60 * 1000; // default 48h
+          if (flow && flow.statusTimers) {
+            if (l.status === "novo" && flow.statusTimers.recentes) {
+              timeoutMs =
+                flow.statusTimers.recentes.hours * 60 * 60 * 1000 +
+                flow.statusTimers.recentes.minutes * 60 * 1000;
+            } else if (flow.statusTimers.ativos) {
+              timeoutMs =
+                flow.statusTimers.ativos.hours * 60 * 60 * 1000 +
+                flow.statusTimers.ativos.minutes * 60 * 1000;
+            }
+          }
+
+          const lastTime = l.lastInteractionAt
+            ? new Date(l.lastInteractionAt).getTime()
+            : l.createdAt
+              ? new Date(l.createdAt).getTime()
+              : now;
+          const elapsed = now - lastTime;
+
+          if (elapsed > timeoutMs) {
+            changed = true;
+            return {
+              ...l,
+              status: "arquivado" as any,
+              lastInteractionAt: new Date().toISOString(),
+              lostReason: `Inatividade > ${Math.floor(timeoutMs / (1000 * 60 * 60))} horas (Automático)`,
+            };
+          }
+          return l;
+        });
+
+        return changed ? updatedLeads : prevLeads;
+      });
+    };
+
+    checkAndArchiveLeads();
+    const interval = setInterval(checkAndArchiveLeads, 15 * 60 * 1000); // Check every 15 minutes
+    return () => clearInterval(interval);
+  }, [isDbHydrated, setLeads, operationalFlows]);
+
+  const [templates, rawSetTemplates] = useState<EmailTemplate[]>(() => {
+    const saved = localStorage.getItem("ciclocred_crm_templates");
+    try {
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
+    return [];
+  });
+
+  const setTemplates = React.useCallback(
+    (val: React.SetStateAction<EmailTemplate[]>) => {
+      isLocalTemplatesChangeRef.current = true;
+      rawSetTemplates(val);
+    },
+    [],
+  );
 
   const [emailLogs, rawSetEmailLogs] = useState<EmailLog[]>(() => {
-    const saved = localStorage.getItem('ciclocred_crm_logs');
+    const saved = localStorage.getItem("ciclocred_crm_logs");
     try {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) return parsed;
       }
     } catch (_) {}
-    return INITIAL_EMAIL_LOGS;
+    return [];
   });
 
-  const setEmailLogs = React.useCallback((val: React.SetStateAction<EmailLog[]>) => {
-    isLocalEmailLogsChangeRef.current = true;
-    rawSetEmailLogs(val);
-  }, []);
+  const setEmailLogs = React.useCallback(
+    (val: React.SetStateAction<EmailLog[]>) => {
+      isLocalEmailLogsChangeRef.current = true;
+      rawSetEmailLogs(val);
+    },
+    [],
+  );
 
   // Helper to strictly sanitize appointment records for database schema compliance
   const sanitizeAppointmentRecord = (item: any): Appointment => {
     const todayStr = new Date().toISOString().slice(0, 10);
-    
-    let mappedType: 'reuniao' | 'telefone' | 'proposta' | 'outro' = 'outro';
-    const rawType = String(item.type || '').toLowerCase();
-    if (rawType.includes('reuniao') || rawType.includes('reunião')) mappedType = 'reuniao';
-    else if (rawType.includes('telefone') || rawType.includes('telefonema') || rawType.includes('ligacao')) mappedType = 'telefone';
-    else if (rawType.includes('proposta')) mappedType = 'proposta';
 
-    let mappedStatus: 'agendado' | 'realizado' | 'cancelado' = 'agendado';
-    const rawStatus = String(item.status || '').toLowerCase();
-    if (rawStatus === 'realizado' || rawStatus === 'completo') mappedStatus = 'realizado';
-    else if (rawStatus === 'cancelado') mappedStatus = 'cancelado';
+    let mappedType: "reuniao" | "telefone" | "proposta" | "outro" = "outro";
+    const rawType = String(item.type || "").toLowerCase();
+    if (rawType.includes("reuniao") || rawType.includes("reunião"))
+      mappedType = "reuniao";
+    else if (
+      rawType.includes("telefone") ||
+      rawType.includes("telefonema") ||
+      rawType.includes("ligacao")
+    )
+      mappedType = "telefone";
+    else if (rawType.includes("proposta")) mappedType = "proposta";
 
-    const cleanId = String(item.id || `appt-${Math.random().toString(36).substr(2, 9)}`).substring(0, 99);
-    const cleanLeadId = String(item.leadId || item.clientId || 'lead-auto').substring(0, 99);
-    const cleanLeadName = String(item.leadName || item.clientName || 'Lead Desconhecido').substring(0, 149);
-    const cleanTitle = String(item.title || 'Compromisso Comercial').substring(0, 199);
-    const cleanDate = (item.date && String(item.date).length === 10) ? String(item.date) : todayStr;
-    const cleanTime = (item.time && String(item.time).length === 5) ? String(item.time) : '09:00';
-    const cleanDesc = String(item.description || item.notes || '').substring(0, 4999);
+    let mappedStatus: "agendado" | "realizado" | "cancelado" = "agendado";
+    const rawStatus = String(item.status || "").toLowerCase();
+    if (rawStatus === "realizado" || rawStatus === "completo")
+      mappedStatus = "realizado";
+    else if (rawStatus === "cancelado") mappedStatus = "cancelado";
+
+    const cleanId = String(
+      item.id || `appt-${Math.random().toString(36).substr(2, 9)}`,
+    ).substring(0, 99);
+    const cleanLeadId = String(
+      item.leadId || item.clientId || "lead-auto",
+    ).substring(0, 99);
+    const cleanLeadName = String(
+      item.leadName || item.clientName || "Lead Desconhecido",
+    ).substring(0, 149);
+    const cleanTitle = String(item.title || "Compromisso Comercial").substring(
+      0,
+      199,
+    );
+    const cleanDate =
+      item.date && String(item.date).length === 10
+        ? String(item.date)
+        : todayStr;
+    const cleanTime =
+      item.time && String(item.time).length === 5 ? String(item.time) : "09:00";
+    const cleanDesc = String(item.description || item.notes || "").substring(
+      0,
+      4999,
+    );
 
     const result: Appointment = {
       id: cleanId,
@@ -267,13 +673,13 @@ export default function App() {
       time: cleanTime,
       description: cleanDesc,
       status: mappedStatus,
-      type: mappedType
+      type: mappedType,
     };
 
-    if (typeof item.reminderMinutes === 'number' && item.reminderMinutes >= 0) {
+    if (typeof item.reminderMinutes === "number" && item.reminderMinutes >= 0) {
       result.reminderMinutes = item.reminderMinutes;
     }
-    if (typeof item.reminderSent === 'boolean') {
+    if (typeof item.reminderSent === "boolean") {
       result.reminderSent = item.reminderSent;
     }
 
@@ -282,32 +688,57 @@ export default function App() {
 
   // New States: Appointments and Inventory Stock
   const [appointments, rawSetAppointments] = useState<Appointment[]>(() => {
-    const saved = localStorage.getItem('ciclocred_crm_appointments');
+    const saved = localStorage.getItem("ciclocred_crm_appointments");
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.map(item => {
+          return parsed.map((item) => {
             const todayStr = new Date().toISOString().slice(0, 10);
-            
-            let mappedType: 'reuniao' | 'telefone' | 'proposta' | 'outro' = 'outro';
-            const rawType = String(item.type || '').toLowerCase();
-            if (rawType.includes('reuniao') || rawType.includes('reunião')) mappedType = 'reuniao';
-            else if (rawType.includes('telefone') || rawType.includes('telefonema') || rawType.includes('ligacao')) mappedType = 'telefone';
-            else if (rawType.includes('proposta')) mappedType = 'proposta';
 
-            let mappedStatus: 'agendado' | 'realizado' | 'cancelado' = 'agendado';
-            const rawStatus = String(item.status || '').toLowerCase();
-            if (rawStatus === 'realizado' || rawStatus === 'completo') mappedStatus = 'realizado';
-            else if (rawStatus === 'cancelado') mappedStatus = 'cancelado';
+            let mappedType: "reuniao" | "telefone" | "proposta" | "outro" =
+              "outro";
+            const rawType = String(item.type || "").toLowerCase();
+            if (rawType.includes("reuniao") || rawType.includes("reunião"))
+              mappedType = "reuniao";
+            else if (
+              rawType.includes("telefone") ||
+              rawType.includes("telefonema") ||
+              rawType.includes("ligacao")
+            )
+              mappedType = "telefone";
+            else if (rawType.includes("proposta")) mappedType = "proposta";
 
-            const cleanId = String(item.id || `appt-${Math.random().toString(36).substr(2, 9)}`).substring(0, 99);
-            const cleanLeadId = String(item.leadId || item.clientId || 'lead-auto').substring(0, 99);
-            const cleanLeadName = String(item.leadName || item.clientName || 'Lead Desconhecido').substring(0, 149);
-            const cleanTitle = String(item.title || 'Compromisso Comercial').substring(0, 199);
-            const cleanDate = (item.date && String(item.date).length === 10) ? String(item.date) : todayStr;
-            const cleanTime = (item.time && String(item.time).length === 5) ? String(item.time) : '09:00';
-            const cleanDesc = String(item.description || item.notes || '').substring(0, 4999);
+            let mappedStatus: "agendado" | "realizado" | "cancelado" =
+              "agendado";
+            const rawStatus = String(item.status || "").toLowerCase();
+            if (rawStatus === "realizado" || rawStatus === "completo")
+              mappedStatus = "realizado";
+            else if (rawStatus === "cancelado") mappedStatus = "cancelado";
+
+            const cleanId = String(
+              item.id || `appt-${Math.random().toString(36).substr(2, 9)}`,
+            ).substring(0, 99);
+            const cleanLeadId = String(
+              item.leadId || item.clientId || "lead-auto",
+            ).substring(0, 99);
+            const cleanLeadName = String(
+              item.leadName || item.clientName || "Lead Desconhecido",
+            ).substring(0, 149);
+            const cleanTitle = String(
+              item.title || "Compromisso Comercial",
+            ).substring(0, 199);
+            const cleanDate =
+              item.date && String(item.date).length === 10
+                ? String(item.date)
+                : todayStr;
+            const cleanTime =
+              item.time && String(item.time).length === 5
+                ? String(item.time)
+                : "09:00";
+            const cleanDesc = String(
+              item.description || item.notes || "",
+            ).substring(0, 4999);
 
             const result: Appointment = {
               id: cleanId,
@@ -318,13 +749,16 @@ export default function App() {
               time: cleanTime,
               description: cleanDesc,
               status: mappedStatus,
-              type: mappedType
+              type: mappedType,
             };
 
-            if (typeof item.reminderMinutes === 'number' && item.reminderMinutes >= 0) {
+            if (
+              typeof item.reminderMinutes === "number" &&
+              item.reminderMinutes >= 0
+            ) {
               result.reminderMinutes = item.reminderMinutes;
             }
-            if (typeof item.reminderSent === 'boolean') {
+            if (typeof item.reminderSent === "boolean") {
               result.reminderSent = item.reminderSent;
             }
 
@@ -336,40 +770,19 @@ export default function App() {
       }
     }
 
-    const todayStr = new Date().toISOString().slice(0, 10);
-    return [
-      {
-        id: 'appt-1',
-        title: 'Apresentação: Crédito de Capital de Giro',
-        date: todayStr,
-        time: '14:30',
-        leadId: 'lead-2',
-        leadName: 'Roberto Alencar',
-        description: 'Explicar taxas diferenciadas do portfólio cicloCRED Empresas.',
-        status: 'agendado',
-        type: 'reuniao'
-      },
-      {
-        id: 'appt-2',
-        title: 'Follow-up de Assinatura de Contrato',
-        date: todayStr,
-        time: '16:00',
-        leadId: 'lead-3',
-        leadName: 'Felipe Santos Oliveira',
-        description: 'Ligar para o Felipe e sanar pendências sobre as taxas retroativas.',
-        status: 'agendado',
-        type: 'telefone'
-      }
-    ];
+    return [];
   });
 
-  const setAppointments = React.useCallback((val: React.SetStateAction<Appointment[]>) => {
-    isLocalApptsChangeRef.current = true;
-    rawSetAppointments(val);
-  }, []);
+  const setAppointments = React.useCallback(
+    (val: React.SetStateAction<Appointment[]>) => {
+      isLocalApptsChangeRef.current = true;
+      rawSetAppointments(val);
+    },
+    [],
+  );
 
   const [inventory, rawSetInventory] = useState<InventoryItem[]>(() => {
-    const saved = localStorage.getItem('ciclocred_crm_inventory');
+    const saved = localStorage.getItem("ciclocred_crm_inventory");
     try {
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -377,51 +790,20 @@ export default function App() {
       }
     } catch (_) {}
 
-    return [
-      {
-        id: 'prod-1',
-        name: 'Maquininha Smart cicloCRED Wi-Fi',
-        sku: 'CC-SMART-001',
-        category: 'Dispositivos',
-        quantity: 12,
-        minQuantity: 4,
-        price: 299,
-        status: 'disponivel',
-        notes: 'Leitor de cartões de alta performance com conexão chip e Wi-Fi inclusos.'
-      },
-      {
-        id: 'prod-2',
-        name: 'Kit Contratos Físicos & Caneta cicloCRED',
-        sku: 'CC-PAPER-KIT',
-        category: 'Papelaria',
-        quantity: 35,
-        minQuantity: 10,
-        price: 15,
-        status: 'disponivel',
-        notes: 'Pastas institucionais, canetas personalizadas cicloCRED e cédulas impressas padrão.'
-      },
-      {
-        id: 'prod-3',
-        name: 'Banners Promocionais de PDV',
-        sku: 'CC-ADV-BANNER',
-        category: 'Marketing',
-        quantity: 2,
-        minQuantity: 5,
-        price: 120,
-        status: 'baixo_estoque',
-        notes: 'Totens impressos em lona para estandes de crédito consorciado.'
-      }
-    ];
+    return [];
   });
 
-  const setInventory = React.useCallback((val: React.SetStateAction<InventoryItem[]>) => {
-    isLocalInventoryChangeRef.current = true;
-    rawSetInventory(val);
-  }, []);
+  const setInventory = React.useCallback(
+    (val: React.SetStateAction<InventoryItem[]>) => {
+      isLocalInventoryChangeRef.current = true;
+      rawSetInventory(val);
+    },
+    [],
+  );
 
   const [properties, rawSetProperties] = useState<RealEstateProperty[]>(() => {
-    const saved = localStorage.getItem('ciclocred_crm_properties');
-    let raw = INITIAL_PROPERTIES;
+    const saved = localStorage.getItem("ciclocred_crm_properties");
+    let raw = [];
     try {
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -442,98 +824,828 @@ export default function App() {
     return [];
   });
 
-  const setProperties = React.useCallback((val: React.SetStateAction<RealEstateProperty[]>) => {
-    isLocalPropertiesChangeRef.current = true;
-    rawSetProperties(val);
-  }, []);
+  const setProperties = React.useCallback(
+    (val: React.SetStateAction<RealEstateProperty[]>) => {
+      isLocalPropertiesChangeRef.current = true;
+      rawSetProperties(val);
+    },
+    [],
+  );
 
-  const [activeTab, rawSetActiveTab] = useState<string>('leads');
-  const [leadsViewMode, setLeadsViewMode] = useState<'kanban' | 'list' | 'followup' | 'automation-flows' | 'marketing'>('list');
+  const [activeTab, rawSetActiveTab] = useState<string>(() => {
+    return localStorage.getItem("ciclocred_active_tab") || "dashboard";
+  });
+  const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
+  const [leadsViewMode, setLeadsViewMode] = useState<
+    "pesquisa_geral" | "recentes" | "ativos" | "archived" | "todos"
+  >(() => {
+    const saved = localStorage.getItem("ciclocred_filter_leads_view_mode");
+    if (saved === "novos") return "recentes";
+    return (saved as any) || "todos";
+  });
+
+  const [leadsSearchMode, setLeadsSearchMode] = useState<number>(() => {
+    const saved = localStorage.getItem("ciclocred_leads_search_mode");
+    return saved !== null ? Number(saved) : 0;
+  });
+  const lastLeadsModeClickRef = useRef<number>(0);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "ciclocred_leads_search_mode",
+      String(leadsSearchMode),
+    );
+  }, [leadsSearchMode]);
+  const [kanbanViewMode, setKanbanViewMode] = useState<
+    "etapas" | "perfil" | "qualificacao" | "objecoes"
+  >(() => {
+    const saved = localStorage.getItem("ciclocred_filter_kanban_view_mode");
+    return (saved && saved !== "status" ? saved : "etapas") as any;
+  });
+  const [followUpActiveSubTab, setFollowUpActiveSubTab] = useState<
+    "follow-ups" | "agendamentos"
+  >(() => {
+    return (
+      (localStorage.getItem("ciclocred_followup_sub_tab") as any) ||
+      "follow-ups"
+    );
+  });
+  const [marketingTargetLeadIds, setMarketingTargetLeadIds] = useState<
+    string[]
+  >([]);
+  const [scriptsTargetLeadId, setScriptsTargetLeadId] = useState<string>("");
+  const [scriptSearchTerm, setScriptSearchTerm] = useState<string>("");
+  const [scriptsSubSection, setScriptsSubSection] = useState<
+    "generator" | "library"
+  >(() => {
+    return (
+      (localStorage.getItem("ciclocred_scripts_sub_section") as any) ||
+      "generator"
+    );
+  });
+
+  const activeTabRef = useRef(activeTab);
+  const leadsViewModeRef = useRef(leadsViewMode);
+  const kanbanViewModeRef = useRef(kanbanViewMode);
+
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
+
+  useEffect(() => {
+    leadsViewModeRef.current = leadsViewMode;
+  }, [leadsViewMode]);
+
+  useEffect(() => {
+    kanbanViewModeRef.current = kanbanViewMode;
+  }, [kanbanViewMode]);
 
   const setActiveTab = React.useCallback((tab: string) => {
+    localStorage.setItem("ciclocred_active_tab", tab);
     rawSetActiveTab(tab);
   }, []);
-  const [hoveredStatusSlice, setHoveredStatusSlice] = useState<string | null>(null);
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('todos');
-  const [originFilter, setOriginFilter] = useState('todos');
-  const [initialLetterFilter, setInitialLetterFilter] = useState('todos');
+  const handleOpenFollowUpForLead = React.useCallback(
+    (lead: Lead) => {
+      setScriptsTargetLeadId(lead.id);
+      setFollowUpActiveSubTab("agendamentos");
+    },
+    [setActiveTab],
+  );
+  const [hoveredStatusSlice, setHoveredStatusSlice] = useState<string | null>(
+    null,
+  );
+
+  const [ceoResponse, setCeoResponse] = useState<{
+    query: string;
+    message: string;
+  } | null>(null);
+  const [isCeoLoading, setIsCeoLoading] = useState(false);
+
+  const [visibilityFilter, setVisibilityFilter] = useState(
+    () => localStorage.getItem("ciclocred_filter_visibility_filter") || "todos",
+  );
+  const [searchTerm, setSearchTerm] = useState(
+    () => localStorage.getItem("ciclocred_filter_search_term") || "",
+  );
+  const [todosSearchTerm, setTodosSearchTerm] = useState("");
+  const [funnelSearchTerm, setFunnelSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState(
+    () => localStorage.getItem("ciclocred_filter_status_filter") || "todos",
+  );
+  const [qualificacaoFilter, setQualificacaoFilter] = useState(
+    () =>
+      localStorage.getItem("ciclocred_filter_qualificacao_filter") || "todos",
+  );
+  const [stageFilter, setStageFilter] = useState(
+    () => localStorage.getItem("ciclocred_filter_stage_filter") || "todos",
+  );
+  const [originFilter, setOriginFilter] = useState(
+    () => localStorage.getItem("ciclocred_filter_origin_filter") || "todos",
+  );
+  const [initialLetterFilter, setInitialLetterFilter] = useState(
+    () =>
+      localStorage.getItem("ciclocred_filter_initial_letter_filter") || "todos",
+  );
+  const [regionFilter, setRegionFilter] = useState(
+    () => localStorage.getItem("ciclocred_filter_region_filter") || "todos",
+  );
+  const [sqmMattersFilter, setSqmMattersFilter] = useState(
+    () =>
+      localStorage.getItem("ciclocred_filter_sqm_matters_filter") || "todos",
+  );
+  const [incomeTypeFilter, setIncomeTypeFilter] = useState(
+    () =>
+      localStorage.getItem("ciclocred_filter_income_type_filter") || "todos",
+  );
+  const [deadlineMattersFilter, setDeadlineMattersFilter] = useState(
+    () =>
+      localStorage.getItem("ciclocred_filter_deadline_matters_filter") ||
+      "todos",
+  );
+  const [deliveryExpectedFilter, setDeliveryExpectedFilter] = useState(
+    () =>
+      localStorage.getItem("ciclocred_filter_delivery_expected_filter") ||
+      "todos",
+  );
+  const [objectionsFilter, setObjectionsFilter] = useState(
+    () => localStorage.getItem("ciclocred_filter_objections_filter") || "todos",
+  );
+  const [genderFilter, setGenderFilter] = useState(
+    () => localStorage.getItem("ciclocred_filter_gender_filter") || "todos",
+  );
+  const [ageBracketFilter, setAgeBracketFilter] = useState(
+    () =>
+      localStorage.getItem("ciclocred_filter_age_bracket_filter") || "todos",
+  );
+  const [profileFilter, setProfileFilter] = useState(
+    () => localStorage.getItem("ciclocred_filter_profile_filter") || "todos",
+  );
+  const [familyIncomeFilter, setFamilyIncomeFilter] = useState(
+    () =>
+      localStorage.getItem("ciclocred_filter_family_income_filter") || "todos",
+  );
+  const [restricaoBacenFilter, setRestricaoBacenFilter] = useState(
+    () =>
+      localStorage.getItem("ciclocred_filter_restricao_bacen_filter") ||
+      "todos",
+  );
+  const [programaDesejadoFilter, setProgramaDesejadoFilter] = useState(
+    () =>
+      localStorage.getItem("ciclocred_filter_programa_desejado_filter") ||
+      "todos",
+  );
+
+  useEffect(() => {
+    (window as any).setActiveTab = (tab: string) => {
+      setActiveTab(tab);
+    };
+    (window as any).setKanbanViewMode = (mode: string) => {
+      setKanbanViewMode(mode as any);
+    };
+  }, [setActiveTab, setKanbanViewMode]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "ciclocred_filter_visibility_filter",
+      visibilityFilter,
+    );
+    localStorage.setItem("ciclocred_filter_search_term", searchTerm);
+    localStorage.setItem("ciclocred_filter_status_filter", statusFilter);
+    localStorage.setItem(
+      "ciclocred_filter_qualificacao_filter",
+      qualificacaoFilter,
+    );
+    localStorage.setItem("ciclocred_filter_stage_filter", stageFilter);
+    localStorage.setItem("ciclocred_filter_origin_filter", originFilter);
+    localStorage.setItem(
+      "ciclocred_filter_initial_letter_filter",
+      initialLetterFilter,
+    );
+    localStorage.setItem("ciclocred_filter_region_filter", regionFilter);
+    localStorage.setItem(
+      "ciclocred_filter_sqm_matters_filter",
+      sqmMattersFilter,
+    );
+    localStorage.setItem(
+      "ciclocred_filter_income_type_filter",
+      incomeTypeFilter,
+    );
+    localStorage.setItem(
+      "ciclocred_filter_deadline_matters_filter",
+      deadlineMattersFilter,
+    );
+    localStorage.setItem(
+      "ciclocred_filter_delivery_expected_filter",
+      deliveryExpectedFilter,
+    );
+    localStorage.setItem(
+      "ciclocred_filter_objections_filter",
+      objectionsFilter,
+    );
+    localStorage.setItem("ciclocred_filter_gender_filter", genderFilter);
+    localStorage.setItem(
+      "ciclocred_filter_age_bracket_filter",
+      ageBracketFilter,
+    );
+    localStorage.setItem("ciclocred_filter_profile_filter", profileFilter);
+    localStorage.setItem(
+      "ciclocred_filter_family_income_filter",
+      familyIncomeFilter,
+    );
+    localStorage.setItem(
+      "ciclocred_filter_restricao_bacen_filter",
+      restricaoBacenFilter,
+    );
+    localStorage.setItem(
+      "ciclocred_filter_programa_desejado_filter",
+      programaDesejadoFilter,
+    );
+    localStorage.setItem("ciclocred_filter_leads_view_mode", leadsViewMode);
+    localStorage.setItem("ciclocred_filter_kanban_view_mode", kanbanViewMode);
+    localStorage.setItem("ciclocred_followup_sub_tab", followUpActiveSubTab);
+    localStorage.setItem("ciclocred_scripts_sub_section", scriptsSubSection);
+  }, [
+    visibilityFilter,
+    searchTerm,
+    statusFilter,
+    qualificacaoFilter,
+    stageFilter,
+    originFilter,
+    initialLetterFilter,
+    regionFilter,
+    sqmMattersFilter,
+    incomeTypeFilter,
+    deadlineMattersFilter,
+    deliveryExpectedFilter,
+    objectionsFilter,
+    genderFilter,
+    ageBracketFilter,
+    profileFilter,
+    familyIncomeFilter,
+    restricaoBacenFilter,
+    programaDesejadoFilter,
+    leadsViewMode,
+    kanbanViewMode,
+    followUpActiveSubTab,
+    scriptsSubSection,
+  ]);
+
   const [isPlanilhasModalOpen, setIsPlanilhasModalOpen] = useState(false);
   const [isPremiumActionsOpen, setIsPremiumActionsOpen] = useState(false);
   const [isConversaoModalOpen, setIsConversaoModalOpen] = useState(false);
-  
+  const [isRuleEngineOpen, setIsRuleEngineOpen] = useState(false);
+  const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
+  const [isSidebarVisible, setIsSidebarVisible] = useState(false);
+  const touchStartX = useRef<number | null>(null);
+  const [selectedLeadForAutomation, setSelectedLeadForAutomation] =
+    useState<Lead | null>(null);
+  const [selectedLeadForAI, setSelectedLeadForAI] = useState<Lead | null>(null);
+
+  const [dashboardVisibility, setDashboardVisibility] = useState<
+    "disparos" | "scripts-roteiros" | "envios-realizados"
+  >(
+    () =>
+      (localStorage.getItem("ciclocred_dashboard_visibility") as any) ||
+      "disparos",
+  );
+
+  useEffect(() => {
+    localStorage.setItem("ciclocred_dashboard_visibility", dashboardVisibility);
+  }, [dashboardVisibility]);
+
+  const TABS_ORDER = [
+    "dashboard",
+    "leads",
+    "automation-flows",
+    "simulador",
+    "inventory",
+    "settings",
+    "gemini-server",
+    "painel-geral",
+  ];
+  const TAB_NAMES: Record<string, string> = {
+    "painel-geral": "Painel Geral",
+    dashboard: "WhatsApp Dashboard",
+    leads: "Leads",
+    simulador: "Simulador",
+    inventory: "Estoque e Lançamentos",
+    settings: "Configurações",
+    "gemini-server": "Assistente AI",
+    "automation-flows": "Biblioteca de Scripts",
+  };
+
+  const handleCycleTab = (e: React.MouseEvent) => {
+    triggerSensoryFeedback("click", accSettings);
+    setActiveTab((prev) => {
+      const currentIndex = TABS_ORDER.indexOf(prev);
+      let nextIndex =
+        currentIndex === -1 ? 0 : (currentIndex + 1) % TABS_ORDER.length;
+      return TABS_ORDER[nextIndex];
+    });
+  };
+
+  useEffect(() => {
+    const handleNextPage = () => {
+      setActiveTab((prev) => {
+        const idx = TABS_ORDER.indexOf(prev);
+        let nextIdx = (idx + 1) % TABS_ORDER.length;
+        return TABS_ORDER[nextIdx];
+      });
+    };
+    const handlePrevPage = () => {
+      setActiveTab((prev) => {
+        const idx = TABS_ORDER.indexOf(prev);
+        let prevIdx = (idx - 1 + TABS_ORDER.length) % TABS_ORDER.length;
+        return TABS_ORDER[prevIdx];
+      });
+    };
+
+    const handleNextVisibility = () => {
+      const currentTab = activeTabRef.current;
+      if (currentTab === "leads") {
+        setLeadsViewMode((prev) => {
+          if (prev === "todos") return "recentes";
+          if (prev === "recentes" || (prev as any) === "novos") return "ativos";
+          if (prev === "ativos") return "archived";
+          if (prev === "archived") return "todos";
+          return "todos";
+        });
+      } else if (currentTab === "dashboard") {
+        setDashboardVisibility((prev) => {
+          if (prev === "disparos") return "scripts-roteiros";
+          if (prev === "scripts-roteiros") return "envios-realizados";
+          return "disparos";
+        });
+      }
+    };
+
+    const handlePrevVisibility = () => {
+      const currentTab = activeTabRef.current;
+      if (currentTab === "leads") {
+        setLeadsViewMode((prev) => {
+          if (prev === "todos") return "archived";
+          if (prev === "archived") return "ativos";
+          if (prev === "ativos") return "recentes";
+          if (prev === "recentes" || (prev as any) === "novos") return "todos";
+          return "todos";
+        });
+      } else if (currentTab === "dashboard") {
+        setDashboardVisibility((prev) => {
+          if (prev === "disparos") return "envios-realizados";
+          if (prev === "scripts-roteiros") return "disparos";
+          return "scripts-roteiros";
+        });
+      }
+    };
+
+    window.addEventListener("ciclocred_cycle_tab_next", handleNextPage);
+    window.addEventListener("ciclocred_cycle_tab_prev", handlePrevPage);
+    window.addEventListener(
+      "ciclocred_global_next_visibility",
+      handleNextVisibility,
+    );
+    window.addEventListener(
+      "ciclocred_global_prev_visibility",
+      handlePrevVisibility,
+    );
+
+    return () => {
+      window.removeEventListener("ciclocred_cycle_tab_next", handleNextPage);
+      window.removeEventListener("ciclocred_cycle_tab_prev", handlePrevPage);
+      window.removeEventListener(
+        "ciclocred_global_next_visibility",
+        handleNextVisibility,
+      );
+      window.removeEventListener(
+        "ciclocred_global_prev_visibility",
+        handlePrevVisibility,
+      );
+    };
+  }, []);
+
+  const handleOpenRuleEngine = (lead: Lead | null) => {
+    setSelectedLeadForAutomation(lead);
+    setIsRuleEngineOpen(true);
+  };
+
+  const handleOpenAIAssistant = (lead: Lead | null) => {
+    setSelectedLeadForAI(lead);
+    setIsAIAssistantOpen(true);
+  };
+
+  const handleSaveAppletSettings = () => {
+    alert("Saved!");
+  };
+
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importOrigin, setImportOrigin] = useState<
+    "upload" | "copy" | "google_sheets"
+  >("upload");
+  const [importPipeline, setImportPipeline] = useState<string>("");
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<
+    "xlsx" | "csv" | "pdf" | "json"
+  >("xlsx");
+  const [exportTarget, setExportTarget] = useState<
+    "download" | "clipboard" | "email"
+  >("download");
+
+  const [kanbanShowOrganizer, setKanbanShowOrganizer] = useState(false);
+  const [kanbanHyperfocus, setKanbanHyperfocus] = useState<number>(0);
+  const [kanbanTriggerCreateStatus, setKanbanTriggerCreateStatus] =
+    useState(false);
+  const [kanbanTriggerCreatePage, setKanbanTriggerCreatePage] = useState(false);
+  const [kanbanTriggerEditPage, setKanbanTriggerEditPage] = useState(false);
+  const [kanbanTriggerDeletePage, setKanbanTriggerDeletePage] = useState(false);
+  const [kanbanTriggerHyperfocus, setKanbanTriggerHyperfocus] = useState(false);
+
+  const [isMaisTabsOpen, setIsMaisTabsOpen] = useState(false);
+  const [showPageNamePill, setShowPageNamePill] = useState(true);
+
+  const cycleKanbanViewMode = React.useCallback(() => {
+    setKanbanViewMode((prev) => {
+      if (prev === "etapas") return "perfil";
+      if (prev === "perfil") return "qualificacao";
+      if (prev === "qualificacao") return "objecoes";
+      return "etapas";
+    });
+  }, []);
+
+  const cycleVisibilityFilter = React.useCallback(() => {
+    setVisibilityFilter((prev) => {
+      if (prev === "todos") return "my_leads";
+      if (prev === "my_leads") return "high_priority";
+      return "todos";
+    });
+  }, []);
+
+  const cycleFollowUpViewMode = React.useCallback(() => {
+    setFollowUpActiveSubTab((prev) =>
+      "follow-ups",
+    );
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "dashboard") {
+      setTimeout(() => {
+        window.location.href = "whatsapp://send";
+      }, 50);
+    }
+  }, [activeTab]);
+
+  const cycleLeadsViewMode = React.useCallback(() => {
+    setLeadsViewMode((prev) => {
+      if (prev === "todos") return "recentes";
+      if (prev === "recentes" || (prev as any) === "novos") return "ativos";
+      if (prev === "ativos") return "archived";
+      return "todos";
+    });
+  }, []);
+
+  useEffect(() => {
+    let shiftPressCount = 0;
+    let shiftPressTimer: NodeJS.Timeout | null = null;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        document.activeElement &&
+        (["INPUT", "TEXTAREA", "SELECT"].includes(
+          document.activeElement.tagName,
+        ) ||
+          document.activeElement.getAttribute("contenteditable") === "true")
+      ) {
+        return;
+      }
+
+      if (e.key === " " || e.key === "Spacebar" || e.code === "Space") {
+        e.preventDefault();
+        setActiveTab("painel-geral");
+        return;
+      }
+
+      if (e.key === "Alt") {
+        e.preventDefault();
+        setActiveTab("leads");
+        return;
+      }
+
+      if (e.key === "Shift") {
+        // O botão shift não pode trocar as visibilidade da página de disparos.
+        const currentTab = activeTabRef.current;
+        if (
+          ["disparos", "scripts-roteiros", "envios-realizados"].includes(
+            currentTab,
+          )
+        ) {
+          return;
+        }
+        shiftPressCount++;
+        if (shiftPressTimer) clearTimeout(shiftPressTimer);
+        shiftPressTimer = setTimeout(() => {
+          if (shiftPressCount === 1) {
+            window.dispatchEvent(new CustomEvent("ciclocred_cycle_tab_next"));
+          } else if (shiftPressCount >= 2) {
+            window.dispatchEvent(new CustomEvent("ciclocred_cycle_tab_prev"));
+          }
+          shiftPressCount = 0;
+        }, 220);
+        return;
+      }
+
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        const main = document.querySelector("main");
+        if (main) main.scrollBy({ top: -200, behavior: "instant" });
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        const main = document.querySelector("main");
+        if (main) main.scrollBy({ top: 200, behavior: "instant" });
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const unifiedFilteredLeads = useMemo(() => {
-    return leads.filter(lead => {
-      const matchesSearch = 
-        lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (lead.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        lead.phone.includes(searchTerm) ||
-        (lead.company || '').toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = statusFilter === 'todos' || lead.status === statusFilter;
-      const matchesOrigin = originFilter === 'todos' || lead.origin === originFilter;
-      const matchesInitial = 
-        initialLetterFilter === 'todos' ||
-        lead.name.trim().charAt(0).toUpperCase() === initialLetterFilter.toUpperCase();
-      return matchesSearch && matchesStatus && matchesOrigin && matchesInitial;
+    return leads.filter((lead) => {
+      const matchesSearch =
+        String(lead.name || "")
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        String(lead.email || "")
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        String(lead.phone || "").includes(searchTerm) ||
+        String(lead.company || "")
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        String(lead.gender || "")
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        String(lead.region || "")
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        String(lead.stage || "")
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        String(lead.status || "")
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        String(lead.objection || "")
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        String(lead.mainProfile || "")
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        String(lead.programaDesejado || "")
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase());
+
+      // Omit archived ('perdido', 'arquivado') status leads during standard active tables unless searching
+      if (
+        !searchTerm &&
+        (leadsViewMode === "recentes" || leadsViewMode === "ativos")
+      ) {
+        if (lead.status === "perdido" || lead.status === "arquivado")
+          return false;
+      }
+
+      const matchesStatus =
+        statusFilter === "todos" || lead.status === statusFilter;
+      const leadQualif = (() => {
+        if (lead.funnelPlacements && lead.funnelPlacements.length > 0) {
+          const placement = lead.funnelPlacements.find(
+            (p: any) => p.pageId === "qualificacao",
+          );
+          if (placement) return placement.status;
+        }
+        if (lead.restricacaoBacen === "Sim" || lead.restricaoBacen === "Sim")
+          return "nao_qualificado";
+        if (lead.programaDesejado === "Minha Casa Minha Vida")
+          return "qualificado_mcmv";
+        if (lead.programaDesejado === "SBPE") return "qualificado_sbpe";
+        return "em_qualificacao";
+      })();
+      const matchesQualificacao =
+        qualificacaoFilter === "todos" || leadQualif === qualificacaoFilter;
+      const matchesOrigin =
+        originFilter === "todos" || lead.origin === originFilter;
+      const matchesInitial =
+        initialLetterFilter === "todos" ||
+        String(lead.name || "")
+          .trim()
+          .charAt(0)
+          .toUpperCase() === initialLetterFilter.toUpperCase();
+
+      const matchesRegion =
+        regionFilter === "todos" || lead.region === regionFilter;
+      const matchesSqm =
+        sqmMattersFilter === "todos" || lead.sqmMatters === sqmMattersFilter;
+      const matchesIncome =
+        incomeTypeFilter === "todos" || lead.incomeType === incomeTypeFilter;
+      const matchesDeadline =
+        deadlineMattersFilter === "todos" ||
+        lead.deadlineMatters === deadlineMattersFilter;
+      const matchesDelivery =
+        deliveryExpectedFilter === "todos" ||
+        lead.deliveryExpected === deliveryExpectedFilter;
+      const matchesGender =
+        genderFilter === "todos" || lead.gender === genderFilter;
+      const matchesAge =
+        ageBracketFilter === "todos" || lead.ageBracket === ageBracketFilter;
+
+      const matchesObjections =
+        objectionsFilter === "todos" ||
+        (lead.objections && lead.objections.includes(objectionsFilter)) ||
+        (objectionsFilter === "-" &&
+          (!lead.objections || lead.objections.length === 0));
+
+      const matchesProfiles =
+        profileFilter === "todos" ||
+        (lead.profiles && lead.profiles.includes(profileFilter));
+
+      // Credito sensitive filters
+      let matchesFamilyIncome = true;
+      if (familyIncomeFilter !== "todos") {
+        const income = lead.familyIncome || 0;
+        if (familyIncomeFilter === "baixa") {
+          matchesFamilyIncome = income < 4000;
+        } else if (familyIncomeFilter === "media") {
+          matchesFamilyIncome = income >= 4000 && income <= 8000;
+        } else if (familyIncomeFilter === "alta") {
+          matchesFamilyIncome = income > 8000;
+        }
+      }
+
+      const matchesRestricaoBacen =
+        restricaoBacenFilter === "todos" ||
+        (restricaoBacenFilter === "sim" && lead.restricaoBacen === "Sim") ||
+        (restricaoBacenFilter === "nao" &&
+          (lead.restricaoBacen === "Não" || !lead.restricaoBacen));
+
+      const matchesProgramaDesejado =
+        programaDesejadoFilter === "todos" ||
+        lead.programaDesejado === programaDesejadoFilter;
+
+      let matchesVisibility = true;
+      if (visibilityFilter === "my_leads") {
+        matchesVisibility = true; // Assume all leads are "mine" for this demo
+      } else if (visibilityFilter === "by_stage") {
+        matchesVisibility = !!lead.stage && lead.stage !== "";
+      } else if (visibilityFilter === "high_priority") {
+        matchesVisibility =
+          (lead.profiles || []).some(
+            (p) =>
+              p.toLowerCase().includes("quente") ||
+              p.toLowerCase().includes("alta"),
+          ) || lead.value > 200000;
+      }
+
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesOrigin &&
+        matchesInitial &&
+        matchesRegion &&
+        matchesSqm &&
+        matchesIncome &&
+        matchesDeadline &&
+        matchesDelivery &&
+        matchesGender &&
+        matchesAge &&
+        matchesObjections &&
+        matchesProfiles &&
+        matchesFamilyIncome &&
+        matchesRestricaoBacen &&
+        matchesProgramaDesejado &&
+        matchesQualificacao &&
+        matchesVisibility
+      );
     });
-  }, [leads, searchTerm, statusFilter, originFilter, initialLetterFilter]);
+  }, [
+    leads,
+    searchTerm,
+    statusFilter,
+    qualificacaoFilter,
+    originFilter,
+    initialLetterFilter,
+    leadsViewMode,
+    regionFilter,
+    sqmMattersFilter,
+    incomeTypeFilter,
+    deadlineMattersFilter,
+    deliveryExpectedFilter,
+    objectionsFilter,
+    genderFilter,
+    ageBracketFilter,
+    profileFilter,
+    familyIncomeFilter,
+    restricaoBacenFilter,
+    programaDesejadoFilter,
+    visibilityFilter,
+  ]);
 
-  const [followUps, rawSetFollowUps] = useState<FollowUpUpdate[]>(() => {
-    const saved = localStorage.getItem('ciclocred_crm_followups');
-    try {
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch (_) {}
-    return [
-      {
-        id: 'fup-1',
-        leadId: 'lead-2',
-        leadName: 'Roberto Alencar',
-        date: new Date().toISOString().slice(0, 10),
-        time: '14:00',
-        type: 'ligacao',
-        notes: 'Ligação de alinhamento com Roberto Alencar sobre taxas de juros habitacionais. Portabilidade cicloCRED validada e pré-aprovada.',
-        nextStepTitle: 'Cobrar comprovantes adicionais de renda para Caixa',
-        nextStepDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
-        nextStepTime: '15:00'
-      }
-    ];
-  });
+  const funnelFilteredLeads = useMemo(() => {
+    if (!funnelSearchTerm.trim()) return leads;
+    const term = funnelSearchTerm.toLowerCase().trim();
+    return leads.filter((lead) => {
+      return (
+        String(lead.name || "")
+          .toLowerCase()
+          .includes(term) ||
+        String(lead.email || "")
+          .toLowerCase()
+          .includes(term) ||
+        String(lead.phone || "").includes(term) ||
+        String(lead.region || "")
+          .toLowerCase()
+          .includes(term) ||
+        String(lead.mainProfile || "")
+          .toLowerCase()
+          .includes(term) ||
+        String(lead.company || "")
+          .toLowerCase()
+          .includes(term)
+      );
+    });
+  }, [leads, funnelSearchTerm]);
 
-  const setFollowUps = React.useCallback((val: React.SetStateAction<FollowUpUpdate[]>) => {
-    isLocalFollowUpsChangeRef.current = true;
-    rawSetFollowUps(val);
-  }, []);
+  const dynamicStatuses = useMemo(() => {
+    // Extract both current stored columns and any other column currently assigned to leads
+    const colIds = new Set(getKanbanColumns().map((c) => c.id));
+    leads.forEach((l) => {
+      if (l.status) colIds.add(l.status);
+      if (l.funnelPlacements) {
+        l.funnelPlacements.forEach((p) => colIds.add(p.status));
+      }
+    });
+
+    const getLabel = (id: string) => {
+      const col = getKanbanColumns().find((c) => c.id === id);
+      if (col) return col.label;
+      const defaults: Record<string, string> = {
+        novo: "Novos Leads",
+        em_contato: "Em Contato",
+        proposta: "Proposta",
+        fechado: "Fechados",
+        perdido: "Perdidos",
+        qualificacao: "Qualificação",
+        objecoes: "Objeções",
+        abordagem_inicial: "Abordagem Inicial",
+        triagem: "Triagem",
+        analise_perfil: "Análise de Perfil",
+        apresentacao_solucao: "Apresentação de Solução",
+        visita_reuniao: "Visita / Reunião",
+        escolha_unidade: "Escolha de Unidade",
+        simulacao_final: "Simulação Final",
+        fechamento: "Fechamento",
+        followup_1: "Follow-Up 1",
+        followup_2: "Follow-Up 2",
+        followup_3: "Follow-Up 3",
+        resgate: "Resgate",
+        reciclagem: "Reciclagem",
+      };
+      return defaults[id] || id.replace(/_/g, " ").toUpperCase();
+    };
+
+    return Array.from(colIds).map((id) => ({ id, label: getLabel(id) }));
+  }, [leads]);
 
   // USER AUTHENTICATION & ACCESSIBILITY SENSORY STATES
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return localStorage.getItem('ciclocred_auth_active') === 'true';
+    return localStorage.getItem("ciclocred_auth_active") === "true";
   });
 
   const [userName, setUserName] = useState<string>(() => {
-    return localStorage.getItem('ciclocred_user_name') || 'Operador CicloCred';
+    return localStorage.getItem("ciclocred_user_name") || "Operador cicloCRED";
   });
 
   const [userEmail, setUserEmail] = useState<string>(() => {
-    return localStorage.getItem('ciclocred_user_email') || 'operador@ciclocred.com';
+    return (
+      localStorage.getItem("ciclocred_user_email") || "operador@sistema.com.br"
+    );
   });
 
-  const [theme, setTheme] = useState<'claro' | 'escuro' | 'galatico'>(() => {
-    return (localStorage.getItem('ciclocred_theme') as any) || 'escuro';
+  const [theme, setTheme] = useState<"claro" | "escuro" | "galatico">(() => {
+    return (localStorage.getItem("ciclocred_theme") as any) || "escuro";
   });
+
+  const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
+
+  const [palette, setPalette] = useState<"vender" | "bege" | "azul" | "lilas">(
+    () => {
+      return (localStorage.getItem("ciclocred_palette") as any) || "vender";
+    },
+  );
 
   const [galaxyPreset, setGalaxyPreset] = useState<string>(() => {
-    return localStorage.getItem('ciclocred_galaxy_preset') || 'lineack';
+    return localStorage.getItem("ciclocred_galaxy_preset") || "lineack";
   });
 
   const [accSettings, setAccSettings] = useState<AccessibilitySettings>(() => {
-    const saved = localStorage.getItem('ciclocred_sensory_config');
+    const saved = localStorage.getItem("ciclocred_sensory_config");
     try {
       if (saved) return JSON.parse(saved);
     } catch (_) {}
@@ -548,16 +1660,16 @@ export default function App() {
     onConfirm: () => void;
     cancelText?: string;
     confirmText?: string;
-    type?: 'danger' | 'warning';
+    type?: "danger" | "warning";
   } | null>(null);
 
   const requestConfirmation = (
-    title: string, 
-    desc: string, 
-    onConfirm: () => void, 
-    type: 'danger' | 'warning' = 'warning'
+    title: string,
+    desc: string,
+    onConfirm: () => void,
+    type: "danger" | "warning" = "warning",
   ) => {
-    triggerSensoryFeedback('chime', accSettings);
+    triggerSensoryFeedback("chime", accSettings);
     setConfirmModal({
       isOpen: true,
       title,
@@ -566,7 +1678,7 @@ export default function App() {
         onConfirm();
         setConfirmModal(null);
       },
-      type
+      type,
     });
   };
 
@@ -575,59 +1687,70 @@ export default function App() {
   });
 
   const [autonomyIntervalSec, setAutonomyIntervalSec] = useState<number>(() => {
-    return Number(localStorage.getItem('ciclocred_autonomy_interval')) || 45;
+    return Number(localStorage.getItem("ciclocred_autonomy_interval")) || 45;
   });
 
   // CONNECTED GAMIFICATION STATES (Evolves from zero/zerado!)
   const [userXP, setUserXP] = useState<number>(() => {
-    const saved = localStorage.getItem('ciclocred_user_xp');
+    const saved = localStorage.getItem("ciclocred_user_xp");
     return saved ? Number(saved) : 0; // Starts fresh at 0 XP
   });
 
   const [userLevel, setUserLevel] = useState<number>(() => {
-    const saved = localStorage.getItem('ciclocred_user_level');
+    const saved = localStorage.getItem("ciclocred_user_level");
     return saved ? Number(saved) : 1; // Starts fresh at Nível 1
   });
 
   // Profile preferences & digital sharing states
-  const [showProfilePrefsModal, setShowProfilePrefsModal] = useState<boolean>(false);
+  const [showProfilePrefsModal, setShowProfilePrefsModal] =
+    useState<boolean>(false);
   const [creciNumber, setCreciNumber] = useState<string>(() => {
-    return localStorage.getItem('ciclocred_creci_number') || 'CRECI 12345-F';
+    return localStorage.getItem("ciclocred_creci_number") || "CRECI 12345-F";
   });
   const [userRole, setUserRole] = useState<string>(() => {
-    return localStorage.getItem('ciclocred_user_role') || 'Corretor de Crédito Sênior';
+    return (
+      localStorage.getItem("ciclocred_user_role") ||
+      "Corretor de Crédito Sênior"
+    );
   });
   const [agencyName, setAgencyName] = useState<string>(() => {
-    return localStorage.getItem('ciclocred_agency_name') || 'cicloCRED Empreendimentos Comerciais';
+    return (
+      localStorage.getItem("ciclocred_agency_name") ||
+      "cicloCRED Empreendimentos Comerciais"
+    );
   });
   const [consolidatedCrmInfo, setConsolidatedCrmInfo] = useState<string>(() => {
-    return localStorage.getItem('ciclocred_consolidated_crm_info') || 'Operando com performance máxima. Metas comerciais alinhadas e integradas cycleCRED.';
+    return (
+      localStorage.getItem("ciclocred_consolidated_crm_info") ||
+      "Operando com performance máxima. Metas comerciais alinhadas e integradas cycleCRED."
+    );
   });
   const [subscriptionPlan, setSubscriptionPlan] = useState<string>(() => {
-    return localStorage.getItem('ciclocred_subscription_plan') || 'Premium VIP';
+    return localStorage.getItem("ciclocred_subscription_plan") || "Premium VIP";
   });
 
   // Leads da sorte state variables
   const [isSpinningSorte, setIsSpinningSorte] = useState<boolean>(false);
   const [luckyLead, setLuckyLead] = useState<Lead | null>(null);
-  const [luckyLeadCelebration, setLuckyLeadCelebration] = useState<boolean>(false);
-  const [currentSpinningName, setCurrentSpinningName] = useState<string>('');
+  const [luckyLeadCelebration, setLuckyLeadCelebration] =
+    useState<boolean>(false);
+  const [currentSpinningName, setCurrentSpinningName] = useState<string>("");
 
   const drawLuckyLead = () => {
     if (leads.length === 0) return;
-    triggerSensoryFeedback('click', accSettings);
+    triggerSensoryFeedback("click", accSettings);
     setIsSpinningSorte(true);
     setLuckyLeadCelebration(false);
     setLuckyLead(null);
-    
+
     let counter = 0;
     const interval = setInterval(() => {
       const randomIndex = Math.floor(Math.random() * leads.length);
       setCurrentSpinningName(leads[randomIndex].name);
       counter++;
-      
+
       if (counter % 2 === 0) {
-        triggerSensoryFeedback('click', accSettings);
+        triggerSensoryFeedback("click", accSettings);
       }
 
       if (counter > 15) {
@@ -636,19 +1759,19 @@ export default function App() {
         setLuckyLead(finalLead);
         setIsSpinningSorte(false);
         setLuckyLeadCelebration(true);
-        triggerSensoryFeedback('success', accSettings);
+        triggerSensoryFeedback("success", accSettings);
         awardXP(150); // reward the user for doing lucky lead drawer
         addNotification(
-          '🎰 LEAD DA SORTE SORTEADO',
+          "🎰 LEAD DA SORTE SORTEADO",
           `O lead "${finalLead.name}" foi selecionado! Entre em contato imediato para bônus de conversão.`,
-          'success'
+          "success",
         );
       }
     }, 120);
   };
 
   const [gamificationGoals, rawSetGamificationGoals] = useState<Goal[]>(() => {
-    const saved = localStorage.getItem('ciclocred_gamification_goals');
+    const saved = localStorage.getItem("ciclocred_gamification_goals");
     try {
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -656,20 +1779,61 @@ export default function App() {
       }
     } catch (_) {}
     return [
-      { id: 'goal-1', title: 'Carregar 5 Novos Leads na Carteira', targetCount: 5, currentCount: 0, xpReward: 350, frequency: 'diaria', category: 'prospecção', completed: false },
-      { id: 'goal-2', title: 'Agendar 3 Visitas Imobiliárias', targetCount: 3, currentCount: 0, xpReward: 500, frequency: 'semanal', category: 'visita', completed: false },
-      { id: 'goal-3', title: 'Disparar 10 Modelos de Email Automatizados', targetCount: 10, currentCount: 0, xpReward: 250, frequency: 'diaria', category: 'email', completed: false },
-      { id: 'goal-4', title: 'Fechar Proposta Comercial de Crédito', targetCount: 1, currentCount: 0, xpReward: 1200, frequency: 'mensal', category: 'venda', completed: false }
+      {
+        id: "goal-1",
+        title: "Carregar 5 Novos Leads na Carteira",
+        targetCount: 5,
+        currentCount: 0,
+        xpReward: 350,
+        frequency: "diaria",
+        category: "prospecção",
+        completed: false,
+      },
+      {
+        id: "goal-2",
+        title: "Agendar 3 Visitas Imobiliárias",
+        targetCount: 3,
+        currentCount: 0,
+        xpReward: 500,
+        frequency: "semanal",
+        category: "visita",
+        completed: false,
+      },
+      {
+        id: "goal-3",
+        title: "Disparar 10 Modelos de Email Automatizados",
+        targetCount: 10,
+        currentCount: 0,
+        xpReward: 250,
+        frequency: "diaria",
+        category: "email",
+        completed: false,
+      },
+      {
+        id: "goal-4",
+        title: "Fechar Proposta Comercial de Crédito",
+        targetCount: 1,
+        currentCount: 0,
+        xpReward: 1200,
+        frequency: "mensal",
+        category: "venda",
+        completed: false,
+      },
     ];
   });
 
-  const setGamificationGoals = React.useCallback((val: React.SetStateAction<Goal[]>) => {
-    isLocalGoalsChangeRef.current = true;
-    rawSetGamificationGoals(val);
-  }, []);
+  const setGamificationGoals = React.useCallback(
+    (val: React.SetStateAction<Goal[]>) => {
+      isLocalGoalsChangeRef.current = true;
+      rawSetGamificationGoals(val);
+    },
+    [],
+  );
 
-  const [gamificationProjects, rawSetGamificationProjects] = useState<Project[]>(() => {
-    const saved = localStorage.getItem('ciclocred_gamification_projects');
+  const [gamificationProjects, rawSetGamificationProjects] = useState<
+    Project[]
+  >(() => {
+    const saved = localStorage.getItem("ciclocred_gamification_projects");
     try {
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -677,76 +1841,158 @@ export default function App() {
       }
     } catch (_) {}
     return [
-      { id: 'proj-1', name: 'Expansão de Lotes Urbanos Virgem', description: 'Metodologia ativa recomendando ofertas exclusivas de terrenos planos da CicloCred.', status: 'ativo', progress: 0, xpReward: 1500, assignedToGoalId: 'goal-2' },
-      { id: 'proj-2', name: 'Automação Massiva de Whatsapp', description: 'Enviar scripts de copywriting para leads frios contidos nas planilhas integradas.', status: 'em_planejamento', progress: 0, xpReward: 900, assignedToGoalId: 'goal-3' }
+      {
+        id: "proj-1",
+        name: "Expansão de Lotes Urbanos Virgem",
+        description:
+          "Metodologia ativa recomendando ofertas exclusivas de terrenos planos da cicloCRED.",
+        status: "ativo",
+        progress: 0,
+        xpReward: 1500,
+        assignedToGoalId: "goal-2",
+      },
+      {
+        id: "proj-2",
+        name: "Automação Massiva de Whatsapp",
+        description:
+          "Enviar scripts de copywriting para leads frios contidos nas planilhas integradas.",
+        status: "em_planejamento",
+        progress: 0,
+        xpReward: 900,
+        assignedToGoalId: "goal-3",
+      },
     ];
   });
 
-  const setGamificationProjects = React.useCallback((val: React.SetStateAction<Project[]>) => {
-    isLocalProjectsChangeRef.current = true;
-    rawSetGamificationProjects(val);
-  }, []);
+  const setGamificationProjects = React.useCallback(
+    (val: React.SetStateAction<Project[]>) => {
+      isLocalProjectsChangeRef.current = true;
+      rawSetGamificationProjects(val);
+    },
+    [],
+  );
 
   // Save changes to localStorage on alteration
   useEffect(() => {
-    localStorage.setItem('ciclocred_auth_active', String(isAuthenticated));
+    localStorage.setItem("ciclocred_auth_active", String(isAuthenticated));
   }, [isAuthenticated]);
 
   useEffect(() => {
-    localStorage.setItem('ciclocred_user_name', userName);
+    localStorage.setItem("ciclocred_user_name", userName);
   }, [userName]);
 
   useEffect(() => {
-    localStorage.setItem('ciclocred_user_email', userEmail);
+    localStorage.setItem("ciclocred_user_email", userEmail);
   }, [userEmail]);
 
   useEffect(() => {
-    localStorage.setItem('ciclocred_creci_number', creciNumber);
+    localStorage.setItem("ciclocred_creci_number", creciNumber);
   }, [creciNumber]);
 
   useEffect(() => {
-    localStorage.setItem('ciclocred_user_role', userRole);
+    localStorage.setItem("ciclocred_user_role", userRole);
   }, [userRole]);
 
   useEffect(() => {
-    localStorage.setItem('ciclocred_agency_name', agencyName);
+    localStorage.setItem("ciclocred_agency_name", agencyName);
   }, [agencyName]);
 
   useEffect(() => {
-    localStorage.setItem('ciclocred_consolidated_crm_info', consolidatedCrmInfo);
+    localStorage.setItem(
+      "ciclocred_consolidated_crm_info",
+      consolidatedCrmInfo,
+    );
   }, [consolidatedCrmInfo]);
 
   useEffect(() => {
-    localStorage.setItem('ciclocred_theme', theme);
+    localStorage.setItem("ciclocred_theme", theme);
   }, [theme]);
 
   useEffect(() => {
-    localStorage.setItem('ciclocred_galaxy_preset', galaxyPreset);
+    localStorage.setItem("ciclocred_palette", palette);
+  }, [palette]);
+
+  // Download auto do backup a cada 3 horas
+  useEffect(() => {
+    const hoursInMs = 3 * 60 * 60 * 1000;
+    const interval = setInterval(() => {
+      const dataToExport = {
+        leads,
+        appointments,
+        settings: {
+          userName,
+          userEmail,
+          creciNumber,
+          agencyName,
+          theme,
+          palette,
+          galaxyPreset,
+        },
+        timestamp: new Date().toISOString(),
+      };
+
+      const blob = new Blob([JSON.stringify(dataToExport, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `ciclocred-backup-${new Date().toISOString().split("T")[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }, hoursInMs);
+
+    return () => clearInterval(interval);
+  }, [
+    leads,
+    appointments,
+    userName,
+    userEmail,
+    creciNumber,
+    agencyName,
+    theme,
+    palette,
+    galaxyPreset,
+  ]);
+
+  useEffect(() => {
+    localStorage.setItem("ciclocred_galaxy_preset", galaxyPreset);
   }, [galaxyPreset]);
 
   useEffect(() => {
-    localStorage.setItem('ciclocred_sensory_config', JSON.stringify(accSettings));
+    localStorage.setItem(
+      "ciclocred_sensory_config",
+      JSON.stringify(accSettings),
+    );
   }, [accSettings]);
 
   useEffect(() => {
-    localStorage.setItem('ciclocred_user_xp', String(userXP));
+    localStorage.setItem("ciclocred_user_xp", String(userXP));
   }, [userXP]);
 
   useEffect(() => {
-    localStorage.setItem('ciclocred_user_level', String(userLevel));
+    localStorage.setItem("ciclocred_user_level", String(userLevel));
   }, [userLevel]);
 
   useEffect(() => {
-    localStorage.setItem('ciclocred_gamification_goals', JSON.stringify(gamificationGoals));
+    localStorage.setItem(
+      "ciclocred_gamification_goals",
+      JSON.stringify(gamificationGoals),
+    );
   }, [gamificationGoals]);
 
   useEffect(() => {
-    localStorage.setItem('ciclocred_gamification_projects', JSON.stringify(gamificationProjects));
+    localStorage.setItem(
+      "ciclocred_gamification_projects",
+      JSON.stringify(gamificationProjects),
+    );
   }, [gamificationProjects]);
 
   // CORE METICULOSITY XP FORMULA & PROGRESS SYNC HANDLERS
   const awardXP = (xpGained: number) => {
-    setUserXP(current => {
+    setUserXP((current) => {
       const xpNeeded = 5000;
       let total = current + xpGained;
       let currentLevel = userLevel;
@@ -755,7 +2001,7 @@ export default function App() {
         currentLevel += 1;
         // Trigger Level-Up chime sensory audio feedback
         setTimeout(() => {
-          triggerSensoryFeedback('chime', accSettings);
+          triggerSensoryFeedback("chime", accSettings);
         }, 300);
       }
       if (currentLevel !== userLevel) {
@@ -765,74 +2011,151 @@ export default function App() {
     });
   };
 
-  const progressGoalCategory = (category: 'venda' | 'prospecção' | 'visita' | 'email', amount = 1) => {
-    setGamificationGoals(prevGoals => 
-      prevGoals.map(g => {
+  const progressGoalCategory = (
+    category: "venda" | "prospecção" | "visita" | "email",
+    amount = 1,
+  ) => {
+    setGamificationGoals((prevGoals) =>
+      prevGoals.map((g) => {
         if (g.category !== category || g.completed) return g;
         const nextCount = g.currentCount + amount;
         const reached = nextCount >= g.targetCount;
-        
+
         if (reached) {
           setTimeout(() => {
-            triggerSensoryFeedback('chime', accSettings);
+            triggerSensoryFeedback("chime", accSettings);
             // Award large bonus XP for completing a goal
             awardXP(g.xpReward);
           }, 150);
         } else {
           // Play micro click sound for incremental movement
           setTimeout(() => {
-            triggerSensoryFeedback('click', accSettings);
+            triggerSensoryFeedback("click", accSettings);
           }, 50);
         }
 
         return {
           ...g,
           currentCount: reached ? g.targetCount : nextCount,
-          completed: reached
+          completed: reached,
         };
-      })
+      }),
     );
   };
 
   const handleResetGamification = () => {
-    if (window.confirm('Deseja realmente ZERAR todo o seu progresso da gamificação (Voltar ao Nível 1, 0 XP e metas limpas)?')) {
+    if (
+      window.confirm(
+        "Deseja realmente ZERAR todo o seu progresso da gamificação (Voltar ao Nível 1, 0 XP e metas limpas)?",
+      )
+    ) {
       setUserXP(0);
       setUserLevel(1);
       const initialGoals = [
-        { id: 'goal-1', title: 'Carregar 5 Novos Leads na Carteira', targetCount: 5, currentCount: 0, xpReward: 350, frequency: 'diaria', category: 'prospecção', completed: false },
-        { id: 'goal-2', title: 'Agendar 3 Visitas Imobiliárias', targetCount: 3, currentCount: 0, xpReward: 500, frequency: 'semanal', category: 'visita', completed: false },
-        { id: 'goal-3', title: 'Disparar 10 Modelos de Email Automatizados', targetCount: 10, currentCount: 0, xpReward: 250, frequency: 'diaria', category: 'email', completed: false },
-        { id: 'goal-4', title: 'Fechar Proposta Comercial de Crédito', targetCount: 1, currentCount: 0, xpReward: 1200, frequency: 'mensal', category: 'venda', completed: false }
+        {
+          id: "goal-1",
+          title: "Carregar 5 Novos Leads na Carteira",
+          targetCount: 5,
+          currentCount: 0,
+          xpReward: 350,
+          frequency: "diaria",
+          category: "prospecção",
+          completed: false,
+        },
+        {
+          id: "goal-2",
+          title: "Agendar 3 Visitas Imobiliárias",
+          targetCount: 3,
+          currentCount: 0,
+          xpReward: 500,
+          frequency: "semanal",
+          category: "visita",
+          completed: false,
+        },
+        {
+          id: "goal-3",
+          title: "Disparar 10 Modelos de Email Automatizados",
+          targetCount: 10,
+          currentCount: 0,
+          xpReward: 250,
+          frequency: "diaria",
+          category: "email",
+          completed: false,
+        },
+        {
+          id: "goal-4",
+          title: "Fechar Proposta Comercial de Crédito",
+          targetCount: 1,
+          currentCount: 0,
+          xpReward: 1200,
+          frequency: "mensal",
+          category: "venda",
+          completed: false,
+        },
       ];
       const initialProjects = [
-        { id: 'proj-1', name: 'Expansão de Lotes Urbanos Virgem', description: 'Metodologia ativa recomendando ofertas exclusivas de terrenos planos da CicloCred.', status: 'ativo', progress: 0, xpReward: 1500, assignedToGoalId: 'goal-2' },
-        { id: 'proj-2', name: 'Automação Massiva de Whatsapp', description: 'Enviar scripts de copywriting para leads frios contidos nas planilhas integradas.', status: 'em_planejamento', progress: 0, xpReward: 900, assignedToGoalId: 'goal-3' }
+        {
+          id: "proj-1",
+          name: "Expansão de Lotes Urbanos Virgem",
+          description:
+            "Metodologia ativa recomendando ofertas exclusivas de terrenos planos da cicloCRED.",
+          status: "ativo",
+          progress: 0,
+          xpReward: 1500,
+          assignedToGoalId: "goal-2",
+        },
+        {
+          id: "proj-2",
+          name: "Automação Massiva de Whatsapp",
+          description:
+            "Enviar scripts de copywriting para leads frios contidos nas planilhas integradas.",
+          status: "em_planejamento",
+          progress: 0,
+          xpReward: 900,
+          assignedToGoalId: "goal-3",
+        },
       ];
       setGamificationGoals(initialGoals);
       setGamificationProjects(initialProjects);
-      localStorage.setItem('ciclocred_user_xp', '0');
-      localStorage.setItem('ciclocred_user_level', '1');
-      localStorage.setItem('ciclocred_gamification_goals', JSON.stringify(initialGoals));
-      localStorage.setItem('ciclocred_gamification_projects', JSON.stringify(initialProjects));
-      triggerSensoryFeedback('warning', accSettings);
-      addNotification('🏆 GAMIFICAÇÃO REINICIADA', 'Sua evolução de gamificação foi resetada com sucesso da base de dados local!', 'success');
+      localStorage.setItem("ciclocred_user_xp", "0");
+      localStorage.setItem("ciclocred_user_level", "1");
+      localStorage.setItem(
+        "ciclocred_gamification_goals",
+        JSON.stringify(initialGoals),
+      );
+      localStorage.setItem(
+        "ciclocred_gamification_projects",
+        JSON.stringify(initialProjects),
+      );
+      triggerSensoryFeedback("warning", accSettings);
+      addNotification(
+        "🏆 GAMIFICAÇÃO REINICIADA",
+        "Sua evolução de gamificação foi resetada com sucesso da base de dados local!",
+        "success",
+      );
     }
   };
 
   // Modals visibility configurations
   const [isLeadModalOpen, setIsLeadModalOpen] = useState(false);
-  const [selectedLeadForEdit, setSelectedLeadForEdit] = useState<Lead | null>(null);
-  const [defaultStatusForCreate, setDefaultStatusForCreate] = useState<LeadStatus>('novo');
+  const [selectedLeadForEdit, setSelectedLeadForEdit] = useState<Lead | null>(
+    null,
+  );
+  const [defaultStatusForCreate, setDefaultStatusForCreate] =
+    useState<LeadStatus>("novo");
 
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
-  const [selectedLeadForDetails, setSelectedLeadForDetails] = useState<Lead | null>(null);
-  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-  const [settingsModalTab, setSettingsModalTab] = useState<'profile' | 'database'>('profile');
+  const [selectedLeadForDetails, setSelectedLeadForDetails] =
+    useState<Lead | null>(null);
+  const [isUserCentralModalOpen, setIsUserCentralModalOpen] = useState(false);
+  const [settingsModalTab, setSettingsModalTab] = useState<
+    "profile" | "database"
+  >("profile");
 
   // NOTIFICATION & ALARM CENTRAL STATES (Visual, Sonoro & Sensorial)
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<CRMNotification[]>(() => {
-    const saved = localStorage.getItem('ciclocred_notifications');
+    const saved = localStorage.getItem("ciclocred_notifications");
     try {
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -841,21 +2164,23 @@ export default function App() {
     } catch (_) {}
     return [
       {
-        id: 'notify-1',
-        title: 'Assistente Autônomo CicloCred ✨',
-        message: 'Conectei seu funil de CRM. Monitorando a carteira de leads e agendamentos imobiliários em tempo real com clock tátil.',
-        type: 'ai',
-        timestamp: '19:00',
-        read: false
+        id: "notify-1",
+        title: "Assistente Autônomo cicloCRED ✨",
+        message:
+          "Conectei seu funil de CRM. Monitorando a carteira de leads e agendamentos imobiliários em tempo real com clock tátil.",
+        type: "ai",
+        timestamp: "19:00",
+        read: false,
       },
       {
-        id: 'notify-2',
-        title: 'Quartel de Gamificação Sincronizado 🎯',
-        message: 'O CRM começou agora em Modo Real. Complete tarefas operacionais para obter XP e atingir outras Galáxias!',
-        type: 'info',
-        timestamp: '19:01',
-        read: false
-      }
+        id: "notify-2",
+        title: "Quartel de Gamificação Sincronizado 🎯",
+        message:
+          "O CRM começou agora em Modo Real. Complete tarefas operacionais para obter XP e atingir outras Galáxias!",
+        type: "info",
+        timestamp: "19:01",
+        read: false,
+      },
     ];
   });
 
@@ -869,68 +2194,646 @@ export default function App() {
 
   // Save notifications history on alteration
   useEffect(() => {
-    localStorage.setItem('ciclocred_notifications', JSON.stringify(notifications));
+    localStorage.setItem(
+      "ciclocred_notifications",
+      JSON.stringify(notifications),
+    );
   }, [notifications]);
 
   // Request browser Web Notifications permission
   useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission().catch(err => {
-        console.log('Push notification permission blocked inside iframe context.', err);
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission().catch((err) => {
+        console.log(
+          "Push notification permission blocked inside iframe context.",
+          err,
+        );
       });
     }
   }, []);
 
-  const addNotification = (title: string, message: string, type: 'info' | 'success' | 'warning' | 'alarm' | 'ai' = 'info') => {
+  const addNotification = (
+    title: string,
+    message: string,
+    type: "info" | "success" | "warning" | "alarm" | "ai" = "info",
+  ) => {
     const newNotify: CRMNotification = {
       id: `notify-${Date.now()}`,
       title,
       message,
       type,
-      timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-      read: false
+      timestamp: new Date().toLocaleTimeString("pt-BR", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      read: false,
     };
 
-    setNotifications(prev => [newNotify, ...prev]);
+    setNotifications((prev) => [newNotify, ...prev]);
 
     // Play sounds, vibrate and trigger sensory pulses
-    if (type === 'alarm') {
-      triggerSensoryFeedback('alarm', accSettings);
-    } else if (type === 'success') {
-      triggerSensoryFeedback('success', accSettings);
-    } else if (type === 'ai') {
-      triggerSensoryFeedback('chime', accSettings);
+    if (type === "alarm") {
+      triggerSensoryFeedback("alarm", accSettings);
+    } else if (type === "success") {
+      triggerSensoryFeedback("success", accSettings);
+    } else if (type === "ai") {
+      triggerSensoryFeedback("chime", accSettings);
     } else {
-      triggerSensoryFeedback('click', accSettings);
+      triggerSensoryFeedback("click", accSettings);
     }
 
     // Fire actual HTML5 Push alarm notification if authorized
-    if ('Notification' in window && Notification.permission === 'granted') {
+    if ("Notification" in window && Notification.permission === "granted") {
       try {
         new Notification(title, {
           body: message,
-          tag: 'ciclocred-crm-alert',
-          silent: false
+          tag: "ciclocred-crm-alert",
+          silent: false,
         });
       } catch (err) {
-        console.warn('Silent or regular push blocked by context.', err);
+        console.warn("Silent or regular push blocked by context.", err);
       }
     }
   };
 
+  const renderTableSearchBar = ({
+    selectedLeadIds = [],
+    blockActions,
+  }: {
+    selectedLeadIds?: string[];
+    blockActions?: {
+      openCampaignModal?: () => void;
+      onDelete?: (ids: string[]) => void;
+      onExport?: (ids: string[]) => void;
+    };
+  }) => {
+    const cycleVisibility = () => {
+      triggerSensoryFeedback("click", accSettings);
+      if (activeTab === "leads") {
+        cycleLeadsViewMode();
+      }
+    };
+
+    const handleMassMessage = () => {
+      triggerSensoryFeedback("click", accSettings);
+      if (selectedLeadIds.length > 0 && blockActions?.openCampaignModal) {
+        blockActions.openCampaignModal();
+      } else {
+        addNotification(
+          "Ação em Massa",
+          "Selecione pelo menos um Lead para realizar envios de mensagem em lote.",
+          "warning",
+        );
+      }
+    };
+
+    const handleMassTask = () => {
+      triggerSensoryFeedback("click", accSettings);
+      if (selectedLeadIds.length > 0) {
+        selectedLeadIds.forEach((id) => {
+          const tempAppt = {
+            id: `appt-ext-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+            title: "Acompanhamento em Massa",
+            date: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+            time: "10:00",
+            type: "call",
+            leadId: id,
+            completed: false,
+            notes: "Adicionado via ação em massa (🚨).",
+          };
+          setAppointments((prev: any) => [...prev, tempAppt]);
+        });
+        addNotification(
+          "Lote Agendado",
+          `Criadas atividades futuras para ${selectedLeadIds.length} leads selecionados.`,
+          "success",
+        );
+      } else {
+        addNotification(
+          "Ação em Massa",
+          "Selecione pelo menos um Lead para criar atividades/tarefas.",
+          "warning",
+        );
+      }
+    };
+
+    const handleMassDelete = () => {
+      triggerSensoryFeedback("click", accSettings);
+      if (selectedLeadIds.length > 0) {
+        requestConfirmation(
+          "Apagar Leads Selecionados?",
+          `Tem certeza que deseja apagar os ${selectedLeadIds.length} leads selecionados permanentemente? Esta ação é irreversível.`,
+          () => {
+            setLeads((prev) =>
+              prev.filter((l) => !selectedLeadIds.includes(l.id)),
+            );
+            triggerSensoryFeedback("warning", accSettings);
+            addNotification(
+              "🗑️ LEADS EXCLUÍDOS",
+              `${selectedLeadIds.length} contatos foram excluídos permanentemente do CRM.`,
+              "warning",
+            );
+          },
+          "danger",
+        );
+      } else {
+        addNotification(
+          "Limpeza de Base",
+          "Selecione pelo menos um Lead para realizar a exclusão em lote.",
+          "warning",
+        );
+      }
+    };
+
+    const isDashboardTab = activeTab === "dashboard";
+    const isMarketingTab =
+      activeTab === "marketing" || activeTab === "settings";
+
+    const containerClasses = isMarketingTab
+      ? "bg-transparent pb-3 shrink-0 flex flex-col gap-2 select-none relative z-30 w-full antialiased mb-2"
+      : isDashboardTab
+        ? "bg-zinc-900/40 backdrop-blur-md px-4 py-3 shrink-0 flex flex-col gap-2 select-none relative z-30 w-full antialiased text-white border-2 border-zinc-800/60 rounded-3xl"
+        : "bg-zinc-900 px-4 py-2.5 shrink-0 flex flex-col gap-2 select-none relative z-30 w-full antialiased text-white border-b-4 border-zinc-950 border-t-0";
+
+    const leftButtonsClass = isMarketingTab
+      ? "w-10 h-10 rounded-xl border-2 border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-white text-base font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center relative cursor-pointer active:translate-y-[1px] hover:translate-y-[-1px] transition-all shrink-0"
+      : isDashboardTab
+        ? "w-10 h-10 rounded-xl border-2 border-zinc-800 bg-zinc-950/60 hover:bg-zinc-900 text-white text-base font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center relative cursor-pointer active:translate-y-[1px] hover:translate-y-[-1px] transition-all shrink-0"
+        : "w-10 h-10 rounded-xl border-2 border-zinc-950 bg-zinc-800 hover:bg-zinc-700 text-white text-base font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center relative cursor-pointer active:translate-y-[1px] hover:translate-y-[-1px] transition-all shrink-0";
+
+    const rightButtonsClass = isMarketingTab
+      ? "w-10 h-10 rounded-xl border-2 border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-white text-base font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center relative cursor-pointer active:translate-y-[1px] hover:translate-y-[-1px] transition-all shrink-0"
+      : isDashboardTab
+        ? "w-10 h-10 rounded-xl border-2 border-zinc-800 bg-zinc-950/60 hover:bg-zinc-900 text-white text-base font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center relative cursor-pointer active:translate-y-[1px] hover:translate-y-[-1px] transition-all shrink-0"
+        : "w-10 h-10 rounded-xl border-2 border-zinc-950 bg-zinc-800 hover:bg-zinc-700 text-white text-base font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center relative cursor-pointer active:translate-y-[1px] hover:translate-y-[-1px] transition-all shrink-0";
+
+    const inputClass = isMarketingTab
+      ? "w-full bg-zinc-900 border-2 border-zinc-800 text-zinc-100 text-xs md:text-sm font-black font-sans pl-12 pr-4 py-3 rounded-xl uppercase tracking-wider placeholder-zinc-500 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all bg-opacity-90"
+      : isDashboardTab
+        ? "w-full bg-white/5 hover:bg-white/10 focus:bg-white/15 border-2 border-zinc-750 text-white text-[10px] md:text-xs font-black font-mono pl-12 pr-4 py-2.5 rounded-xl uppercase tracking-wider placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+        : "w-full bg-zinc-100 border-2 border-zinc-950 text-zinc-900 text-[10px] md:text-xs font-black font-mono pl-12 pr-4 py-2.5 rounded-xl uppercase tracking-wider placeholder-zinc-500 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all";
+
+    const activeFilterBtnClass = "bg-indigo-600 text-white";
+
+    return (
+      <div className={containerClasses}>
+        <div className="flex flex-col md:flex-row items-center justify-between w-full gap-3">
+          {/* LADO ESQUERDO: Botões solicitados */}
+          <div className="flex items-center gap-2 shrink-0 w-full md:w-auto justify-start">
+            <button
+              type="button"
+              onClick={cycleVisibility}
+              title="👁️ Alterar Visibilidade/Alerta"
+              className={leftButtonsClass}
+            >
+              👁️
+            </button>
+            <button
+              type="button"
+              onClick={handleMassMessage}
+              title="📨 Enviar Email/Mensagem em Lote"
+              className={leftButtonsClass}
+            >
+              📨
+              {selectedLeadIds.length > 0 && (
+                <span className="absolute -top-2 -right-2 bg-indigo-500 text-white text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] pointer-events-none">
+                  {selectedLeadIds.length}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={handleMassTask}
+              title="🚨 Criar Tarefa/Atividade em Lote"
+              className={leftButtonsClass}
+            >
+              🚨
+              {selectedLeadIds.length > 0 && (
+                <span className="absolute -top-2 -right-2 bg-rose-500 text-white text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] pointer-events-none">
+                  {selectedLeadIds.length}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={handleMassDelete}
+              title="🗑️ Excluir Leads em Massa"
+              className={leftButtonsClass}
+            >
+              🗑️
+              {selectedLeadIds.length > 0 && (
+                <span className="absolute -top-2 -right-2 bg-red-600 text-white text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] pointer-events-none">
+                  {selectedLeadIds.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* CENTRO: Barra de Pesquisa */}
+          <div className="flex-1 relative flex items-center gap-1 w-full">
+            <div className="relative flex-1 flex items-center">
+              <button
+                type="button"
+                onClick={() => {
+                  triggerSensoryFeedback("click", accSettings);
+                  const SpeechRecognition =
+                    (window as any).SpeechRecognition ||
+                    (window as any).webkitSpeechRecognition;
+                  if (SpeechRecognition) {
+                    const recognition = new SpeechRecognition();
+                    recognition.lang = "pt-BR";
+                    recognition.start();
+                    recognition.onstart = () => {
+                      addNotification(
+                        "Ouvindo...",
+                        "Pode falar seu comando.",
+                        "info",
+                      );
+                    };
+                    recognition.onresult = (event: any) => {
+                      const text = event.results[0][0].transcript;
+                      setSearchTerm(text);
+                      addNotification(
+                        "Comando recebido",
+                        `"${text}"`,
+                        "success",
+                      );
+                    };
+                    recognition.onerror = () => {
+                      addNotification(
+                        "Erro",
+                        "Não foi possível reconhecer a voz.",
+                        "warning",
+                      );
+                    };
+                  } else {
+                    alert(
+                      "A API de reconhecimento de voz não é suportada por este navegador.",
+                    );
+                  }
+                }}
+                title="🎤 Pesquisa por Voz"
+                className="absolute left-3 p-1.5 rounded-lg hover:bg-zinc-800 text-indigo-400 transition-colors z-10"
+              >
+                🎤
+              </button>
+              <input
+                type="text"
+                placeholder="Pesquisar / Filtrar globalmente leads e funil..."
+                value={searchTerm}
+                className={inputClass}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val.trim() === "/automacao") {
+                    setActiveTab("automation-flows");
+                    setSearchTerm("");
+                    return;
+                  }
+                  if (val.trim() === "/assistente") {
+                    setActiveTab("gemini-server");
+                    setSearchTerm("");
+                    return;
+                  }
+                  setSearchTerm(val);
+                }}
+                onKeyDown={async (e) => {
+                  if (e.key === "Enter" && searchTerm.trim() !== "") {
+                    const originalQuery = searchTerm;
+                    setIsCeoLoading(true);
+                    setCeoResponse({
+                      query: originalQuery,
+                      message:
+                        "Analisando dados do CRM... Conectando com a Diretoria Executiva cicloCRED.",
+                    });
+                    try {
+                      const res = await fetch("/api/ai/ceo-query", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          query: originalQuery,
+                          leadsContext: leads,
+                          activeTab: activeTab,
+                        }),
+                      });
+                      if (res.ok) {
+                        const data = await res.json();
+                        const filters = data.filters || {};
+
+                        if (filters.regionFilter)
+                          setRegionFilter(filters.regionFilter);
+                        if (filters.statusFilter)
+                          setStatusFilter(filters.statusFilter);
+                        if (filters.stageFilter)
+                          setStageFilter(filters.stageFilter);
+                        if (filters.familyIncomeFilter)
+                          setFamilyIncomeFilter(filters.familyIncomeFilter);
+                        if (filters.programaDesejadoFilter)
+                          setProgramaDesejadoFilter(
+                            filters.programaDesejadoFilter,
+                          );
+                        if (filters.objectionsFilter)
+                          setObjectionsFilter(filters.objectionsFilter);
+                        if (filters.profileFilter)
+                          setProfileFilter(filters.profileFilter);
+
+                        setCeoResponse({
+                          query: originalQuery,
+                          message:
+                            data.message || "Relatório executivo concluído.",
+                        });
+                        setSearchTerm("");
+                        addNotification(
+                          "Relatório do CEO",
+                          "Gemini CEO analisou a situação, leads e estruturou as diretrizes.",
+                          "success",
+                        );
+                      } else {
+                        throw new Error("Erro na comunicação");
+                      }
+                    } catch (error) {
+                      console.error("CEO Query Erro:", error);
+                      setCeoResponse({
+                        query: originalQuery,
+                        message:
+                          "⚠️ Erro ao se comunicar com a Diretoria Executiva (Gemini). Verifique a chave de API em Settings.",
+                      });
+                    } finally {
+                      setIsCeoLoading(false);
+                    }
+                  }
+                }}
+              />
+              {/* Gemini Badge */}
+              <span className="absolute inset-y-0 right-2 flex items-center gap-1 pointer-events-none">
+                <Sparkles className="w-3.5 h-3.5 text-purple-500 animate-pulse" />
+                <span className="text-[7.5px] font-black uppercase text-purple-600 bg-purple-100 px-1 py-0.5 rounded border border-purple-300 hidden md:block">
+                  Inteligência Gemini
+                </span>
+              </span>
+            </div>
+          </div>
+
+          {/* LADO DIREITO: Botões solicitados 📥📤🔻 */}
+          <div className="flex items-center gap-2 shrink-0 w-full md:w-auto justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                triggerSensoryFeedback("click", accSettings);
+                setIsImportModalOpen(true);
+              }}
+              title="📥 Importar Leads"
+              className={rightButtonsClass}
+            >
+              📥
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                triggerSensoryFeedback("click", accSettings);
+                setIsExportModalOpen(true);
+              }}
+              title="📤 Exportar Leads"
+              className={rightButtonsClass}
+            >
+              📤
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                triggerSensoryFeedback("click", accSettings);
+                setSearchFiltersVisibility((prev) => (prev === 2 ? 1 : 2));
+              }}
+              title="🔻 Mostrar/Ocultar Filtros"
+              className={`${rightButtonsClass} ${searchFiltersVisibility === 2 ? activeFilterBtnClass : ""}`}
+            >
+              🔻
+            </button>
+          </div>
+        </div>
+
+        {/* Linha dos Filtros suspensa */}
+        {searchFiltersVisibility === 2 && (
+          <div className="w-full flex items-center gap-1 pt-2 pb-3 px-1 overflow-hidden">
+            <select
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setSearchFiltersVisibility(1);
+              }}
+              className="flex-1 min-w-0 bg-zinc-800 text-zinc-300 border border-zinc-950 text-[7px] font-black uppercase font-mono px-1 flex-shrink-0 py-1.5 rounded-md outline-none cursor-pointer truncate shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+            >
+              <option value="todos">St: TODOS</option>
+              <option value="novo">St: Novos</option>
+              <option value="ativo">St: Ativos</option>
+              <option value="arquivado">St: Arq</option>
+            </select>
+            <select
+              value={qualificacaoFilter}
+              onChange={(e) => {
+                setQualificacaoFilter(e.target.value);
+                setSearchFiltersVisibility(1);
+              }}
+              className="flex-1 min-w-0 bg-zinc-800 text-zinc-300 border border-zinc-950 text-[7px] font-black uppercase font-mono px-1 flex-shrink-0 py-1.5 rounded-md outline-none cursor-pointer truncate shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+            >
+              <option value="todos">Qualif: TODAS</option>
+              {getKanbanColumns("qualificacao").map((col) => (
+                <option key={col.id} value={col.id}>
+                  {col.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={stageFilter}
+              onChange={(e) => {
+                setStageFilter(e.target.value);
+                setSearchFiltersVisibility(1);
+              }}
+              className="flex-1 min-w-0 bg-zinc-800 text-zinc-300 border border-zinc-950 text-[7px] font-black uppercase font-mono px-1 flex-shrink-0 py-1.5 rounded-md outline-none cursor-pointer truncate shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+            >
+              <option value="todos">Etapa: TODAS</option>
+              {getKanbanColumns("etapas").map((col) => (
+                <option key={col.id} value={col.id}>
+                  {col.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={profileFilter}
+              onChange={(e) => {
+                setProfileFilter(e.target.value);
+                setSearchFiltersVisibility(1);
+              }}
+              className="flex-1 min-w-0 bg-zinc-800 text-zinc-300 border border-zinc-950 text-[7px] font-black uppercase font-mono px-1 flex-shrink-0 py-1.5 rounded-md outline-none cursor-pointer truncate shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+            >
+              <option value="todos">Perfil: TODOS</option>
+              {getKanbanColumns("perfil").map((col) => (
+                <option key={col.id} value={col.id}>
+                  {col.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={objectionsFilter}
+              onChange={(e) => {
+                setObjectionsFilter(e.target.value);
+                setSearchFiltersVisibility(1);
+              }}
+              className="flex-1 min-w-0 bg-zinc-800 text-zinc-300 border border-zinc-950 text-[7px] font-black uppercase font-mono px-1 flex-shrink-0 py-1.5 rounded-md outline-none cursor-pointer truncate shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+            >
+              <option value="todos">Obj: TODAS</option>
+              {getKanbanColumns("objecoes").map((col) => (
+                <option key={col.id} value={col.id}>
+                  {col.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={originFilter}
+              onChange={(e) => {
+                setOriginFilter(e.target.value);
+                setSearchFiltersVisibility(1);
+              }}
+              className="flex-1 min-w-0 bg-zinc-800 text-zinc-300 border border-zinc-950 text-[7px] font-black uppercase font-mono px-1 flex-shrink-0 py-1.5 rounded-md outline-none cursor-pointer truncate shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+            >
+              <option value="todos">Orig: TODAS</option>
+              <option value="WhatsApp">WPP</option>
+              <option value="Insta/Face/Tiktok">Sociais</option>
+              <option value="Google Ads/Site">Google</option>
+              <option value="Planilhas Antigas">Planilhas</option>
+              <option value="Plantão Fisico (Porta)">Físico</option>
+              <option value="Indicação">Indicação</option>
+              <option value="Cury Vendas">Cury</option>
+              <option value="Roleta">Roleta</option>
+              <option value="Outros">Outras</option>
+            </select>
+            <select
+              value={initialLetterFilter}
+              onChange={(e) => {
+                setInitialLetterFilter(e.target.value);
+                setSearchFiltersVisibility(1);
+              }}
+              className="flex-1 min-w-0 bg-zinc-800 text-zinc-300 border border-zinc-950 text-[7px] font-black uppercase font-mono px-1 flex-shrink-0 py-1.5 rounded-md outline-none cursor-pointer truncate shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+            >
+              <option value="todos">A-Z: T</option>
+              {"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((letter) => (
+                <option key={`letter-${letter}`} value={letter}>
+                  {letter}
+                </option>
+              ))}
+            </select>
+            <select
+              value={regionFilter}
+              onChange={(e) => {
+                setRegionFilter(e.target.value);
+                setSearchFiltersVisibility(1);
+              }}
+              className="flex-1 min-w-0 bg-zinc-800 text-zinc-300 border border-zinc-950 text-[7px] font-black uppercase font-mono px-1 flex-shrink-0 py-1.5 rounded-md outline-none cursor-pointer truncate shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+            >
+              <option value="todos">Região: T</option>
+              <option value="Leste">Z.Leste</option>
+              <option value="Norte">Z.Norte</option>
+              <option value="Sul">Z.Sul</option>
+              <option value="Oeste">Z.Oeste</option>
+              <option value="Centro">Centro</option>
+              <option value="Litoral/Interior">Int</option>
+              <option value="Alto Padrao SBPE">SBPE</option>
+            </select>
+            <select
+              value={programaDesejadoFilter}
+              onChange={(e) => {
+                setProgramaDesejadoFilter(e.target.value);
+                setSearchFiltersVisibility(1);
+              }}
+              className="flex-1 min-w-0 bg-zinc-800 text-zinc-300 border border-zinc-950 text-[7px] font-black uppercase font-mono px-1 flex-shrink-0 py-1.5 rounded-md outline-none cursor-pointer truncate shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+            >
+              <option value="todos">Prog: T</option>
+              <option value="Minha Casa Minha Vida">MCMV</option>
+              <option value="SBPE">SBPE</option>
+              <option value="Pode Entrar">PE</option>
+            </select>
+            <select
+              value={restricaoBacenFilter}
+              onChange={(e) => {
+                setRestricaoBacenFilter(e.target.value);
+                setSearchFiltersVisibility(1);
+              }}
+              className="flex-1 min-w-0 bg-zinc-800 text-zinc-300 border border-zinc-950 text-[7px] font-black uppercase font-mono px-1 flex-shrink-0 py-1.5 rounded-md outline-none cursor-pointer truncate shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+            >
+              <option value="todos">Bacen: T</option>
+              <option value="Não">Limpo</option>
+              <option value="Sim">Restrito</option>
+              <option value="Desconhecido">Verificar</option>
+            </select>
+            <select
+              value={genderFilter}
+              onChange={(e) => {
+                setGenderFilter(e.target.value);
+                setSearchFiltersVisibility(1);
+              }}
+              className="flex-1 min-w-0 bg-zinc-800 text-zinc-300 border border-zinc-950 text-[7px] font-black uppercase font-mono px-1 flex-shrink-0 py-1.5 rounded-md outline-none cursor-pointer truncate shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+            >
+              <option value="todos">Gênero: T</option>
+              <option value="Homem">M</option>
+              <option value="Mulher">F</option>
+              <option value="Prefiro nao informar">O</option>
+            </select>
+            <select
+              value={familyIncomeFilter}
+              onChange={(e) => {
+                setFamilyIncomeFilter(e.target.value);
+                setSearchFiltersVisibility(1);
+              }}
+              className="flex-1 min-w-0 bg-zinc-800 text-zinc-300 border border-zinc-950 text-[7px] font-black uppercase font-mono px-1 flex-shrink-0 py-1.5 rounded-md outline-none cursor-pointer truncate shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+            >
+              <option value="todos">Renda: T</option>
+              <option value="Faixa 1">F1 (-2.6k)</option>
+              <option value="Faixa 2">F2 (-4.4k)</option>
+              <option value="Faixa 3">F3 (-8k)</option>
+              <option value="Acima do Teto">Teto+</option>
+            </select>
+            <select
+              value={incomeTypeFilter}
+              onChange={(e) => {
+                setIncomeTypeFilter(e.target.value);
+                setSearchFiltersVisibility(1);
+              }}
+              className="flex-1 min-w-0 bg-zinc-800 text-zinc-300 border border-zinc-950 text-[7px] font-black uppercase font-mono px-1 flex-shrink-0 py-1.5 rounded-md outline-none cursor-pointer truncate shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+            >
+              <option value="todos">Vínculo: T</option>
+              <option value="CLT">CLT</option>
+              <option value="Autônomo/Sócio">Aut</option>
+              <option value="Funcionario Publico">Func</option>
+            </select>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const handleToggleForceLocalMode = (checked: boolean) => {
-    localStorage.setItem('ciclocred_force_local_offline', checked ? 'true' : 'false');
+    localStorage.setItem(
+      "ciclocred_force_local_offline",
+      checked ? "true" : "false",
+    );
     setForceLocalStorageMode(checked);
     if (checked) {
       setIsQuotaExceeded(false); // Hide standard cloud quota warnings since we are operating locally
       disableFirestoreNetwork();
-      addNotification('📁 CRM 100% LOCAL', 'Operando de forma independente no localStorage do navegador para evitar limites diários.', 'success');
+      addNotification(
+        "📁 CRM 100% LOCAL",
+        "Operando de forma independente no localStorage do navegador para evitar limites diários.",
+        "success",
+      );
     } else {
-      localStorage.removeItem('ciclocred_force_local_offline');
-      localStorage.removeItem('firestore_quota_exceeded_status');
+      localStorage.removeItem("ciclocred_force_local_offline");
+      localStorage.removeItem("firestore_quota_exceeded_status");
       (window as any).isFirestoreQuotaExceeded = false;
       setIsQuotaExceeded(false);
-      addNotification('☁️ RECONECTANDO NUVEM', 'Reiniciando a conexão com o Firebase Cloud...', 'info');
+      addNotification(
+        "☁️ RECONECTANDO NUVEM",
+        "Reiniciando a conexão com o Firebase Cloud...",
+        "info",
+      );
       setTimeout(() => {
         window.location.reload();
       }, 1500);
@@ -941,10 +2844,10 @@ export default function App() {
       // Avoid creating mock leads or dispatching fake alerts if there are no registered leads
       return;
     }
-    
+
     // Select a real client lead indeed to create a highly contextual alert/tip
     const randomLead = leads[Math.floor(Math.random() * leads.length)];
-    
+
     const realEvents = [
       {
         title: "🤖 Assistente Preditivo: Oportunidade!",
@@ -952,7 +2855,7 @@ export default function App() {
         type: "ai" as const,
         action: () => {
           awardXP(50);
-        }
+        },
       },
       {
         title: "⚠️ Alerta de Acompanhamento",
@@ -960,7 +2863,7 @@ export default function App() {
         type: "warning" as const,
         action: () => {
           awardXP(30);
-        }
+        },
       },
       {
         title: "💡 Dica de Venda",
@@ -968,8 +2871,8 @@ export default function App() {
         type: "ai" as const,
         action: () => {
           awardXP(40);
-        }
-      }
+        },
+      },
     ];
 
     const idx = Math.floor(Math.random() * realEvents.length);
@@ -984,19 +2887,24 @@ export default function App() {
       const now = new Date();
       // Format today
       const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const day = String(now.getDate()).padStart(2, '0');
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const day = String(now.getDate()).padStart(2, "0");
       const currentDateStr = `${year}-${month}-${day}`;
 
-      const hours = String(now.getHours()).padStart(2, '0');
-      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const hours = String(now.getHours()).padStart(2, "0");
+      const minutes = String(now.getMinutes()).padStart(2, "0");
       const currentTimeStr = `${hours}:${minutes}`;
 
-      setAppointments(prevAppts => {
+      setAppointments((prevAppts) => {
         let hasChanges = false;
-        const updatedAppts = prevAppts.map(appt => {
+        const updatedAppts = prevAppts.map((appt) => {
           // Compare today's dates, matching schedules and warning flag
-          if (appt.status === 'agendado' && appt.date === currentDateStr && appt.time === currentTimeStr && !appt.reminderSent) {
+          if (
+            appt.status === "agendado" &&
+            appt.date === currentDateStr &&
+            appt.time === currentTimeStr &&
+            !appt.reminderSent
+          ) {
             hasChanges = true;
 
             // Trigger alarm block
@@ -1004,14 +2912,16 @@ export default function App() {
               addNotification(
                 `🚨 ALARME: ${appt.title}`,
                 `Compromisso pendente com cliente ${appt.leadName} agora (${appt.time})! Verifique a aba de agendamentos.`,
-                'alarm'
+                "alarm",
               );
               setActiveAlarm({
                 id: appt.id,
                 title: appt.title,
                 leadName: appt.leadName,
                 time: appt.time,
-                description: appt.description || 'Tarefa operacional sem observações extras.'
+                description:
+                  appt.description ||
+                  "Tarefa operacional sem observações extras.",
               });
             }, 80);
 
@@ -1021,7 +2931,10 @@ export default function App() {
         });
 
         if (hasChanges) {
-          localStorage.setItem('ciclocred_crm_appointments', JSON.stringify(updatedAppts));
+          localStorage.setItem(
+            "ciclocred_crm_appointments",
+            JSON.stringify(updatedAppts),
+          );
           return updatedAppts;
         }
         return prevAppts;
@@ -1033,11 +2946,14 @@ export default function App() {
 
   // Setup loop for autonomous periodic CRM intelligence tips - completely disabled to focus strictly on real-time data
   useEffect(() => {
-    localStorage.setItem('ciclocred_autonomy_enabled', 'false');
+    localStorage.setItem("ciclocred_autonomy_enabled", "false");
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('ciclocred_autonomy_interval', String(autonomyIntervalSec));
+    localStorage.setItem(
+      "ciclocred_autonomy_interval",
+      String(autonomyIntervalSec),
+    );
   }, [autonomyIntervalSec]);
 
   useEffect(() => {
@@ -1047,42 +2963,109 @@ export default function App() {
 
   // Persistent storage side-effects
   useEffect(() => {
-    localStorage.setItem('ciclocred_crm_leads', JSON.stringify(leads));
+    localStorage.setItem("ciclocred_crm_leads", JSON.stringify(leads));
   }, [leads]);
 
+  // Automated 24-hour inactivity check (Auto-Archive)
   useEffect(() => {
-    localStorage.setItem('ciclocred_crm_templates', JSON.stringify(templates));
+    const checkInactivity = () => {
+      const now = Date.now();
+      const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+      let changed = false;
+
+      rawSetLeads((prevLeads) => {
+        const nextLeads = prevLeads.map((l) => {
+          // A lead is active or recent if status is "novo" or anything other than archived, lost, discarded, won
+          const isActiveOrRecent =
+            l.status === "novo" ||
+            (l.status !== "arquivado" &&
+              l.status !== "perdido" &&
+              l.status !== "lead_descartado" &&
+              l.status !== "descartado" &&
+              l.status !== "ganhou");
+
+          if (isActiveOrRecent) {
+            const lastInteractionStr = l.lastInteractionAt || l.createdAt;
+            const lastInteractionTime = new Date(lastInteractionStr).getTime();
+
+            if (now - lastInteractionTime > twentyFourHoursMs) {
+              changed = true;
+              return {
+                ...l,
+                status: "arquivado",
+                lastInteractionAt: new Date().toISOString(),
+              };
+            }
+          }
+          return l;
+        });
+
+        if (changed) {
+          isLocalLeadsChangeRef.current = true;
+          setTimeout(() => {
+            addNotification(
+              "Leads Arquivados",
+              "Alguns contatos sem interações por mais de 24h foram movidos para Arquivados automaticamente.",
+              "warning",
+            );
+          }, 100);
+          return nextLeads;
+        }
+        return prevLeads;
+      });
+    };
+
+    // Run on boot (after a short delay), then every 60 seconds
+    const interval = setInterval(checkInactivity, 60000);
+    const timeout = setTimeout(checkInactivity, 5000);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [addNotification]);
+
+  useEffect(() => {
+    localStorage.setItem("ciclocred_crm_templates", JSON.stringify(templates));
   }, [templates]);
 
   useEffect(() => {
-    localStorage.setItem('ciclocred_crm_logs', JSON.stringify(emailLogs));
+    localStorage.setItem("ciclocred_crm_logs", JSON.stringify(emailLogs));
   }, [emailLogs]);
 
   useEffect(() => {
-    localStorage.setItem('ciclocred_crm_appointments', JSON.stringify(appointments));
+    localStorage.setItem(
+      "ciclocred_crm_appointments",
+      JSON.stringify(appointments),
+    );
   }, [appointments]);
 
   useEffect(() => {
-    localStorage.setItem('ciclocred_crm_inventory', JSON.stringify(inventory));
+    localStorage.setItem("ciclocred_crm_inventory", JSON.stringify(inventory));
   }, [inventory]);
 
   useEffect(() => {
-    localStorage.setItem('ciclocred_crm_properties', JSON.stringify(properties));
+    localStorage.setItem(
+      "ciclocred_crm_properties",
+      JSON.stringify(properties),
+    );
   }, [properties]);
 
-  useEffect(() => {
-    localStorage.setItem('ciclocred_crm_followups', JSON.stringify(followUps));
-  }, [followUps]);
 
   // Hybrid Workspace Real-time background replication backplane
   useEffect(() => {
     // Wait until db is loaded initially to avoid syncing before hydration
-    const isAutosync = localStorage.getItem('ciclocred_sheets_autosync_enabled') === 'true';
+    const isAutosync =
+      localStorage.getItem("ciclocred_sheets_autosync_enabled") === "true";
     if (!isAutosync) return;
 
     const timer = setTimeout(() => {
-      autoSyncWorkspaceDatabase(leads, appointments, emailLogs)
-        .catch(err => console.warn("Background auto sync to Google Workspace failed silently:", err));
+      autoSyncWorkspaceDatabase(leads, appointments, emailLogs).catch((err) =>
+        console.warn(
+          "Background auto sync to Google Workspace failed silently:",
+          err,
+        ),
+      );
     }, 4500); // 4.5s debounce to keep REST requests healthy and non-blocking
 
     return () => clearTimeout(timer);
@@ -1090,44 +3073,106 @@ export default function App() {
 
   // One-time startup sweep to zero the lead list and fulfill user intent safely (offline/local mode)
   useEffect(() => {
-    const hasWiped = localStorage.getItem('ciclocred_leads_wiped_zero_v3') === 'true';
+    const hasWiped =
+      localStorage.getItem("ciclocred_leads_wiped_zero_v3") === "true";
     if (!hasWiped) {
-      localStorage.removeItem('ciclocred_crm_leads');
+      localStorage.removeItem("ciclocred_crm_leads");
       setLeads([]);
       lastLeadsIdsRef.current = [];
       if (!auth.currentUser) {
-        localStorage.setItem('ciclocred_leads_wiped_zero_v3', 'true');
+        localStorage.setItem("ciclocred_leads_wiped_zero_v3", "true");
       }
     }
   }, []);
 
   // ONE-TIME BOOTSTRAP TO GALAXY CHASSIS - 100% REAL AND ZEROED gamification
   useEffect(() => {
-    const hasGalaxyReset = localStorage.getItem('ciclocred_galaxy_force_reset_v4') === 'true';
+    const hasGalaxyReset =
+      localStorage.getItem("ciclocred_galaxy_force_reset_v4") === "true";
     if (!hasGalaxyReset) {
       setUserXP(0);
       setUserLevel(1);
-      
+
       const resetGoals = [
-        { id: 'goal-1', title: 'Carregar 5 Novos Leads na Carteira', targetCount: 5, currentCount: 0, xpReward: 350, frequency: 'diaria', category: 'prospecção', completed: false },
-        { id: 'goal-2', title: 'Agendar 3 Visitas Imobiliárias', targetCount: 3, currentCount: 0, xpReward: 500, frequency: 'semanal', category: 'visita', completed: false },
-        { id: 'goal-3', title: 'Disparar 10 Modelos de Email Automatizados', targetCount: 10, currentCount: 0, xpReward: 250, frequency: 'diaria', category: 'email', completed: false },
-        { id: 'goal-4', title: 'Fechar Proposta Comercial de Crédito', targetCount: 1, currentCount: 0, xpReward: 1200, frequency: 'mensal', category: 'venda', completed: false }
+        {
+          id: "goal-1",
+          title: "Carregar 5 Novos Leads na Carteira",
+          targetCount: 5,
+          currentCount: 0,
+          xpReward: 350,
+          frequency: "diaria",
+          category: "prospecção",
+          completed: false,
+        },
+        {
+          id: "goal-2",
+          title: "Agendar 3 Visitas Imobiliárias",
+          targetCount: 3,
+          currentCount: 0,
+          xpReward: 500,
+          frequency: "semanal",
+          category: "visita",
+          completed: false,
+        },
+        {
+          id: "goal-3",
+          title: "Disparar 10 Modelos de Email Automatizados",
+          targetCount: 10,
+          currentCount: 0,
+          xpReward: 250,
+          frequency: "diaria",
+          category: "email",
+          completed: false,
+        },
+        {
+          id: "goal-4",
+          title: "Fechar Proposta Comercial de Crédito",
+          targetCount: 1,
+          currentCount: 0,
+          xpReward: 1200,
+          frequency: "mensal",
+          category: "venda",
+          completed: false,
+        },
       ];
       const resetProjects = [
-        { id: 'proj-1', name: 'Expansão de Lotes Urbanos Virgem', description: 'Metodologia ativa recomendando ofertas exclusivas de terrenos planos da CicloCred.', status: 'ativo', progress: 0, xpReward: 1500, assignedToGoalId: 'goal-2' },
-        { id: 'proj-2', name: 'Automação Massiva de Whatsapp', description: 'Enviar scripts de copywriting para leads frios contidos nas planilhas integradas.', status: 'em_planejamento', progress: 0, xpReward: 900, assignedToGoalId: 'goal-3' }
+        {
+          id: "proj-1",
+          name: "Expansão de Lotes Urbanos Virgem",
+          description:
+            "Metodologia ativa recomendando ofertas exclusivas de terrenos planos da cicloCRED.",
+          status: "ativo",
+          progress: 0,
+          xpReward: 1500,
+          assignedToGoalId: "goal-2",
+        },
+        {
+          id: "proj-2",
+          name: "Automação Massiva de Whatsapp",
+          description:
+            "Enviar scripts de copywriting para leads frios contidos nas planilhas integradas.",
+          status: "em_planejamento",
+          progress: 0,
+          xpReward: 900,
+          assignedToGoalId: "goal-3",
+        },
       ];
-      
+
       setGamificationGoals(resetGoals);
       setGamificationProjects(resetProjects);
-      
-      localStorage.setItem('ciclocred_user_xp', '0');
-      localStorage.setItem('ciclocred_user_level', '1');
-      localStorage.setItem('ciclocred_gamification_goals', JSON.stringify(resetGoals));
-      localStorage.setItem('ciclocred_gamification_projects', JSON.stringify(resetProjects));
-      localStorage.setItem('ciclocred_autonomy_enabled', 'false');
-      localStorage.setItem('ciclocred_galaxy_force_reset_v4', 'true');
+
+      localStorage.setItem("ciclocred_user_xp", "0");
+      localStorage.setItem("ciclocred_user_level", "1");
+      localStorage.setItem(
+        "ciclocred_gamification_goals",
+        JSON.stringify(resetGoals),
+      );
+      localStorage.setItem(
+        "ciclocred_gamification_projects",
+        JSON.stringify(resetProjects),
+      );
+      localStorage.setItem("ciclocred_autonomy_enabled", "false");
+      localStorage.setItem("ciclocred_galaxy_force_reset_v4", "true");
     }
   }, []);
 
@@ -1136,16 +3181,25 @@ export default function App() {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (user) {
         setIsAuthenticated(true);
-        setUserName(user.displayName || user.email?.split('@')[0].toUpperCase() || 'Operador CicloCred');
-        setUserEmail(user.email || 'operador@ciclocred.com');
+        setUserName(
+          user.displayName ||
+            user.email?.split("@")[0].toUpperCase() ||
+            "Operador cicloCRED",
+        );
+        setUserEmail(user.email || "operador@sistema.com.br");
         setIsSyncing(true);
 
-        const forcedOffline = localStorage.getItem('ciclocred_force_local_offline') === 'true';
-        const quotaExceededLogged = localStorage.getItem('firestore_quota_exceeded_status') === 'true';
-        let rawQuotaExceeded = quotaExceededLogged || !!(window as any).isFirestoreQuotaExceeded;
+        const forcedOffline =
+          localStorage.getItem("ciclocred_force_local_offline") === "true";
+        const quotaExceededLogged =
+          localStorage.getItem("firestore_quota_exceeded_status") === "true";
+        let rawQuotaExceeded =
+          quotaExceededLogged || !!(window as any).isFirestoreQuotaExceeded;
 
         if (forcedOffline) {
-          console.log("CRM: Operando em modo 100% Local (escolha do operador).");
+          console.log(
+            "CRM: Operando em modo 100% Local (escolha do operador).",
+          );
           setIsQuotaExceeded(false);
           setIsDbHydrated(true);
           setIsSyncing(false);
@@ -1156,27 +3210,38 @@ export default function App() {
           try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 1800);
-            const res = await fetch('/api/server/status', { signal: controller.signal });
+            const res = await fetch("/api/server/status", {
+              signal: controller.signal,
+            });
             clearTimeout(timeoutId);
             if (res.ok) {
               const status = await res.json();
               if (status.isQuotaExceeded) {
-                console.warn("Server reported Firestore quota is exceeded during hydration check.");
+                console.warn(
+                  "Server reported Firestore quota is exceeded during hydration check.",
+                );
                 rawQuotaExceeded = true;
-                localStorage.setItem('firestore_quota_exceeded_status', 'true');
+                localStorage.setItem("firestore_quota_exceeded_status", "true");
                 (window as any).isFirestoreQuotaExceeded = true;
                 try {
-                  window.dispatchEvent(new CustomEvent('firestore-quota-exceeded'));
+                  window.dispatchEvent(
+                    new CustomEvent("firestore-quota-exceeded"),
+                  );
                 } catch (_) {}
               }
             }
           } catch (fetchErr) {
-            console.warn("Could not retrieve server status within timeout:", fetchErr);
+            console.warn(
+              "Could not retrieve server status within timeout:",
+              fetchErr,
+            );
           }
         }
 
         if (rawQuotaExceeded) {
-          console.warn("Quota exceeded or Offline local-only mode detected. Hydrating instantly from localStorage.");
+          console.warn(
+            "Quota exceeded or Offline local-only mode detected. Hydrating instantly from localStorage.",
+          );
           setIsQuotaExceeded(true);
           setIsDbHydrated(true);
           setIsSyncing(false);
@@ -1185,20 +3250,32 @@ export default function App() {
 
         try {
           // Check for one-time wipe to clear the 147 dummy/fictitious leads
-          const hasWiped = localStorage.getItem('ciclocred_leads_wiped_zero_v3') === 'true';
+          const hasWiped =
+            localStorage.getItem("ciclocred_leads_wiped_zero_v3") === "true";
           if (!hasWiped) {
-            if ((window as any).isFirestoreQuotaExceeded || localStorage.getItem('firestore_quota_exceeded_status') === 'true') {
-              throw new Error("resource-exhausted: Quota exceeded during wipe processing");
+            if (
+              (window as any).isFirestoreQuotaExceeded ||
+              localStorage.getItem("firestore_quota_exceeded_status") === "true"
+            ) {
+              throw new Error(
+                "resource-exhausted: Quota exceeded during wipe processing",
+              );
             }
-            const leadsSnapshot = await getDocs(collection(db, 'leads'));
+            const leadsSnapshot = await getDocs(collection(db, "leads"));
             for (const docSnap of leadsSnapshot.docs) {
-              if ((window as any).isFirestoreQuotaExceeded || localStorage.getItem('firestore_quota_exceeded_status') === 'true') {
-                throw new Error("resource-exhausted: Quota exceeded during deletion activity");
+              if (
+                (window as any).isFirestoreQuotaExceeded ||
+                localStorage.getItem("firestore_quota_exceeded_status") ===
+                  "true"
+              ) {
+                throw new Error(
+                  "resource-exhausted: Quota exceeded during deletion activity",
+                );
               }
-              await deleteDoc(doc(db, 'leads', docSnap.id));
+              await deleteDoc(doc(db, "leads", docSnap.id));
             }
-            localStorage.setItem('ciclocred_crm_leads', JSON.stringify([]));
-            localStorage.setItem('ciclocred_leads_wiped_zero_v3', 'true');
+            localStorage.setItem("ciclocred_crm_leads", JSON.stringify([]));
+            localStorage.setItem("ciclocred_leads_wiped_zero_v3", "true");
             setLeads([]);
             lastLeadsIdsRef.current = [];
           }
@@ -1207,71 +3284,113 @@ export default function App() {
             colName: string,
             initialSeed: T[],
             setter: React.Dispatch<React.SetStateAction<T[]>>,
-            idRef: React.MutableRefObject<string[]>
+            idRef: React.MutableRefObject<string[]>,
           ) => {
-            if ((window as any).isFirestoreQuotaExceeded || localStorage.getItem('firestore_quota_exceeded_status') === 'true') {
-              throw new Error(`resource-exhausted: Quota exceeded before query of ${colName}`);
+            if (
+              (window as any).isFirestoreQuotaExceeded ||
+              localStorage.getItem("firestore_quota_exceeded_status") === "true"
+            ) {
+              throw new Error(
+                `resource-exhausted: Quota exceeded before query of ${colName}`,
+              );
             }
             const querySnapshot = await getDocs(collection(db, colName));
             if (querySnapshot.empty) {
-              const cleanSeed = colName === 'appointments' 
-                ? initialSeed.map(item => sanitizeAppointmentRecord(item) as unknown as T)
-                : initialSeed;
-              for (const item of cleanSeed) {
-                if ((window as any).isFirestoreQuotaExceeded || localStorage.getItem('firestore_quota_exceeded_status') === 'true') {
-                  throw new Error(`resource-exhausted: Quota exceeded during seed write of ${colName}`);
-                }
-                await setDoc(doc(db, colName, item.id), item);
-              }
-              const seen = new Set<string>();
-              const uniqueSeed = cleanSeed.filter(item => {
-                const idStr = String(item.id || '');
-                if (!idStr || seen.has(idStr)) return false;
-                seen.add(idStr);
-                return true;
-              });
-              setter(uniqueSeed);
-              idRef.current = uniqueSeed.map(i => i.id);
+              // No automatic seeding of mock records as requested. Keep collections empty until manually added or imported.
+              setter([]);
+              idRef.current = [];
+              return;
             } else {
+              if (auth.currentUser) {
+                localStorage.setItem(`ciclocred_seeded_${colName}`, "true");
+                try {
+                  await setDoc(
+                    doc(db, "system", `seed_${colName}`),
+                    { seeded: true },
+                    { merge: true },
+                  );
+                } catch (e) {}
+              }
               const loaded: T[] = [];
               querySnapshot.forEach((docSnap) => {
                 let data = docSnap.data();
-                if (colName === 'appointments') {
+                if (colName === "appointments") {
                   data = sanitizeAppointmentRecord(data);
                 }
                 loaded.push(data as T);
               });
               const seen = new Set<string>();
-              const uniqueLoaded = loaded.filter(item => {
-                const idStr = String(item.id || '');
+              const uniqueLoaded = loaded.filter((item) => {
+                const idStr = String(item.id || "");
                 if (!idStr || seen.has(idStr)) return false;
                 seen.add(idStr);
                 return true;
               });
               setter(uniqueLoaded);
-              idRef.current = uniqueLoaded.map(i => i.id);
+              idRef.current = uniqueLoaded.map((i) => i.id);
             }
           };
 
-          await loadOrSeedCollection('leads', leads, rawSetLeads, lastLeadsIdsRef);
-          await loadOrSeedCollection('templates', templates, rawSetTemplates, lastTemplatesIdsRef);
-          await loadOrSeedCollection('emailLogs', emailLogs, rawSetEmailLogs, lastLogsIdsRef);
-          await loadOrSeedCollection('appointments', appointments, rawSetAppointments, lastApptsIdsRef);
-          await loadOrSeedCollection('inventory', inventory, rawSetInventory, lastInventoryIdsRef);
-          await loadOrSeedCollection('properties', properties, rawSetProperties, lastPropertiesIdsRef);
-          await loadOrSeedCollection('gamificationGoals', gamificationGoals, rawSetGamificationGoals, lastGoalsIdsRef);
-          await loadOrSeedCollection('gamificationProjects', gamificationProjects, rawSetGamificationProjects, lastProjectsIdsRef);
-          await loadOrSeedCollection('followups', followUps, rawSetFollowUps, lastFollowupsIdsRef);
+          await loadOrSeedCollection(
+            "leads",
+            leads,
+            rawSetLeads,
+            lastLeadsIdsRef,
+          );
+          await loadOrSeedCollection(
+            "templates",
+            templates,
+            rawSetTemplates,
+            lastTemplatesIdsRef,
+          );
+          await loadOrSeedCollection(
+            "emailLogs",
+            emailLogs,
+            rawSetEmailLogs,
+            lastLogsIdsRef,
+          );
+          await loadOrSeedCollection(
+            "appointments",
+            appointments,
+            rawSetAppointments,
+            lastApptsIdsRef,
+          );
+          await loadOrSeedCollection(
+            "inventory",
+            inventory,
+            rawSetInventory,
+            lastInventoryIdsRef,
+          );
+          await loadOrSeedCollection(
+            "properties",
+            properties,
+            rawSetProperties,
+            lastPropertiesIdsRef,
+          );
+          await loadOrSeedCollection(
+            "gamificationGoals",
+            gamificationGoals,
+            rawSetGamificationGoals,
+            lastGoalsIdsRef,
+          );
+          await loadOrSeedCollection(
+            "gamificationProjects",
+            gamificationProjects,
+            rawSetGamificationProjects,
+            lastProjectsIdsRef,
+          );
 
           // Load or Seed userProfile
           try {
-            const profileRef = doc(db, 'userProfiles', user.uid);
+            const profileRef = doc(db, "userProfiles", user.uid);
             const profileSnap = await getDoc(profileRef);
             if (profileSnap.exists()) {
               const data = profileSnap.data();
               const firestoreUpdatedAt = data.updatedAt || 0;
-              const localUpdatedAt = Number(localStorage.getItem('ciclocred_profile_updated_at') || '0');
-              
+              const localUpdatedAt = Number(
+                localStorage.getItem("ciclocred_profile_updated_at") || "0",
+              );
+
               if (firestoreUpdatedAt >= localUpdatedAt) {
                 console.log("CRM: Carregando perfil mais recente do Firestore");
                 isLocalProfileChangeRef.current = false;
@@ -1280,20 +3399,28 @@ export default function App() {
                 if (data.creciNumber) setCreciNumber(data.creciNumber);
                 if (data.userRole) setUserRole(data.userRole);
                 if (data.agencyName) setAgencyName(data.agencyName);
-                if (data.subscriptionPlan) setSubscriptionPlan(data.subscriptionPlan);
+                if (data.subscriptionPlan)
+                  setSubscriptionPlan(data.subscriptionPlan);
                 if (data.theme) setTheme(data.theme);
                 if (data.galaxyPreset) setGalaxyPreset(data.galaxyPreset);
                 if (data.userXP !== undefined) setUserXP(data.userXP);
                 if (data.userLevel !== undefined) setUserLevel(data.userLevel);
                 if (data.accSettings) setAccSettings(data.accSettings);
                 if (data.notifications) setNotifications(data.notifications);
-                localStorage.setItem('ciclocred_profile_updated_at', String(firestoreUpdatedAt));
+                localStorage.setItem(
+                  "ciclocred_profile_updated_at",
+                  String(firestoreUpdatedAt),
+                );
               } else {
-                console.log("CRM: Perfil local é mais recente. Irá sincronizar para o Firestore");
+                console.log(
+                  "CRM: Perfil local é mais recente. Irá sincronizar para o Firestore",
+                );
                 isLocalProfileChangeRef.current = true;
               }
             } else {
-              console.log("CRM: Criando perfil inicial no Firestore com os dados locais");
+              console.log(
+                "CRM: Criando perfil inicial no Firestore com os dados locais",
+              );
               isLocalProfileChangeRef.current = true;
             }
           } catch (profileErr) {
@@ -1304,23 +3431,25 @@ export default function App() {
         } catch (err: any) {
           console.error("Hydration fault: ", err);
           const errMsg = err?.message || String(err);
-          const errCode = err?.code || '';
-          
-          const isQuota = 
-            errCode === 'resource-exhausted' ||
-            errMsg.toLowerCase().includes('quota') || 
-            errMsg.toLowerCase().includes('exhausted') || 
-            errMsg.toLowerCase().includes('resource-exhausted');
+          const errCode = err?.code || "";
+
+          const isQuota =
+            errCode === "resource-exhausted" ||
+            errMsg.toLowerCase().includes("quota") ||
+            errMsg.toLowerCase().includes("exhausted") ||
+            errMsg.toLowerCase().includes("resource-exhausted");
 
           if (isQuota) {
-            localStorage.setItem('firestore_quota_exceeded_status', 'true');
+            localStorage.setItem("firestore_quota_exceeded_status", "true");
             (window as any).isFirestoreQuotaExceeded = true;
             try {
-              window.dispatchEvent(new CustomEvent('firestore-quota-exceeded'));
+              window.dispatchEvent(new CustomEvent("firestore-quota-exceeded"));
             } catch (_) {}
             setIsQuotaExceeded(true);
           } else {
-            console.warn("CRM: Outra falha de conexão/CORS de sandbox detectada. Operando em modo seguro local.");
+            console.warn(
+              "CRM: Outra falha de conexão/CORS de sandbox detectada. Operando em modo seguro local.",
+            );
           }
           setIsDbHydrated(true); // CRITICAL: Always hydrate so the CRM interface initializes with localStorage fallback states!
         } finally {
@@ -1337,171 +3466,207 @@ export default function App() {
 
   // Active Firestore Live synchronization for all CRM data matrices
   useEffect(() => {
-    if (!isDbHydrated || !auth.currentUser || isQuotaExceeded) return;
-    const unsubscribeLeads = onSnapshot(collection(db, 'leads'), (snapshot) => {
-      if (isLocalLeadsChangeRef.current) return;
-      const loaded: Lead[] = [];
-      snapshot.forEach((docSnap) => {
-        loaded.push(docSnap.data() as Lead);
-      });
-      loaded.sort((a, b) => {
-        const timeA = new Date(a.createdAt || 0).getTime();
-        const timeB = new Date(b.createdAt || 0).getTime();
-        return timeB - timeA;
-      });
-      
-      localStorage.setItem('ciclocred_crm_leads', JSON.stringify(loaded));
-      rawSetLeads(loaded);
-      lastLeadsIdsRef.current = loaded.map(l => l.id);
-    }, (err) => {
-      const errMsg = err?.message || String(err);
-      if (errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('exhausted') || errMsg.toLowerCase().includes('resource-exhausted')) {
-        setIsQuotaExceeded(true);
-      } else {
-        handleFirestoreError(err, OperationType.GET, 'leads');
-      }
-    });
+    if (
+      !isDbHydrated ||
+      !auth.currentUser ||
+      isQuotaExceeded ||
+      forceLocalStorageMode
+    )
+      return;
+    const unsubscribeLeads = onSnapshot(
+      collection(db, "leads"),
+      (snapshot) => {
+        if (isLocalLeadsChangeRef.current) return;
+        const loaded: Lead[] = [];
+        snapshot.forEach((docSnap) => {
+          loaded.push(docSnap.data() as Lead);
+        });
+        loaded.sort((a, b) => {
+          const timeA = new Date(a.createdAt || 0).getTime();
+          const timeB = new Date(b.createdAt || 0).getTime();
+          return timeB - timeA;
+        });
 
-    const unsubscribeFollowups = onSnapshot(collection(db, 'followups'), (snapshot) => {
-      if (isLocalFollowUpsChangeRef.current) return;
-      const loaded: FollowUpUpdate[] = [];
-      snapshot.forEach((docSnap) => {
-        loaded.push(docSnap.data() as FollowUpUpdate);
-      });
-      loaded.sort((a, b) => {
-        const valA = `${a.date || ''} ${a.time || ''}`;
-        const valB = `${b.date || ''} ${b.time || ''}`;
-        return valB.localeCompare(valA);
-      });
-      
-      localStorage.setItem('ciclocred_crm_followups', JSON.stringify(loaded));
-      rawSetFollowUps(loaded);
-      lastFollowupsIdsRef.current = loaded.map(f => f.id);
-    }, (err) => {
-      const errMsg = err?.message || String(err);
-      if (errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('exhausted') || errMsg.toLowerCase().includes('resource-exhausted')) {
-        setIsQuotaExceeded(true);
-      } else {
-        handleFirestoreError(err, OperationType.GET, 'followups');
-      }
-    });
+        localStorage.setItem("ciclocred_crm_leads", JSON.stringify(loaded));
+        rawSetLeads(loaded);
+        lastLeadsIdsRef.current = loaded.map((l) => l.id);
+      },
+      (err) => {
+        const errMsg = err?.message || String(err);
+        if (
+          errMsg.toLowerCase().includes("quota") ||
+          errMsg.toLowerCase().includes("exhausted") ||
+          errMsg.toLowerCase().includes("resource-exhausted")
+        ) {
+          setIsQuotaExceeded(true);
+        } else {
+          handleFirestoreError(err, OperationType.GET, "leads");
+        }
+      },
+    );
 
-    const unsubscribeAppointments = onSnapshot(collection(db, 'appointments'), (snapshot) => {
-      if (isLocalApptsChangeRef.current) return;
-      const loaded: Appointment[] = [];
-      snapshot.forEach((docSnap) => {
-        loaded.push(sanitizeAppointmentRecord(docSnap.data()));
-      });
-      localStorage.setItem('ciclocred_crm_appointments', JSON.stringify(loaded));
-      rawSetAppointments(loaded);
-      lastApptsIdsRef.current = loaded.map(a => a.id);
-    }, (err) => {
-      console.warn("Appointments live listener failed:", err);
-    });
+    const unsubscribeAppointments = onSnapshot(
+      collection(db, "appointments"),
+      (snapshot) => {
+        if (isLocalApptsChangeRef.current) return;
+        const loaded: Appointment[] = [];
+        snapshot.forEach((docSnap) => {
+          loaded.push(sanitizeAppointmentRecord(docSnap.data()));
+        });
+        localStorage.setItem(
+          "ciclocred_crm_appointments",
+          JSON.stringify(loaded),
+        );
+        rawSetAppointments(loaded);
+        lastApptsIdsRef.current = loaded.map((a) => a.id);
+      },
+      (err) => {
+        console.warn("Appointments live listener failed:", err);
+      },
+    );
 
-    const unsubscribeTemplates = onSnapshot(collection(db, 'templates'), (snapshot) => {
-      if (isLocalTemplatesChangeRef.current) return;
-      const loaded: EmailTemplate[] = [];
-      snapshot.forEach((docSnap) => {
-        loaded.push(docSnap.data() as EmailTemplate);
-      });
-      localStorage.setItem('ciclocred_crm_templates', JSON.stringify(loaded));
-      rawSetTemplates(loaded);
-      lastTemplatesIdsRef.current = loaded.map(t => t.id);
-    }, (err) => {
-      console.warn("Templates live listener failed:", err);
-    });
+    const unsubscribeTemplates = onSnapshot(
+      collection(db, "templates"),
+      (snapshot) => {
+        if (isLocalTemplatesChangeRef.current) return;
+        const loaded: EmailTemplate[] = [];
+        snapshot.forEach((docSnap) => {
+          loaded.push(docSnap.data() as EmailTemplate);
+        });
+        localStorage.setItem("ciclocred_crm_templates", JSON.stringify(loaded));
+        rawSetTemplates(loaded);
+        lastTemplatesIdsRef.current = loaded.map((t) => t.id);
+      },
+      (err) => {
+        console.warn("Templates live listener failed:", err);
+      },
+    );
 
-    const unsubscribeEmailLogs = onSnapshot(collection(db, 'emailLogs'), (snapshot) => {
-      if (isLocalEmailLogsChangeRef.current) return;
-      const loaded: EmailLog[] = [];
-      snapshot.forEach((docSnap) => {
-        loaded.push(docSnap.data() as EmailLog);
-      });
-      localStorage.setItem('ciclocred_crm_logs', JSON.stringify(loaded));
-      rawSetEmailLogs(loaded);
-      lastLogsIdsRef.current = loaded.map(l => l.id);
-    }, (err) => {
-      console.warn("EmailLogs live listener failed:", err);
-    });
+    const unsubscribeEmailLogs = onSnapshot(
+      collection(db, "emailLogs"),
+      (snapshot) => {
+        if (isLocalEmailLogsChangeRef.current) return;
+        const loaded: EmailLog[] = [];
+        snapshot.forEach((docSnap) => {
+          loaded.push(docSnap.data() as EmailLog);
+        });
+        localStorage.setItem("ciclocred_crm_logs", JSON.stringify(loaded));
+        rawSetEmailLogs(loaded);
+        lastLogsIdsRef.current = loaded.map((l) => l.id);
+      },
+      (err) => {
+        console.warn("EmailLogs live listener failed:", err);
+      },
+    );
 
-    const unsubscribeInventory = onSnapshot(collection(db, 'inventory'), (snapshot) => {
-      if (isLocalInventoryChangeRef.current) return;
-      const loaded: InventoryItem[] = [];
-      snapshot.forEach((docSnap) => {
-        loaded.push(docSnap.data() as InventoryItem);
-      });
-      localStorage.setItem('ciclocred_crm_inventory', JSON.stringify(loaded));
-      rawSetInventory(loaded);
-      lastInventoryIdsRef.current = loaded.map(i => i.id);
-    }, (err) => {
-      console.warn("Inventory live listener failed:", err);
-    });
+    const unsubscribeInventory = onSnapshot(
+      collection(db, "inventory"),
+      (snapshot) => {
+        if (isLocalInventoryChangeRef.current) return;
+        const loaded: InventoryItem[] = [];
+        snapshot.forEach((docSnap) => {
+          loaded.push(docSnap.data() as InventoryItem);
+        });
+        localStorage.setItem("ciclocred_crm_inventory", JSON.stringify(loaded));
+        rawSetInventory(loaded);
+        lastInventoryIdsRef.current = loaded.map((i) => i.id);
+      },
+      (err) => {
+        console.warn("Inventory live listener failed:", err);
+      },
+    );
 
-    const unsubscribeProperties = onSnapshot(collection(db, 'properties'), (snapshot) => {
-      if (isLocalPropertiesChangeRef.current) return;
-      const loaded: RealEstateProperty[] = [];
-      snapshot.forEach((docSnap) => {
-        loaded.push(docSnap.data() as RealEstateProperty);
-      });
-      localStorage.setItem('ciclocred_crm_properties', JSON.stringify(loaded));
-      rawSetProperties(loaded);
-      lastPropertiesIdsRef.current = loaded.map(p => p.id);
-    }, (err) => {
-      console.warn("Properties live listener failed:", err);
-    });
+    const unsubscribeProperties = onSnapshot(
+      collection(db, "properties"),
+      (snapshot) => {
+        if (isLocalPropertiesChangeRef.current) return;
+        const loaded: RealEstateProperty[] = [];
+        snapshot.forEach((docSnap) => {
+          loaded.push(docSnap.data() as RealEstateProperty);
+        });
+        localStorage.setItem(
+          "ciclocred_crm_properties",
+          JSON.stringify(loaded),
+        );
+        rawSetProperties(loaded);
+        lastPropertiesIdsRef.current = loaded.map((p) => p.id);
+      },
+      (err) => {
+        console.warn("Properties live listener failed:", err);
+      },
+    );
 
-    const unsubscribeGoals = onSnapshot(collection(db, 'gamificationGoals'), (snapshot) => {
-      if (isLocalGoalsChangeRef.current) return;
-      const loaded: Goal[] = [];
-      snapshot.forEach((docSnap) => {
-        loaded.push(docSnap.data() as Goal);
-      });
-      localStorage.setItem('ciclocred_gamification_goals', JSON.stringify(loaded));
-      rawSetGamificationGoals(loaded);
-      lastGoalsIdsRef.current = loaded.map(g => g.id);
-    }, (err) => {
-      console.warn("Goals live listener failed:", err);
-    });
+    const unsubscribeGoals = onSnapshot(
+      collection(db, "gamificationGoals"),
+      (snapshot) => {
+        if (isLocalGoalsChangeRef.current) return;
+        const loaded: Goal[] = [];
+        snapshot.forEach((docSnap) => {
+          loaded.push(docSnap.data() as Goal);
+        });
+        localStorage.setItem(
+          "ciclocred_gamification_goals",
+          JSON.stringify(loaded),
+        );
+        rawSetGamificationGoals(loaded);
+        lastGoalsIdsRef.current = loaded.map((g) => g.id);
+      },
+      (err) => {
+        console.warn("Goals live listener failed:", err);
+      },
+    );
 
-    const unsubscribeProjects = onSnapshot(collection(db, 'gamificationProjects'), (snapshot) => {
-      if (isLocalProjectsChangeRef.current) return;
-      const loaded: Project[] = [];
-      snapshot.forEach((docSnap) => {
-        loaded.push(docSnap.data() as Project);
-      });
-      localStorage.setItem('ciclocred_gamification_projects', JSON.stringify(loaded));
-      rawSetGamificationProjects(loaded);
-      lastProjectsIdsRef.current = loaded.map(p => p.id);
-    }, (err) => {
-      console.warn("Projects live listener failed:", err);
-    });
+    const unsubscribeProjects = onSnapshot(
+      collection(db, "gamificationProjects"),
+      (snapshot) => {
+        if (isLocalProjectsChangeRef.current) return;
+        const loaded: Project[] = [];
+        snapshot.forEach((docSnap) => {
+          loaded.push(docSnap.data() as Project);
+        });
+        localStorage.setItem(
+          "ciclocred_gamification_projects",
+          JSON.stringify(loaded),
+        );
+        rawSetGamificationProjects(loaded);
+        lastProjectsIdsRef.current = loaded.map((p) => p.id);
+      },
+      (err) => {
+        console.warn("Projects live listener failed:", err);
+      },
+    );
 
-    const unsubscribeProfile = onSnapshot(doc(db, 'userProfiles', auth.currentUser.uid), (docSnap) => {
-      if (isLocalProfileChangeRef.current) return;
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data.userName) setUserName(data.userName);
-        if (data.userEmail) setUserEmail(data.userEmail);
-        if (data.creciNumber) setCreciNumber(data.creciNumber);
-        if (data.userRole) setUserRole(data.userRole);
-        if (data.agencyName) setAgencyName(data.agencyName);
-        if (data.subscriptionPlan) setSubscriptionPlan(data.subscriptionPlan);
-        if (data.theme) setTheme(data.theme);
-        if (data.galaxyPreset) setGalaxyPreset(data.galaxyPreset);
-        if (data.userXP !== undefined) setUserXP(data.userXP);
-        if (data.userLevel !== undefined) setUserLevel(data.userLevel);
-        if (data.accSettings) setAccSettings(data.accSettings);
-        if (data.notifications) setNotifications(data.notifications);
-        localStorage.setItem('ciclocred_profile_updated_at', String(data.updatedAt || Date.now()));
-      }
-    }, (err) => {
-      console.warn("UserProfile snapshot error:", err);
-    });
+    const unsubscribeProfile = onSnapshot(
+      doc(db, "userProfiles", auth.currentUser.uid),
+      (docSnap) => {
+        if (isLocalProfileChangeRef.current) return;
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data.userName) setUserName(data.userName);
+          if (data.userEmail) setUserEmail(data.userEmail);
+          if (data.creciNumber) setCreciNumber(data.creciNumber);
+          if (data.userRole) setUserRole(data.userRole);
+          if (data.agencyName) setAgencyName(data.agencyName);
+          if (data.subscriptionPlan) setSubscriptionPlan(data.subscriptionPlan);
+          if (data.theme) setTheme(data.theme);
+          if (data.galaxyPreset) setGalaxyPreset(data.galaxyPreset);
+          if (data.userXP !== undefined) setUserXP(data.userXP);
+          if (data.userLevel !== undefined) setUserLevel(data.userLevel);
+          if (data.accSettings) setAccSettings(data.accSettings);
+          if (data.notifications) setNotifications(data.notifications);
+          localStorage.setItem(
+            "ciclocred_profile_updated_at",
+            String(data.updatedAt || Date.now()),
+          );
+        }
+      },
+      (err) => {
+        console.warn("UserProfile snapshot error:", err);
+      },
+    );
 
     return () => {
       unsubscribeLeads();
-      unsubscribeFollowups();
       unsubscribeAppointments();
       unsubscribeTemplates();
       unsubscribeEmailLogs();
@@ -1511,232 +3676,311 @@ export default function App() {
       unsubscribeProjects();
       unsubscribeProfile();
     };
-  }, [isDbHydrated, isQuotaExceeded]);
+  }, [isDbHydrated, isQuotaExceeded, forceLocalStorageMode]);
 
   // Leads Sync
   useEffect(() => {
-    if (!isDbHydrated || !auth.currentUser || isQuotaExceeded) return;
+    if (
+      !isDbHydrated ||
+      !auth.currentUser ||
+      isQuotaExceeded ||
+      forceLocalStorageMode
+    )
+      return;
     if (!isLocalLeadsChangeRef.current) return;
     const syncLeads = async () => {
       try {
         const lastIds = lastLeadsIdsRef.current;
-        const currentIds = new Set(leads.map(l => l.id));
+        const currentIds = new Set(leads.map((l) => l.id));
+
+        const operations: { type: "delete" | "set"; id: string; data?: any }[] =
+          [];
+
         for (const id of lastIds) {
           if (!currentIds.has(id)) {
-            await deleteDoc(doc(db, 'leads', id));
+            operations.push({ type: "delete", id });
           }
         }
         for (const lead of leads) {
-          await setDoc(doc(db, 'leads', lead.id), lead);
+          operations.push({ type: "set", id: lead.id, data: lead });
         }
+
+        const CHUNK_SIZE = 450;
+        for (let i = 0; i < operations.length; i += CHUNK_SIZE) {
+          const chunk = operations.slice(i, i + CHUNK_SIZE);
+          const batch = writeBatch(db);
+          for (const op of chunk) {
+            if (op.type === "delete") {
+              batch.delete(doc(db, "leads", op.id));
+            } else if (op.type === "set") {
+              // Sanitize undefined fields by stringifying
+              const cleanData = JSON.parse(JSON.stringify(op.data));
+              batch.set(doc(db, "leads", op.id), cleanData);
+            }
+          }
+          await batch.commit();
+        }
+
         lastLeadsIdsRef.current = Array.from(currentIds);
         isLocalLeadsChangeRef.current = false;
       } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, 'leads');
+        handleFirestoreError(err, OperationType.WRITE, "leads");
       }
     };
     syncLeads();
-  }, [leads, isDbHydrated, isQuotaExceeded]);
+  }, [leads, isDbHydrated, isQuotaExceeded, forceLocalStorageMode]);
 
   // Templates Sync
   useEffect(() => {
-    if (!isDbHydrated || !auth.currentUser || isQuotaExceeded) return;
+    if (
+      !isDbHydrated ||
+      !auth.currentUser ||
+      isQuotaExceeded ||
+      forceLocalStorageMode
+    )
+      return;
     if (!isLocalTemplatesChangeRef.current) return;
     const syncTemplates = async () => {
       try {
         const lastIds = lastTemplatesIdsRef.current;
-        const currentIds = new Set(templates.map(t => t.id));
+        const currentIds = new Set(templates.map((t) => t.id));
         for (const id of lastIds) {
           if (!currentIds.has(id)) {
-            await deleteDoc(doc(db, 'templates', id));
+            await deleteDoc(doc(db, "templates", id));
           }
         }
         for (const template of templates) {
-          await setDoc(doc(db, 'templates', template.id), template);
+          const cleanTemplate = JSON.parse(JSON.stringify(template));
+          await setDoc(doc(db, "templates", template.id), cleanTemplate);
         }
         lastTemplatesIdsRef.current = Array.from(currentIds);
         isLocalTemplatesChangeRef.current = false;
       } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, 'templates');
+        handleFirestoreError(err, OperationType.WRITE, "templates");
       }
     };
     syncTemplates();
-  }, [templates, isDbHydrated, isQuotaExceeded]);
+  }, [templates, isDbHydrated, isQuotaExceeded, forceLocalStorageMode]);
 
   // EmailLogs Sync
   useEffect(() => {
-    if (!isDbHydrated || !auth.currentUser || isQuotaExceeded) return;
+    if (
+      !isDbHydrated ||
+      !auth.currentUser ||
+      isQuotaExceeded ||
+      forceLocalStorageMode
+    )
+      return;
     if (!isLocalEmailLogsChangeRef.current) return;
     const syncLogs = async () => {
       try {
         const lastIds = lastLogsIdsRef.current;
-        const currentIds = new Set(emailLogs.map(l => l.id));
+        const currentIds = new Set(emailLogs.map((l) => l.id));
         for (const id of lastIds) {
           if (!currentIds.has(id)) {
-            await deleteDoc(doc(db, 'emailLogs', id));
+            await deleteDoc(doc(db, "emailLogs", id));
           }
         }
         for (const log of emailLogs) {
-          await setDoc(doc(db, 'emailLogs', log.id), log);
+          const cleanLog = JSON.parse(JSON.stringify(log));
+          await setDoc(doc(db, "emailLogs", log.id), cleanLog);
         }
         lastLogsIdsRef.current = Array.from(currentIds);
         isLocalEmailLogsChangeRef.current = false;
       } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, 'emailLogs');
+        handleFirestoreError(err, OperationType.WRITE, "emailLogs");
       }
     };
     syncLogs();
-  }, [emailLogs, isDbHydrated, isQuotaExceeded]);
+  }, [emailLogs, isDbHydrated, isQuotaExceeded, forceLocalStorageMode]);
 
   // Appointments Sync
   useEffect(() => {
-    if (!isDbHydrated || !auth.currentUser || isQuotaExceeded) return;
+    if (
+      !isDbHydrated ||
+      !auth.currentUser ||
+      isQuotaExceeded ||
+      forceLocalStorageMode
+    )
+      return;
     if (!isLocalApptsChangeRef.current) return;
     const syncAppts = async () => {
       try {
         const lastIds = lastApptsIdsRef.current;
-        const currentIds = new Set(appointments.map(a => a.id));
+        const currentIds = new Set(appointments.map((a) => a.id));
         for (const id of lastIds) {
           if (!currentIds.has(id)) {
-            await deleteDoc(doc(db, 'appointments', id));
+            await deleteDoc(doc(db, "appointments", id));
           }
         }
         for (const appt of appointments) {
-          await setDoc(doc(db, 'appointments', appt.id), appt);
+          const cleanAppt = JSON.parse(JSON.stringify(appt));
+          await setDoc(doc(db, "appointments", appt.id), cleanAppt);
         }
         lastApptsIdsRef.current = Array.from(currentIds);
         isLocalApptsChangeRef.current = false;
       } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, 'appointments');
+        handleFirestoreError(err, OperationType.WRITE, "appointments");
       }
     };
     syncAppts();
-  }, [appointments, isDbHydrated, isQuotaExceeded]);
+  }, [appointments, isDbHydrated, isQuotaExceeded, forceLocalStorageMode]);
 
   // Inventory Sync
   useEffect(() => {
-    if (!isDbHydrated || !auth.currentUser || isQuotaExceeded) return;
+    if (
+      !isDbHydrated ||
+      !auth.currentUser ||
+      isQuotaExceeded ||
+      forceLocalStorageMode
+    )
+      return;
     if (!isLocalInventoryChangeRef.current) return;
     const syncInventory = async () => {
       try {
         const lastIds = lastInventoryIdsRef.current;
-        const currentIds = new Set(inventory.map(i => i.id));
+        const currentIds = new Set(inventory.map((i) => i.id));
         for (const id of lastIds) {
           if (!currentIds.has(id)) {
-            await deleteDoc(doc(db, 'inventory', id));
+            await deleteDoc(doc(db, "inventory", id));
           }
         }
         for (const item of inventory) {
-          await setDoc(doc(db, 'inventory', item.id), item);
+          const cleanItem = JSON.parse(JSON.stringify(item));
+          await setDoc(doc(db, "inventory", item.id), cleanItem);
         }
         lastInventoryIdsRef.current = Array.from(currentIds);
         isLocalInventoryChangeRef.current = false;
       } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, 'inventory');
+        handleFirestoreError(err, OperationType.WRITE, "inventory");
       }
     };
     syncInventory();
-  }, [inventory, isDbHydrated, isQuotaExceeded]);
+  }, [inventory, isDbHydrated, isQuotaExceeded, forceLocalStorageMode]);
 
   // Properties Sync
   useEffect(() => {
-    if (!isDbHydrated || !auth.currentUser || isQuotaExceeded) return;
+    if (
+      !isDbHydrated ||
+      !auth.currentUser ||
+      isQuotaExceeded ||
+      forceLocalStorageMode
+    )
+      return;
     if (!isLocalPropertiesChangeRef.current) return;
     const syncProperties = async () => {
       try {
         const lastIds = lastPropertiesIdsRef.current;
-        const currentIds = new Set(properties.map(p => p.id));
+        const currentIds = new Set(properties.map((p) => p.id));
+
+        let batch = writeBatch(db);
+        let opCount = 0;
+        const MAX_BATCH_OPS = 450;
+
         for (const id of lastIds) {
           if (!currentIds.has(id)) {
-            await deleteDoc(doc(db, 'properties', id));
+            batch.delete(doc(db, "properties", id));
+            opCount++;
+            if (opCount >= MAX_BATCH_OPS) {
+              await batch.commit();
+              batch = writeBatch(db);
+              opCount = 0;
+            }
           }
         }
         for (const item of properties) {
-          await setDoc(doc(db, 'properties', item.id), item);
+          const cleanData = JSON.parse(JSON.stringify(item));
+          batch.set(doc(db, "properties", item.id), cleanData);
+          opCount++;
+          if (opCount >= MAX_BATCH_OPS) {
+            await batch.commit();
+            batch = writeBatch(db);
+            opCount = 0;
+          }
         }
+
+        if (opCount > 0) {
+          await batch.commit();
+        }
+
         lastPropertiesIdsRef.current = Array.from(currentIds);
         isLocalPropertiesChangeRef.current = false;
       } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, 'properties');
+        handleFirestoreError(err, OperationType.WRITE, "properties");
       }
     };
     syncProperties();
-  }, [properties, isDbHydrated, isQuotaExceeded]);
+  }, [properties, isDbHydrated, isQuotaExceeded, forceLocalStorageMode]);
 
   // GamificationGoals Sync
   useEffect(() => {
-    if (!isDbHydrated || !auth.currentUser || isQuotaExceeded) return;
+    if (
+      !isDbHydrated ||
+      !auth.currentUser ||
+      isQuotaExceeded ||
+      forceLocalStorageMode
+    )
+      return;
     if (!isLocalGoalsChangeRef.current) return;
     const syncGoals = async () => {
       try {
         const lastIds = lastGoalsIdsRef.current;
-        const currentIds = new Set(gamificationGoals.map(g => g.id));
+        const currentIds = new Set(gamificationGoals.map((g) => g.id));
         for (const id of lastIds) {
           if (!currentIds.has(id)) {
-            await deleteDoc(doc(db, 'gamificationGoals', id));
+            await deleteDoc(doc(db, "gamificationGoals", id));
           }
         }
         for (const goal of gamificationGoals) {
-          await setDoc(doc(db, 'gamificationGoals', goal.id), goal);
+          const cleanGoal = JSON.parse(JSON.stringify(goal));
+          await setDoc(doc(db, "gamificationGoals", goal.id), cleanGoal);
         }
         lastGoalsIdsRef.current = Array.from(currentIds);
         isLocalGoalsChangeRef.current = false;
       } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, 'gamificationGoals');
+        handleFirestoreError(err, OperationType.WRITE, "gamificationGoals");
       }
     };
     syncGoals();
-  }, [gamificationGoals, isDbHydrated, isQuotaExceeded]);
+  }, [gamificationGoals, isDbHydrated, isQuotaExceeded, forceLocalStorageMode]);
 
   // GamificationProjects Sync
   useEffect(() => {
-    if (!isDbHydrated || !auth.currentUser || isQuotaExceeded) return;
+    if (
+      !isDbHydrated ||
+      !auth.currentUser ||
+      isQuotaExceeded ||
+      forceLocalStorageMode
+    )
+      return;
     if (!isLocalProjectsChangeRef.current) return;
     const syncProjects = async () => {
       try {
         const lastIds = lastProjectsIdsRef.current;
-        const currentIds = new Set(gamificationProjects.map(p => p.id));
+        const currentIds = new Set(gamificationProjects.map((p) => p.id));
         for (const id of lastIds) {
           if (!currentIds.has(id)) {
-            await deleteDoc(doc(db, 'gamificationProjects', id));
+            await deleteDoc(doc(db, "gamificationProjects", id));
           }
         }
         for (const proj of gamificationProjects) {
-          await setDoc(doc(db, 'gamificationProjects', proj.id), proj);
+          const cleanProj = JSON.parse(JSON.stringify(proj));
+          await setDoc(doc(db, "gamificationProjects", proj.id), cleanProj);
         }
         lastProjectsIdsRef.current = Array.from(currentIds);
         isLocalProjectsChangeRef.current = false;
       } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, 'gamificationProjects');
+        handleFirestoreError(err, OperationType.WRITE, "gamificationProjects");
       }
     };
     syncProjects();
-  }, [gamificationProjects, isDbHydrated, isQuotaExceeded]);
+  }, [
+    gamificationProjects,
+    isDbHydrated,
+    isQuotaExceeded,
+    forceLocalStorageMode,
+  ]);
 
-  // FollowUps Sync
-  useEffect(() => {
-    if (!isDbHydrated || !auth.currentUser || isQuotaExceeded) return;
-    if (!isLocalFollowUpsChangeRef.current) return;
-    const syncFollowUps = async () => {
-      try {
-        const lastIds = lastFollowupsIdsRef.current;
-        const currentIds = new Set(followUps.map(f => f.id));
-        for (const id of lastIds) {
-          if (!currentIds.has(id)) {
-            await deleteDoc(doc(db, 'followups', id));
-          }
-        }
-        for (const fup of followUps) {
-          await setDoc(doc(db, 'followups', fup.id), fup);
-        }
-        lastFollowupsIdsRef.current = Array.from(currentIds);
-        isLocalFollowUpsChangeRef.current = false;
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, 'followups');
-      }
-    };
-    syncFollowUps();
-  }, [followUps, isDbHydrated, isQuotaExceeded]);
 
   // Enable local tracking 5 seconds after hydration is complete to prevent initial load overwrite loops
   useEffect(() => {
@@ -1752,7 +3996,13 @@ export default function App() {
 
   // Synchronize userProfile state changes to Firestore
   useEffect(() => {
-    if (!isDbHydrated || !auth.currentUser || isQuotaExceeded) return;
+    if (
+      !isDbHydrated ||
+      !auth.currentUser ||
+      isQuotaExceeded ||
+      forceLocalStorageMode
+    )
+      return;
     if (!isLocalProfileChangeRef.current) return;
 
     const syncProfile = async () => {
@@ -1771,213 +4021,564 @@ export default function App() {
           userLevel,
           accSettings,
           notifications,
-          updatedAt: Date.now()
+          updatedAt: Date.now(),
         };
-        await setDoc(doc(db, 'userProfiles', auth.currentUser!.uid), profileDoc);
-        localStorage.setItem('ciclocred_profile_updated_at', String(profileDoc.updatedAt));
+        await setDoc(
+          doc(db, "userProfiles", auth.currentUser!.uid),
+          profileDoc,
+        );
+        localStorage.setItem(
+          "ciclocred_profile_updated_at",
+          String(profileDoc.updatedAt),
+        );
       } catch (err) {
         console.warn("Failed to sync userProfile to Firestore:", err);
       }
     };
-    
+
     // Debounce uploads by 1200ms to avoid flooding on keystrokes/XP rewards
     const timer = setTimeout(() => {
       syncProfile();
     }, 1200);
     return () => clearTimeout(timer);
-  }, [userName, userEmail, creciNumber, userRole, agencyName, consolidatedCrmInfo, subscriptionPlan, theme, galaxyPreset, userXP, userLevel, accSettings, notifications, isDbHydrated, isQuotaExceeded]);
+  }, [
+    userName,
+    userEmail,
+    creciNumber,
+    userRole,
+    agencyName,
+    consolidatedCrmInfo,
+    subscriptionPlan,
+    theme,
+    galaxyPreset,
+    userXP,
+    userLevel,
+    accSettings,
+    notifications,
+    isDbHydrated,
+    isQuotaExceeded,
+    forceLocalStorageMode,
+  ]);
+
+  // Centralized Lead Field Updater
+  const handleUpdateLeadField = (leadId: string, fields: Partial<Lead>) => {
+    setLeads((prev) =>
+      prev.map((l) => {
+        if (l.id === leadId) {
+          const updated = {
+            ...l,
+            ...fields,
+            lastInteractionAt: new Date().toISOString(),
+          };
+
+          // Auto-advance rule: ANY edit or alteration on a "novo" lead automatically promotes it to status "ativo" and initial stage "abordagem"
+          if (
+            l.status === "novo" &&
+            updated.status !== "arquivado" &&
+            updated.status !== "lead_descartado" &&
+            updated.status !== "descartado" &&
+            updated.status !== "ganhou"
+          ) {
+            updated.status = "ativo";
+            updated.stage = "abordagem";
+          }
+
+          // Sync details modal if open
+          if (selectedLeadForDetails?.id === leadId) {
+            setSelectedLeadForDetails((curr) =>
+              curr ? { ...curr, ...updated } : null,
+            );
+          }
+          return updated;
+        }
+        return l;
+      }),
+    );
+  };
 
   // Lead transition handler
-  const handleMoveLead = (leadId: string, newStatus: LeadStatus, newPageId?: string) => {
-    let previousStatus: LeadStatus | undefined;
-    
+  const handleMoveLead = (
+    leadId: string,
+    newStatus: string,
+    targetPageId?: string,
+  ) => {
+    let previousStatus: string | undefined;
     // Get columns to automatically tag the lead based on matching stage label
-    const cols = getKanbanColumns();
-    const targetCol = cols.find(c => c.id === newStatus);
+    const cols = getKanbanColumns(targetPageId);
+    const targetCol = cols.find((c) => c.id === newStatus);
     const stageLabel = targetCol ? targetCol.label : String(newStatus);
 
-    setLeads(prevLeads => {
-      return prevLeads.map(l => {
+    // Resolve which field the target column actually represents
+    const resolvedPageId =
+      targetPageId ||
+      localStorage.getItem("ciclocred_active_funnel_page_id") ||
+      "status";
+
+    setLeads((prevLeads) => {
+      return prevLeads.map((l) => {
         if (l.id === leadId) {
           previousStatus = l.status;
+
+          // Ensure funnelPlacements works correctly
+          const placements =
+            l.funnelPlacements && l.funnelPlacements.length > 0
+              ? [...l.funnelPlacements]
+              : [{ pageId: l.funnelPageId || "status", status: l.status }];
+
+          const existingPlacementIndex = placements.findIndex(
+            (p) => p.pageId === resolvedPageId,
+          );
+
+          if (existingPlacementIndex !== -1) {
+            placements[existingPlacementIndex] = {
+              pageId: resolvedPageId,
+              status: newStatus,
+            };
+          } else {
+            placements.push({ pageId: resolvedPageId, status: newStatus });
+          }
+
           const currentTags = l.tags || [];
-          const newTags = currentTags.includes(stageLabel) ? currentTags : [...currentTags, stageLabel];
-          return { 
-            ...l, 
-            status: newStatus, 
+          const newTags = currentTags.includes(stageLabel)
+            ? currentTags
+            : [...currentTags, stageLabel];
+
+          const updatedLead = {
+            ...l,
             tags: newTags,
-            funnelPageId: newPageId !== undefined ? newPageId : (l.funnelPageId || 'principal')
+            funnelPageId: resolvedPageId,
+            funnelPlacements: placements,
+            lastInteractionAt: new Date().toISOString(),
           };
+
+          if (resolvedPageId === "status" || resolvedPageId === "tabelas") {
+            updatedLead.status = newStatus as any;
+          } else if (
+            resolvedPageId === "etapas" ||
+            resolvedPageId === "ativos"
+          ) {
+            updatedLead.stage = newStatus;
+          } else if (resolvedPageId === "perfil") {
+            updatedLead.mainProfile = newStatus;
+          } else if (
+            resolvedPageId === "objecoes" ||
+            resolvedPageId === "carteira"
+          ) {
+            updatedLead.objection = newStatus;
+          }
+
+          // Auto-advance rule: Any movement on a "novo" lead places it directly into 'ativo' and 'abordagem'
+          if (
+            l.status === "novo" &&
+            updatedLead.status !== "arquivado" &&
+            updatedLead.status !== "lead_descartado" &&
+            updatedLead.status !== "descartado" &&
+            updatedLead.status !== "ganhou"
+          ) {
+            updatedLead.status = "ativo";
+            updatedLead.stage = "abordagem";
+          }
+
+          return updatedLead;
         }
         return l;
       });
     });
-    
+
     // Sync current details modal if matches
     if (selectedLeadForDetails && selectedLeadForDetails.id === leadId) {
-      setSelectedLeadForDetails(prev => prev ? { ...prev, status: newStatus } : null);
+      setSelectedLeadForDetails((prev) => {
+        if (!prev) return null;
+        const updated = { ...prev };
+        if (resolvedPageId === "status" || resolvedPageId === "tabelas")
+          updated.status = newStatus as any;
+        if (resolvedPageId === "etapas" || resolvedPageId === "ativos")
+          updated.stage = newStatus;
+        if (resolvedPageId === "perfil") updated.mainProfile = newStatus;
+        if (resolvedPageId === "objecoes" || resolvedPageId === "carteira")
+          updated.objection = newStatus;
+        return updated;
+      });
     }
 
     // Trigger Gamification for moving leads in Kanban!
     if (previousStatus && previousStatus !== newStatus) {
-      if (newStatus === 'fechado') {
-        progressGoalCategory('venda', 1);
+      if (newStatus === "fechado") {
+        progressGoalCategory("venda", 1);
         awardXP(500); // 500 XP big closed win deal bonus!
       } else {
         awardXP(40); // 40 XP for advancing pipeline stage
       }
 
       // Sync to Google Sheets Real-time
-      const leadObj = leads.find(l => l.id === leadId);
+      const leadObj = leads.find((l) => l.id === leadId);
       if (leadObj) {
         syncCRMMovementToGoogleSheet(
-          'Fase Alterada',
-          `Lead ${leadObj.name} movido de [${(previousStatus || '').toUpperCase()}] para [${newStatus.toUpperCase()}] | Negócio: R$ ${leadObj.value.toLocaleString('pt-BR')}`,
-          userName
+          "Fase Alterada",
+          `Lead ${leadObj.name} movido de [${(previousStatus || "").toUpperCase()}] para [${newStatus.toUpperCase()}] | Negócio: R$ ${leadObj.value.toLocaleString("pt-BR")}`,
+          userName,
         );
       }
     }
   };
 
   const handleUpdateNotes = (leadId: string, newNotes: string) => {
-    setLeads(prevLeads => 
-      prevLeads.map(l => l.id === leadId ? { ...l, notes: newNotes } : l)
+    setLeads((prevLeads) =>
+      prevLeads.map((l) => (l.id === leadId ? { ...l, notes: newNotes } : l)),
     );
-     // Sync current details modal if matches
+    // Sync current details modal if matches
     if (selectedLeadForDetails && selectedLeadForDetails.id === leadId) {
-      setSelectedLeadForDetails(prev => prev ? { ...prev, notes: newNotes } : null);
+      setSelectedLeadForDetails((prev) =>
+        prev ? { ...prev, notes: newNotes } : null,
+      );
+    }
+  };
+
+  const handleUpdateLeadFull = (
+    leadId: string,
+    updatedFields: Partial<Lead>,
+  ) => {
+    setLeads((prevLeads) =>
+      prevLeads.map((l) => (l.id === leadId ? { ...l, ...updatedFields } : l)),
+    );
+    if (selectedLeadForDetails && selectedLeadForDetails.id === leadId) {
+      setSelectedLeadForDetails((prev) =>
+        prev ? { ...prev, ...updatedFields } : null,
+      );
     }
   };
 
   const handleUpdateFamilyIncome = (leadId: string, income: number) => {
-    setLeads(prevLeads => 
-      prevLeads.map(l => l.id === leadId ? { ...l, familyIncome: income } : l)
+    setLeads((prevLeads) =>
+      prevLeads.map((l) =>
+        l.id === leadId ? { ...l, familyIncome: income } : l,
+      ),
     );
     if (selectedLeadForDetails && selectedLeadForDetails.id === leadId) {
-      setSelectedLeadForDetails(prev => prev ? { ...prev, familyIncome: income } : null);
+      setSelectedLeadForDetails((prev) =>
+        prev ? { ...prev, familyIncome: income } : null,
+      );
     }
   };
 
-  const handleAddFollowUp = (newFupData: Omit<FollowUpUpdate, 'id'>, createAppointment: boolean) => {
-    const newId = `fup-${Date.now()}`;
-    const completeFup: FollowUpUpdate = {
-      id: newId,
-      ...newFupData
-    };
-    
-    setFollowUps(prev => [completeFup, ...prev]);
 
-    if (createAppointment && newFupData.nextStepTitle && newFupData.nextStepDate) {
-      const newAppt: Appointment = {
-        id: `appt-fup-${Date.now()}`,
-        leadId: newFupData.leadId,
-        leadName: newFupData.leadName,
-        title: `Follow-Up: ${newFupData.nextStepTitle}`,
-        date: newFupData.nextStepDate,
-        time: newFupData.nextStepTime || '12:00',
-        description: `Agendado automaticamente via painel de Follow-Up. Notas: ${newFupData.notes}`,
-        status: 'agendado',
-        type: newFupData.type === 'ligacao' ? 'telefone' : newFupData.type === 'reuniao' ? 'reuniao' : 'outro'
-      };
-      
-      setAppointments(prev => [newAppt, ...prev]);
-    }
-
-    awardXP(80);
-    triggerSensoryFeedback('success', accSettings);
-    addNotification(
-      '🎙️ HISTÓRICO ATUALIZADO',
-      `Follow-up registrado com sucesso para o lead ${newFupData.leadName}. +80 XP!`,
-      'success'
-    );
-  };
-
-  const handleDeleteFollowUp = (id: string) => {
-    setFollowUps(prev => prev.filter(f => f.id !== id));
-    triggerSensoryFeedback('warning', accSettings);
-    addNotification('🗑️ HISTÓRICO REMOVIDO', 'Registro de follow-up removido do CRM.', 'warning');
-  };
 
   const handleDeleteLead = (leadId: string) => {
-    const leadObj = leads.find(l => l.id === leadId);
-    const leadName = leadObj ? leadObj.name : 'este lead';
+    const leadObj = leads.find((l) => l.id === leadId);
+    const leadName = leadObj ? leadObj.name : "este lead";
     requestConfirmation(
-      'Remover Cliente Lead?',
+      "Remover Cliente Lead?",
       `Tem certeza de que deseja remover permanentemente o lead "${leadName}" do CRM? Esta ação apagará seu histórico nesta sessão de forma definitiva.`,
-      () => {
-        setLeads(prev => prev.filter(l => l.id !== leadId));
+      async () => {
+        // Flag local change to prevent incoming firestore snapshots from resetting our data
+        isLocalLeadsChangeRef.current = true;
+
+        // 1. Update local state and also keep the tracking reference in exact sync
+        setLeads((prev) => {
+          const filtered = prev.filter((l) => l.id !== leadId);
+          lastLeadsIdsRef.current = filtered.map((l) => l.id);
+          return filtered;
+        });
+
+        // 1.1 Also purge all corresponding follow-up logs, appointments and templates/email-logs for this lead
+        rawSetAppointments((prev) => prev.filter((a) => a.leadId !== leadId));
+        rawSetEmailLogs((prev) => prev.filter((l) => l.leadId !== leadId));
+
+        // 1.2 Clear select states if they pointed to this deleted lead
+        if (scriptsTargetLeadId === leadId) {
+          setScriptsTargetLeadId("");
+        }
+
+        // 2. Explicitly remove from localStorage
+        const savedLeads = localStorage.getItem("ciclocred_crm_leads");
+        if (savedLeads) {
+          try {
+            const parsed = JSON.parse(savedLeads);
+            if (Array.isArray(parsed)) {
+              const updated = parsed.filter((l: any) => l.id !== leadId);
+              localStorage.setItem(
+                "ciclocred_crm_leads",
+                JSON.stringify(updated),
+              );
+            }
+          } catch (_) {}
+        }
+
+        // 3. Remove from Firestore immediately
+        if (auth.currentUser) {
+          try {
+            await deleteDoc(doc(db, "leads", leadId));
+          } catch (err) {
+            console.error("Erro ao deletar lead do Firestore:", err);
+          }
+        }
+
         if (selectedLeadForDetails && selectedLeadForDetails.id === leadId) {
           setIsDetailsModalOpen(false);
         }
-        triggerSensoryFeedback('warning', accSettings);
-        addNotification('🗑️ LEAD REMOVIDO', `O lead "${leadName}" foi removido do seu funil.`, 'warning');
+        triggerSensoryFeedback("warning", accSettings);
+        addNotification(
+          "🗑️ LEAD REMOVIDO",
+          `O lead "${leadName}" foi removido do seu funil com persistência total.`,
+          "warning",
+        );
+
+        // Keep the sync disabled momentarily for the database writes to propagate and stabilize
+        setTimeout(() => {
+          isLocalLeadsChangeRef.current = false;
+        }, 1500);
       },
-      'danger'
+      "danger",
+    );
+  };
+
+  const handleDeleteMultipleLeadsHandler = async (ids: string[]) => {
+    // Flag local change to lock incoming snapshots
+    isLocalLeadsChangeRef.current = true;
+
+    // 1. Update local state and tracking reference
+    setLeads((prev) => {
+      const filtered = prev.filter((l) => !ids.includes(l.id));
+      lastLeadsIdsRef.current = filtered.map((l) => l.id);
+      return filtered;
+    });
+
+    // 1.1 Also purge corresponding follow-up logs, appointments, email logs and clear select states
+    rawSetAppointments((prev) => prev.filter((a) => !ids.includes(a.leadId)));
+    rawSetEmailLogs((prev) => prev.filter((l) => !ids.includes(l.leadId)));
+
+    if (ids.includes(scriptsTargetLeadId)) {
+      setScriptsTargetLeadId("");
+    }
+
+    if (selectedLeadForDetails && ids.includes(selectedLeadForDetails.id)) {
+      setIsDetailsModalOpen(false);
+    }
+
+    // 2. Update localStorage
+    const savedLeads = localStorage.getItem("ciclocred_crm_leads");
+    if (savedLeads) {
+      try {
+        const parsed = JSON.parse(savedLeads);
+        if (Array.isArray(parsed)) {
+          const updated = parsed.filter((l: any) => !ids.includes(l.id));
+          localStorage.setItem("ciclocred_crm_leads", JSON.stringify(updated));
+        }
+      } catch (_) {}
+    }
+
+    // 3. Update Firestore immediately
+    if (auth.currentUser) {
+      try {
+        const CHUNK_SIZE = 450;
+        for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+          const chunk = ids.slice(i, i + CHUNK_SIZE);
+          const batch = writeBatch(db);
+          chunk.forEach((id) => {
+            batch.delete(doc(db, "leads", id));
+          });
+          await batch.commit();
+        }
+      } catch (err) {
+        console.error("Erro ao deletar múltiplos leads no Firestore:", err);
+      }
+    }
+    triggerSensoryFeedback("warning", accSettings);
+    addNotification(
+      "🗑️ LEADS EXCLUÍDOS",
+      `${ids.length} contatos foram excluídos permanentemente de forma integrada e persistente.`,
+      "warning",
+    );
+
+    // Release sync lock after safety margin
+    setTimeout(() => {
+      isLocalLeadsChangeRef.current = false;
+    }, 1500);
+  };
+
+  const handleNavigateToScripts = (lead: any) => {
+    setIsConversaoModalOpen(true);
+    triggerSensoryFeedback("chime", accSettings);
+    addNotification(
+      "Assistente AI Ativado",
+      `Carregando IA Integrada e Simulações para ${lead.name}`,
+      "info",
+    );
+  };
+
+  const handleNavigateToDisparos = (lead: any) => {
+    setMarketingTargetLeadIds([lead.id]);
+    setDashboardVisibility("disparos");
+    setActiveTab("dashboard");
+    triggerSensoryFeedback("chime", accSettings);
+    addNotification(
+      "Preparar Campanha",
+      `O lead ${lead.name} foi adicionado à fila de campanhas de disparos em massa.`,
+      "info",
     );
   };
 
   const handleWipeLeads = async () => {
     setLeads([]);
-    localStorage.setItem('ciclocred_crm_leads', JSON.stringify([]));
+    localStorage.setItem("ciclocred_crm_leads", JSON.stringify([]));
     lastLeadsIdsRef.current = [];
     if (auth.currentUser) {
       try {
-        const querySnapshot = await getDocs(collection(db, 'leads'));
+        const querySnapshot = await getDocs(collection(db, "leads"));
         for (const d of querySnapshot.docs) {
-          await deleteDoc(doc(db, 'leads', d.id));
+          await deleteDoc(doc(db, "leads", d.id));
         }
       } catch (e) {
         console.error("Erro ao expurgar leads no Firebase:", e);
       }
     }
-    triggerSensoryFeedback('alarm', accSettings);
-    addNotification('🗑️ LEADS EXPURGADOS', 'Toda a base de leads foi limpa com sucesso.', 'warning');
+    triggerSensoryFeedback("alarm", accSettings);
+    addNotification(
+      "🗑️ LEADS EXPURGADOS",
+      "Toda a base de leads foi limpa com sucesso.",
+      "warning",
+    );
   };
 
   const handleWipeProperties = async () => {
     setProperties([]);
-    localStorage.setItem('ciclocred_crm_properties', JSON.stringify([]));
+    localStorage.setItem("ciclocred_crm_properties", JSON.stringify([]));
     lastPropertiesIdsRef.current = [];
     if (auth.currentUser) {
       try {
-        const querySnapshot = await getDocs(collection(db, 'properties'));
+        const querySnapshot = await getDocs(collection(db, "properties"));
         for (const d of querySnapshot.docs) {
-          await deleteDoc(doc(db, 'properties', d.id));
+          await deleteDoc(doc(db, "properties", d.id));
         }
       } catch (e) {
         console.error("Erro ao expurgar properties no Firebase:", e);
       }
     }
-    triggerSensoryFeedback('alarm', accSettings);
-    addNotification('🏠 ESTOQUE EXPURGADO', 'Todo o estoque correspondente foi limpo com sucesso.', 'warning');
+    triggerSensoryFeedback("alarm", accSettings);
+    addNotification(
+      "🏠 ESTOQUE EXPURGADO",
+      "Todo o estoque correspondente foi limpo com sucesso.",
+      "warning",
+    );
   };
 
-  const handleSaveLead = (savedLead: Lead) => {
+  const handleMasterSystemReset = async () => {
+    requestConfirmation(
+      "🚨 RESETAR CENTRAL DO CRM?",
+      "ATENÇÃO: Este é um Master System Reset completo! Ele vai deletar PERMANENTEMENTE toda a sua base de Leads, interações, agendamentos, estoque de imóveis, logs e notificações de todas as memórias do Firebase e do navegador. Seus códigos de sistema continuarão 100% intactos e limpos.",
+      async () => {
+        try {
+          addNotification(
+            "⚙️ INICIANDO MASTER RESET",
+            "Limpando todos os registros e bancos...",
+            "info",
+          );
+
+          // 1. Clear state and localStorage
+          setLeads([]);
+          setProperties([]);
+          setAppointments([]);
+          setNotifications([]);
+
+          localStorage.removeItem("ciclocred_crm_leads");
+          localStorage.removeItem("ciclocred_crm_properties");
+          localStorage.removeItem("ciclocred_crm_appointments");
+          localStorage.removeItem("ciclocred_crm_notifications");
+
+          lastLeadsIdsRef.current = [];
+          lastPropertiesIdsRef.current = [];
+
+          // 2. Wipe Firestore collection leads
+          if (auth.currentUser) {
+            try {
+              const leadsSnap = await getDocs(collection(db, "leads"));
+              for (const d of leadsSnap.docs) {
+                await deleteDoc(doc(db, "leads", d.id));
+              }
+            } catch (err) {
+              console.error("Erro ao limpar Leads no Firestore:", err);
+            }
+
+            try {
+              const propsSnap = await getDocs(collection(db, "properties"));
+              for (const d of propsSnap.docs) {
+                await deleteDoc(doc(db, "properties", d.id));
+              }
+            } catch (err) {
+              console.error("Erro ao limpar Properties no Firestore:", err);
+            }
+          }
+
+          // 3. Complete and announce success
+          triggerSensoryFeedback("alarm", accSettings);
+          addNotification(
+            "🔥 SISTEMA LIMPO",
+            "O CRM foi resetado por completo com sucesso! Pronto para novas tarefas.",
+            "success",
+          );
+          setIsUserCentralModalOpen(false);
+        } catch (error: any) {
+          alert(
+            "Ocorreu um erro durante o reset de segurança: " + error.message,
+          );
+        }
+      },
+      "danger",
+    );
+  };
+
+  const handleSaveLead = async (rawLead: Lead) => {
+    let savedLead = { ...rawLead };
+
+    // Validations:
+    if (/\d/.test(savedLead.name)) {
+      alert('Erro Crítico: O campo "Nome" não deve conter números.');
+      return;
+    }
+    if (
+      /[a-zA-Z]/.test(savedLead.phone) ||
+      isFictitiousPhone(savedLead.phone)
+    ) {
+      alert(
+        'Erro Crítico: O campo "Telefone" contém letras ou é um número fictício inválido.',
+      );
+      return;
+    }
+
     let isNew = false;
-    setLeads(prevLeads => {
-      const exists = prevLeads.some(l => l.id === savedLead.id);
+    setLeads((prevLeads) => {
+      const exists = prevLeads.some((l) => l.id === savedLead.id);
       if (!exists) isNew = true;
       if (exists) {
-        return prevLeads.map(l => l.id === savedLead.id ? savedLead : l);
+        return prevLeads.map((l) => (l.id === savedLead.id ? savedLead : l));
       } else {
         return [savedLead, ...prevLeads];
       }
     });
 
+    if (auth.currentUser) {
+      try {
+        const cleanData = JSON.parse(JSON.stringify(savedLead));
+        await setDoc(doc(db, "leads", savedLead.id), cleanData);
+      } catch (err) {
+        console.error("Erro Firebase lead:", err);
+      }
+    }
+
     if (isNew) {
-      progressGoalCategory('prospecção', 1);
+      progressGoalCategory("prospecção", 1);
       awardXP(50); // 50 XP for cataloging new prospective client
-      
+
       syncCRMMovementToGoogleSheet(
-        'Lead Cadastrado',
-        `Novo prospecto ${savedLead.name} criado | Origem: ${savedLead.origin} | Valor: R$ ${savedLead.value.toLocaleString('pt-BR')}`,
-        userName
+        "Lead Cadastrado",
+        `Novo prospecto ${savedLead.name} criado | Origem: ${savedLead.origin} | Valor: R$ ${savedLead.value.toLocaleString("pt-BR")}`,
+        userName,
       );
     } else {
       syncCRMMovementToGoogleSheet(
-        'Lead Atualizado',
+        "Lead Atualizado",
         `Cadastro de ${savedLead.name} editado ou atualizado pelo painel CRM.`,
-        userName
+        userName,
       );
     }
 
@@ -1986,221 +4587,343 @@ export default function App() {
   };
 
   const handleAddNewLeadCapturedPublicly = (newLead: Lead) => {
-    setLeads(prev => [newLead, ...prev]);
-    progressGoalCategory('prospecção', 1);
+    setLeads((prev) => [newLead, ...prev]);
+    progressGoalCategory("prospecção", 1);
     awardXP(150);
     addNotification(
-      '💥 NOVO LEAD CAPTADO!',
-      `O cliente ${newLead.name} cadastrou-se no seu Site Público manifestando interesse num valor estimado de R$ ${newLead.value.toLocaleString('pt-BR')}.`,
-      'success'
+      "💥 NOVO LEAD CAPTADO!",
+      `O cliente ${newLead.name} cadastrou-se no seu Site Público manifestando interesse num valor estimado de R$ ${newLead.value.toLocaleString("pt-BR")}.`,
+      "success",
     );
 
     syncCRMMovementToGoogleSheet(
-      'Captura Pública',
-      `Lead ${newLead.name} inserido via Site Externo | Telefone: ${newLead.phone} | Orçamento de Investimento: R$ ${newLead.value.toLocaleString('pt-BR')}`,
-      'Site Público Captor'
+      "Captura Pública",
+      `Lead ${newLead.name} inserido via Site Externo | Telefone: ${newLead.phone} | Orçamento de Investimento: R$ ${newLead.value.toLocaleString("pt-BR")}`,
+      "Site Público Captor",
     );
   };
 
   // Templates CRUD side actions
   const handleAddTemplate = (newTemplate: EmailTemplate) => {
-    setTemplates(prev => [newTemplate, ...prev]);
+    setTemplates((prev) => [newTemplate, ...prev]);
   };
 
   const handleEditTemplate = (updatedTemplate: EmailTemplate) => {
-    setTemplates(prev => prev.map(t => t.id === updatedTemplate.id ? updatedTemplate : t));
+    setTemplates((prev) =>
+      prev.map((t) => (t.id === updatedTemplate.id ? updatedTemplate : t)),
+    );
   };
 
   const handleDeleteTemplate = (templateId: string) => {
-    const tempObj = templates.find(t => t.id === templateId);
-    const tempName = tempObj ? tempObj.title : 'este modelo';
+    const tempObj = templates.find((t) => t.id === templateId);
+    const tempName = tempObj ? tempObj.title : "este modelo";
     requestConfirmation(
-      'Remover Modelo de E-mail?',
+      "Remover Modelo de E-mail?",
       `Deseja realmente apagar o template de mensagem "${tempName}"? Isto desativará campanhas de follow-up ligadas a ele.`,
       () => {
-        setTemplates(prev => prev.filter(t => t.id !== templateId));
-        triggerSensoryFeedback('warning', accSettings);
-        addNotification('📨 TEMPLATE REMOVIDO', `O modelo "${tempName}" foi excluído.`, 'info');
+        setTemplates((prev) => prev.filter((t) => t.id !== templateId));
+        triggerSensoryFeedback("warning", accSettings);
+        addNotification(
+          "📨 TEMPLATE REMOVIDO",
+          `O modelo "${tempName}" foi excluído.`,
+          "info",
+        );
       },
-      'danger'
+      "danger",
     );
   };
 
   const handleSendEmailSimulated = (log: EmailLog) => {
-    setEmailLogs(prev => [log, ...prev]);
+    setEmailLogs((prev) => [log, ...prev]);
     // Tag lead profile with last contacted timestamp
-    setLeads(prev => 
-      prev.map(l => l.id === log.leadId ? { ...l, lastContactAt: log.sentAt } : l)
+    setLeads((prev) =>
+      prev.map((l) =>
+        l.id === log.leadId ? { ...l, lastContactAt: log.sentAt } : l,
+      ),
     );
 
     // Automation email trigger gamified XP!
-    progressGoalCategory('email', 1);
+    progressGoalCategory("email", 1);
     awardXP(25); // 25 XP for automated template trigger
   };
 
   const handleAddAppointment = (newAppt: Appointment) => {
-    setAppointments(prev => [newAppt, ...prev]);
+    setAppointments((prev) => [newAppt, ...prev]);
 
     // Visita goal progress!
-    progressGoalCategory('visita', 1);
+    progressGoalCategory("visita", 1);
     awardXP(100); // 100 XP for planning & scheduling a visit!
 
     syncCRMMovementToGoogleSheet(
-      'Visita Agendada',
+      "Visita Agendada",
       `Reunião/Visita agendada para o cliente [${newAppt.leadName}] | Assunto: ${newAppt.title} em ${newAppt.date} às ${newAppt.time}`,
-      userName
+      userName,
     );
   };
 
-  const handleUpdateAppointmentStatus = (id: string, status: 'agendado' | 'realizado' | 'cancelado') => {
-    let previousStatus: Appointment['status'] | undefined;
-    setAppointments(prev => {
-      const appt = prev.find(a => a.id === id);
+  const handleUpdateAppointmentStatus = (
+    id: string,
+    status: "agendado" | "realizado" | "cancelado",
+  ) => {
+    let previousStatus: Appointment["status"] | undefined;
+    setAppointments((prev) => {
+      const appt = prev.find((a) => a.id === id);
       if (appt) previousStatus = appt.status;
-      return prev.map(a => a.id === id ? { ...a, status } : a);
+      return prev.map((a) => (a.id === id ? { ...a, status } : a));
     });
 
-    if (status === 'realizado' && previousStatus !== 'realizado') {
-      progressGoalCategory('visita', 1);
+    if (status === "realizado" && previousStatus !== "realizado") {
+      progressGoalCategory("visita", 1);
       awardXP(200); // 200 XP for successfully finishing an operational task!
     }
   };
 
   const handleDeleteAppointment = (id: string) => {
-    const appObj = appointments.find(a => a.id === id);
-    const appTitle = appObj ? appObj.title : 'compromisso';
+    const appObj = appointments.find((a) => a.id === id);
+    const appTitle = appObj ? appObj.title : "compromisso";
     requestConfirmation(
-      'Excluir Agendamento?',
+      "Excluir Agendamento?",
       `Tem certeza que deseja apagar o compromisso comercial "${appTitle}"? Isto desativará o alarme em tempo real no CRM.`,
       () => {
-        setAppointments(prev => prev.filter(a => a.id !== id));
-        triggerSensoryFeedback('warning', accSettings);
-        addNotification('📅 AGENDAMENTO REMOVIDO', 'Seu compromisso comercial foi removido dos registros.', 'info');
+        setAppointments((prev) => prev.filter((a) => a.id !== id));
+        triggerSensoryFeedback("warning", accSettings);
+        addNotification(
+          "📅 AGENDAMENTO REMOVIDO",
+          "Seu compromisso comercial foi removido dos registros.",
+          "info",
+        );
       },
-      'danger'
+      "danger",
     );
   };
 
   const handleAddProduct = (newProduct: InventoryItem) => {
-    setInventory(prev => [newProduct, ...prev]);
+    setInventory((prev) => [newProduct, ...prev]);
     awardXP(30); // 30 XP for catalog expansion
   };
 
   const handleUpdateStock = (id: string, delta: number) => {
-    setInventory(prev => 
-      prev.map(p => {
+    setInventory((prev) =>
+      prev.map((p) => {
         if (p.id === id) {
           const newQty = Math.max(0, p.quantity + delta);
-          let newStatus: 'disponivel' | 'baixo_estoque' | 'esgotado' = 'disponivel';
+          let newStatus: "disponivel" | "baixo_estoque" | "esgotado" =
+            "disponivel";
           if (newQty === 0) {
-            newStatus = 'esgotado';
+            newStatus = "esgotado";
           } else if (newQty < p.minQuantity) {
-            newStatus = 'baixo_estoque';
+            newStatus = "baixo_estoque";
           }
           return { ...p, quantity: newQty, status: newStatus };
         }
         return p;
-      })
+      }),
     );
   };
 
   const handleDeleteProduct = (id: string) => {
-    const prodObj = inventory.find(i => i.id === id);
-    const prodName = prodObj ? prodObj.name : 'este item';
+    const prodObj = inventory.find((i) => i.id === id);
+    const prodName = prodObj ? prodObj.name : "este item";
     requestConfirmation(
-      'Remover Item do Almoxarifado?',
+      "Remover Item do Almoxarifado?",
       `Tem certeza que deseja remover o lote "${prodName}" do estoque do almoxarifado?`,
       () => {
-        setInventory(prev => prev.filter(p => p.id !== id));
-        triggerSensoryFeedback('warning', accSettings);
-        addNotification('📦 ITEM DELETADO', 'Registro de produto excluído do almoxarifado.', 'info');
+        setInventory((prev) => prev.filter((p) => p.id !== id));
+        triggerSensoryFeedback("warning", accSettings);
+        addNotification(
+          "📦 ITEM DELETADO",
+          "Registro de produto excluído do almoxarifado.",
+          "info",
+        );
       },
-      'danger'
+      "danger",
     );
   };
 
   const handleAddProperty = (prop: RealEstateProperty) => {
-    setProperties(prev => {
-      const filtered = prev.filter(p => p.id !== prop.id);
+    isLocalPropertiesChangeRef.current = true;
+    setProperties((prev) => {
+      const filtered = prev.filter((p) => p.id !== prop.id);
       return [prop, ...filtered];
     });
     awardXP(50); // 50 XP for cataloging product assets
 
     syncCRMMovementToGoogleSheet(
-      'Imóvel Catalogado',
-      `Imóvel [${prop.code}] ${prop.title} registrado em ${prop.neighborhood} | R$ ${prop.price.toLocaleString('pt-BR')}`,
-      userName
+      "Imóvel Catalogado",
+      `Imóvel [${prop.code}] ${prop.title} registrado em ${prop.neighborhood} | R$ ${prop.price.toLocaleString("pt-BR")}`,
+      userName,
     );
   };
 
   const handleAddBulkProperties = (newProps: RealEstateProperty[]) => {
-    setProperties(prev => {
-      const existingIds = new Set(prev.map(p => p.id));
-      const filteredNew = newProps.filter(p => !existingIds.has(p.id));
+    isLocalPropertiesChangeRef.current = true;
+    setProperties((prev) => {
+      const existingIds = new Set(prev.map((p) => p.id));
+      const filteredNew = newProps.filter((p) => !existingIds.has(p.id));
       return [...filteredNew, ...prev];
     });
     awardXP(120); // 120 XP for bulk portfolio uploads
 
     syncCRMMovementToGoogleSheet(
-      'Carga em Lote de Estoque',
+      "Carga em Lote de Estoque",
       `Importados ${newProps.length} imóveis/lotes residenciais com sucesso para o catálogo universal.`,
-      userName
+      userName,
     );
   };
 
   const handleAddBulkLeads = (newLeads: Lead[]) => {
-    setLeads(prev => {
-      const existingIds = new Set(prev.map(l => l.id));
-      const filteredNew = newLeads.filter(l => !existingIds.has(l.id));
-      return [...filteredNew, ...prev];
-    });
+    // 1. Immediately save to localStorage to guarantee maximum local persistence
+    const saved = localStorage.getItem("ciclocred_crm_leads");
+    let currentLeadsList: Lead[] = [];
+    try {
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) currentLeadsList = parsed;
+      }
+    } catch (_) {}
+    const existingIds = new Set(currentLeadsList.map((l) => l.id));
+    const filteredNew = newLeads.filter((l) => !existingIds.has(l.id));
+    const updatedLeadsList = [...filteredNew, ...currentLeadsList];
+    localStorage.setItem(
+      "ciclocred_crm_leads",
+      JSON.stringify(updatedLeadsList),
+    );
+
+    // 2. Set leads state
+    isLocalLeadsChangeRef.current = true;
+    rawSetLeads(updatedLeadsList);
+
+    // 3. Immediately sync new leads to Firestore in batch to prevent network delays or race conditions from dropping them!
+    if (auth.currentUser && !forceLocalStorageMode && !isQuotaExceeded) {
+      const dbSyncLeads = async () => {
+        try {
+          const CHUNK_SIZE = 450;
+          for (let i = 0; i < filteredNew.length; i += CHUNK_SIZE) {
+            const chunk = filteredNew.slice(i, i + CHUNK_SIZE);
+            const batch = writeBatch(db);
+            chunk.forEach((l) => {
+              const cleanData = JSON.parse(JSON.stringify(l));
+              batch.set(doc(db, "leads", l.id), cleanData);
+            });
+            await batch.commit();
+          }
+          // Merge newly synced IDs into lastLeadsIdsRef to keep general sync loop consistent
+          const nextSet = new Set([
+            ...lastLeadsIdsRef.current,
+            ...filteredNew.map((l) => l.id),
+          ]);
+          lastLeadsIdsRef.current = Array.from(nextSet);
+        } catch (dbErr) {
+          console.error(
+            "Erro ao sincronizar lote importado no Firestore:",
+            dbErr,
+          );
+        }
+      };
+      dbSyncLeads();
+    }
 
     // Big bulk lead prospecting multiplier!
-    progressGoalCategory('prospecção', newLeads.length);
+    progressGoalCategory("prospecção", newLeads.length);
     awardXP(newLeads.length * 20); // 20 XP per lead imported
 
     syncCRMMovementToGoogleSheet(
-      'Importação em Lote de Leads',
+      "Importação em Lote de Leads",
       `Carga de ${newLeads.length} novos leads inseridos via planilha (.xlsx / .csv).`,
-      userName
+      userName,
     );
   };
 
   const handleDeleteProperty = (id: string) => {
-    const propObj = properties.find(p => p.id === id);
-    const propTitle = propObj ? propObj.title : 'imóvel';
+    const propObj = properties.find((p) => p.id === id);
+    const propTitle = propObj ? propObj.title : "imóvel";
     requestConfirmation(
-      'Excluir Imóvel do Estoque?',
+      "Excluir Imóvel do Estoque?",
       `Tem certeza que deseja apagar o imóvel "${propTitle}"? Isto removerá sua divulgação no Site de Captação Público.`,
       () => {
-        setProperties(prev => prev.filter(p => p.id !== id));
-        triggerSensoryFeedback('warning', accSettings);
-        addNotification('🏠 IMÓVEL DELETADO', 'Propriedade retirada do estoque de captação.', 'warning');
+        isLocalPropertiesChangeRef.current = true;
+        setProperties((prev) => prev.filter((p) => p.id !== id));
+        triggerSensoryFeedback("warning", accSettings);
+        addNotification(
+          "🏠 IMÓVEL DELETADO",
+          "Propriedade retirada do estoque de captação.",
+          "warning",
+        );
       },
-      'danger'
+      "danger",
     );
   };
 
-  const handleUpdatePropertyStatus = (id: string, status: 'disponivel' | 'reservado' | 'vendido') => {
-    setProperties(prev => prev.map(p => p.id === id ? { ...p, status } : p));
+  const handleDeleteMultiplePropertiesHandler = async (ids: string[]) => {
+    isLocalPropertiesChangeRef.current = true;
+    setProperties((prev) => prev.filter((p) => !ids.includes(p.id)));
+
+    // 2. Update localStorage
+    const saved = localStorage.getItem("ciclocred_crm_properties");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const updated = parsed.filter((p: any) => !ids.includes(p.id));
+          localStorage.setItem(
+            "ciclocred_crm_properties",
+            JSON.stringify(updated),
+          );
+        }
+      } catch (_) {}
+    }
+
+    // 3. Update Firestore immediately
+    if (auth.currentUser) {
+      try {
+        const CHUNK_SIZE = 450;
+        for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+          const chunk = ids.slice(i, i + CHUNK_SIZE);
+          const batch = writeBatch(db);
+          chunk.forEach((id) => {
+            batch.delete(doc(db, "properties", id));
+          });
+          await batch.commit();
+        }
+      } catch (err) {
+        console.error("Erro ao deletar múltiplas props no Firestore:", err);
+      }
+    }
+  };
+
+  const handleUpdatePropertyStatus = (
+    id: string,
+    status: "disponivel" | "reservado" | "vendido",
+  ) => {
+    isLocalPropertiesChangeRef.current = true;
+    setProperties((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, status } : p)),
+    );
   };
 
   const handleUpdateProperty = (updated: RealEstateProperty) => {
-    setProperties(prev => prev.map(p => p.id === updated.id ? updated : p));
+    isLocalPropertiesChangeRef.current = true;
+    setProperties((prev) =>
+      prev.map((p) => (p.id === updated.id ? updated : p)),
+    );
   };
 
   // Aggregated home stats computation
   const totalLeads = leads.length;
   const totalPipelineValue = leads.reduce((sum, l) => sum + l.value, 0);
-  const conversionRate = totalLeads > 0 
-    ? Math.round((leads.filter(l => l.status === 'fechado').length / totalLeads) * 100)
-    : 0;
+  const conversionRate =
+    totalLeads > 0
+      ? Math.round(
+          (leads.filter((l) => l.status === "fechado").length / totalLeads) *
+            100,
+        )
+      : 0;
   const winRate = conversionRate;
 
   // Gate app behind user login and password
   if (!isAuthenticated) {
     return (
-      <LoginView 
+      <LoginView
         onLoginSuccess={(name, email) => {
           setUserName(name);
           setUserEmail(email);
@@ -2213,1788 +4936,1621 @@ export default function App() {
   }
 
   // Handle CSS variable sizing and themes class
-  const fontStyle = accSettings.fontSizeClass === 'large' 
-    ? { fontSize: '110%' } 
-    : accSettings.fontSizeClass === 'extra-large' 
-      ? { fontSize: '122%' } 
-      : {};
+  const fontStyle =
+    accSettings.fontSizeClass === "large"
+      ? { fontSize: "110%" }
+      : accSettings.fontSizeClass === "extra-large"
+        ? { fontSize: "122%" }
+        : {};
 
-  let rootClass = "flex h-screen overflow-hidden font-sans transition-all duration-300 ";
-  if (theme === 'claro') {
+  let rootClass = "flex h-screen overflow-hidden font-sans ";
+  if (theme === "claro") {
     rootClass += "bg-zinc-50 text-zinc-900";
-  } else if (theme === 'escuro') {
+  } else if (theme === "escuro") {
     rootClass += "bg-zinc-950 text-zinc-100";
-  } else { // galatico
-    rootClass += "bg-gradient-to-br from-indigo-950 via-zinc-950 to-purple-950 text-indigo-100";
+  } else {
+    // galatico
+    rootClass +=
+      "bg-gradient-to-br from-indigo-950 via-zinc-950 to-purple-950 text-indigo-100";
   }
 
+  const handleGoogleSheetsImport = async () => {
+    try {
+      let token = await getAccessToken();
+      if (!token) {
+        const result = await googleSignIn();
+        if (result) token = result.accessToken;
+      }
+      if (!token) return;
+
+      const showPicker = (oauthToken: string) => {
+        const origin = window.location.origin;
+        if (!(window as any).google?.picker) {
+          addNotification(
+            "Acesso Autorizado",
+            "Aguarde o carregamento do explorador...",
+            "info",
+          );
+          return;
+        }
+        const picker = new (window as any).google.picker.PickerBuilder()
+          .addView((window as any).google.picker.ViewId.SPREADSHEETS)
+          .setOAuthToken(oauthToken)
+          .setDeveloperKey("") // Uses origin implicitly
+          .setCallback(async (data: any) => {
+            if (data.action === (window as any).google.picker.Action.PICKED) {
+              const file = data.docs[0];
+              await importFromGoogleSheet(file.id, oauthToken);
+            }
+          })
+          .setOrigin(origin)
+          .build();
+        picker.setVisible(true);
+      };
+
+      if ((window as any).gapi && !(window as any).google?.picker) {
+        (window as any).gapi.load("picker", () => showPicker(token as string));
+      } else {
+        showPicker(token);
+      }
+    } catch (err: any) {
+      alert("Erro ao abrir importador Google Sheets: " + err.message);
+    }
+  };
+
+  const importFromGoogleSheet = async (sheetId: string, token: string) => {
+    try {
+      addNotification(
+        "Conectando...",
+        "A extração dos dados foi iniciada.",
+        "info",
+      );
+      setIsImportModalOpen(false);
+
+      const res = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/A2:G100`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      if (!res.ok)
+        throw new Error("Não foi possível ler as colunas da primeira página.");
+      const data = await res.json();
+      const rows = data.values || [];
+      if (rows.length === 0) {
+        alert("A planilha selecionada está vazia!");
+        return;
+      }
+      let count = 0;
+      const parsedLeads: Lead[] = [];
+      for (const row of rows) {
+        if (!row[0]) continue;
+        parsedLeads.push({
+          id: `sheet-lead-${Date.now()}-${count}`,
+          name: row[0] || "Nome",
+          email: row[1] || "sem@email.com",
+          phone: row[2] || "",
+          familyIncome: row[3]
+            ? parseFloat(row[3].replace(/[^\d.-]/g, ""))
+            : 4500,
+          value: row[4] ? parseFloat(row[4].replace(/[^\d.-]/g, "")) : 0,
+          status: "novo",
+          origin: row[5] || "Google Sheets",
+          notes: row[6] || "Importado via API",
+          fluxoId: importPipeline,
+          createdAt: new Date().toISOString(),
+        });
+        count++;
+      }
+      handleAddBulkLeads(parsedLeads);
+      addNotification(
+        "📥 PLANILHA IMPORTADA",
+        `${count} leads carregados do Sheets de forma 100% nativa.`,
+        "success",
+      );
+      triggerSensoryFeedback("success", accSettings);
+    } catch (e: any) {
+      alert("Erro ao ler dados da planilha: " + e.message);
+    }
+  };
+
   return (
-    <div className={rootClass} style={fontStyle}>
+    <div
+      className={`min-h-screen transition-colors duration-300 ${theme === "escuro" || theme === "galatico" ? "dark bg-zinc-950 text-zinc-100" : "bg-zinc-50 text-zinc-900"} ${theme === "galatico" ? "bg-black" : ""} ${accSettings.highContrast ? "contrast-125" : ""}`}
+      style={{
+        fontSize: `${accSettings.fontScale}%`,
+        fontFamily: accSettings.dyslexicFont
+          ? "OpenDyslexic, sans-serif"
+          : "inherit",
+        filter:
+          accSettings.daltonism !== "none"
+            ? `url(#daltonism-${accSettings.daltonism})`
+            : "none",
+      }}
+      data-palette={palette}
+    >
+      {accSettings.highLegibilityFont && (
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+          * {
+            font-family: Arial, Inter, Helvetica, sans-serif !important;
+          }
+        `,
+          }}
+        />
+      )}
       {/* Right Core Content viewports wrapper */}
-      <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        {/* Mobile top-bar */}
-        {/* Universal Action & Notification Header Bar - Unified Single Responsive Header */}
-        <div className="px-4 md:px-8 py-3.5 border-b-4 bg-black border-zinc-950 text-white flex items-center justify-between">
-          {/* Left Portion of Header: Clickable brand title, shortcuts, and collapsible menu trigger right after appointments */}
-          <div className="flex flex-wrap items-center gap-4 min-w-0">
-            {/* Clickable Brand Logo/Title - Clicking it redirects directly to Dashboard ('leads') */}
+      <div className="relative flex-1 flex flex-col h-screen overflow-hidden">
+        {/* Top-center Hover/Touch trigger for the auto-hiding navigation system */}
+        <div
+          onMouseEnter={() => setIsHeaderExpanded(true)}
+          onClick={() => setIsHeaderExpanded((prev) => !prev)}
+          className="fixed top-0 left-1/2 -translate-x-1/2 w-48 h-3.5 z-[100] cursor-pointer bg-transparent border-none opacity-0 select-none"
+          title="Toque/Encoste para abrir ou fechar o menu superior"
+        />
+
+        {/* Unified Neo-Brutalist Layout according to diagram */}
+        <div
+          className={`bg-black text-white flex items-center justify-between w-full select-none shrink-0 pl-4 md:pl-8 pr-12 md:pr-16 py-3 gap-3.5 relative z-40 transition-all duration-300 ease-in-out ${
+            isHeaderExpanded
+              ? "translate-y-0 opacity-100 border-b-4 border-zinc-950 h-auto py-3"
+              : "-translate-y-full opacity-0 pointer-events-none h-0 overflow-hidden py-0 border-b-0"
+          }`}
+          onMouseLeave={() => setIsHeaderExpanded(false)}
+        >
+          {/* Title / Brand and Left Icons */}
+          <div className="flex items-center gap-3 shrink-0">
             <button
               onClick={() => {
-                triggerSensoryFeedback('click', accSettings);
-                setActiveTab('leads');
+                triggerSensoryFeedback("click", accSettings);
+                setActiveTab("painel-geral");
               }}
-              className="flex items-center gap-1.5 focus:outline-none transition group select-none text-left shrink-0 cursor-pointer"
-              title="Ir para a Tela Inicial"
+              className="flex items-center gap-2.5 focus:outline-none transition group text-left shrink-0 cursor-pointer mr-2"
+              title="cicloCRED CRM - Painel Geral"
             >
-              <Briefcase className="w-5 h-5 text-indigo-400 group-hover:scale-110 transition duration-200" />
-              <span className="font-sans font-black tracking-tighter text-md uppercase italic text-white leading-none whitespace-nowrap">
-                cicloCRED <span className="text-indigo-400">CRM</span>
+              <Briefcase className="w-5.5 h-5.5 text-indigo-400 group-hover:scale-110 transition duration-200" />
+              <span className="font-sans font-black tracking-tight text-lg md:text-xl uppercase italic text-white leading-none whitespace-nowrap">
+                CICLOCRED <span className="text-indigo-400 font-sans">CRM</span>
               </span>
             </button>
+
+            {/* Header Left: Tab Navigation 🔄 */}
+            <button
+              onClick={handleCycleTab}
+              className={`flex items-center justify-center w-9 h-9 shrink-0 rounded-xl border-2 transition-all cursor-pointer bg-indigo-600 hover:bg-indigo-500 border-indigo-400 text-white shadow-inner hover:scale-105 active:scale-95`}
+              title={`${TAB_NAMES[activeTab] || "Página"} - 🔄 Navegação (Clique: Próxima)`}
+            >
+              <span className="text-sm font-bold">🔄</span>
+            </button>
+
+            {/* Page Name Pill / Indicator */}
+            {showPageNamePill && (
+              <div className="flex items-center bg-zinc-900 border-2 border-zinc-700 text-indigo-400 rounded-lg shadow-[2px_2px_0px_0px_rgba(255,255,255,0.15)] px-3 h-9 mr-auto animate-fadeIn shrink-0">
+                <span className="font-mono font-black text-[10px] md:text-xs uppercase whitespace-nowrap">
+                  {TAB_NAMES[activeTab] || "Página"}
+                </span>
+                <button
+                  onClick={() => setShowPageNamePill(false)}
+                  className="ml-2 text-lg hover:text-rose-500 text-zinc-500 font-bold transition-colors leading-none"
+                  title="Fechar Aviso"
+                >
+                  ×
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Right Portion of Header: Notifications, Settings, and Novo Lead button */}
-          <div className="flex items-center gap-3">
-            {/* Static Bell Notification controller button */}
+          {/* Right Side Control Panel - User Photo/Modal, Notifications, and Add Lead */}
+          <div className="flex items-center gap-3 shrink-0">
+            {/* Add Lead ➕👤 Button */}
             <button
-               id="bell-notification-trigger"
-               type="button"
-               onClick={() => {
-                 triggerSensoryFeedback('click', accSettings);
-                 setIsNotificationsOpen(true);
-               }}
-               className="relative p-2.5 rounded-xl border-2 border-zinc-805 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-white transition cursor-pointer"
-               title="Ver Notificações"
+              onClick={() => {
+                triggerSensoryFeedback("click", accSettings);
+                setSelectedLeadForEdit(null);
+                setIsLeadModalOpen(true);
+              }}
+              className="bg-zinc-800 text-white border-2 border-zinc-950 text-sm font-black rounded-lg shadow-[2px_2px_0px_0px_rgba(255,255,255,0.15)] px-2 min-w-[40px] h-9 flex items-center justify-center transition-transform hover:translate-y-[-1px] active:translate-y-[1px] cursor-pointer shrink-0 whitespace-nowrap"
+              title="➕👤 Adicionar Lead à Ficha Cadastral"
             >
-              <Bell className="w-4 h-4 text-zinc-300 shrink-0" />
+              ➕👤
+            </button>
 
-              {notifications.filter(n => !n.read).length > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 block text-[9px] font-black font-mono leading-none py-0.5 px-1 bg-rose-600 text-white rounded-full border border-zinc-950">
-                  {notifications.filter(n => !n.read).length}
+            {/* Notification Bell 🔔 */}
+            <button
+              id="bell-notification-trigger"
+              type="button"
+              onClick={() => {
+                triggerSensoryFeedback("click", accSettings);
+                setIsNotificationsOpen((prev) => !prev);
+              }}
+              className="relative w-9 h-9 rounded-lg border-2 border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-white transition cursor-pointer flex items-center justify-center focus:outline-none shadow-[2px_2px_0px_0px_rgba(255,255,255,0.15)]"
+              title="🔔 Ver Notificações"
+            >
+              <Bell className="w-4 h-4 text-zinc-350 shrink-0" />
+              {notifications.filter((n) => !n.read).length > 0 && (
+                <span className="absolute -top-1 -right-1 block text-[8px] font-black font-mono leading-none py-0.5 px-1 bg-rose-600 text-white rounded-full border border-zinc-950">
+                  {notifications.filter((n) => !n.read).length}
                 </span>
               )}
             </button>
 
-            {/* Static Settings Gear Icon button */}
+            {/* User Profile Button with photo or initial */}
             <button
               onClick={() => {
-                triggerSensoryFeedback('click', accSettings);
-                setIsSettingsModalOpen(true);
+                triggerSensoryFeedback("click", accSettings);
+                setIsUserCentralModalOpen(true);
               }}
-              className="p-2.5 rounded-xl border-2 border-zinc-805 bg-zinc-900 text-zinc-300 hover:bg-zinc-850 hover:text-white transition cursor-pointer flex items-center justify-center focus:outline-none"
-              title="Ajustes, Administração & Perfil do Operador"
+              className="relative w-10 h-10 rounded-full border-2 border-zinc-950 bg-zinc-800 hover:bg-zinc-750 transition cursor-pointer flex items-center justify-center overflow-hidden shrink-0 shadow-[2px_2px_0px_0px_rgba(255,255,255,0.15)] focus:outline-none"
+              title="👤 Central do Usuário"
             >
-              <Settings className="w-4 h-4 text-zinc-300 shrink-0" />
-            </button>
-
-            {/* Novo Lead Button - Cadastro Rápido Trigger styled as elegant neo-brutalist widget */}
-            <button
-              type="button"
-              onClick={() => {
-                triggerSensoryFeedback('click', accSettings);
-                setSelectedLeadForEdit(null);
-                setIsLeadModalOpen(true);
-              }}
-              className="px-4.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs tracking-wider border-2 border-zinc-950 shadow-[2.5px_2.5px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition-all cursor-pointer flex items-center gap-1.5 uppercase shrink-0"
-              title="Adicionar Novo Lead no CRM"
-            >
-              <UserPlus className="w-4 h-4 text-white shrink-0" />
-              <span>Novo Lead</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Nova Barra Horizontal de Navegação Fixa (Substitui Menu Lateral) */}
-        <div className={`px-4 md:px-8 py-3.5 border-b-4 flex flex-wrap items-center gap-3 transition-colors duration-300 md:overflow-visible overflow-x-auto scrollbar-thin ${
-          theme === 'claro' 
-            ? 'bg-zinc-100 border-zinc-950' 
-            : theme === 'escuro' 
-              ? 'bg-zinc-900 border-zinc-950' 
-              : 'bg-indigo-950 border-indigo-900'
-        }`} id="fixed-horizontal-navbar">
-          
-          {/* Botão Leads */}
-          <button
-            type="button"
-            onClick={() => {
-              triggerSensoryFeedback('click', accSettings);
-              setActiveTab('leads');
-            }}
-            className={`px-4 py-2 text-xs font-black uppercase font-mono tracking-wider rounded-xl transition-all border-2 border-zinc-950 flex items-center gap-2 cursor-pointer shadow-[2.5px_2.5px_0px_0px_rgba(0,0,0,1)] shrink-0 h-10 ${
-              activeTab === 'leads'
-                ? 'bg-indigo-600 text-white translate-y-[1px] shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'
-                : 'bg-zinc-850 hover:bg-zinc-800 border-transparent text-zinc-350'
-            }`}
-          >
-            <Users className="w-4 h-4 text-indigo-400 shrink-0" />
-            <span>Leads</span>
-          </button>
-
-          {/* Botão Estoque (Renomeado) */}
-          <button
-            type="button"
-            onClick={() => {
-              triggerSensoryFeedback('click', accSettings);
-              setActiveTab('inventory');
-            }}
-            className={`px-4 py-2 text-xs font-black uppercase font-mono tracking-wider rounded-xl transition-all border-2 border-zinc-950 flex items-center gap-2 cursor-pointer shadow-[2.5px_2.5px_0px_0px_rgba(0,0,0,1)] shrink-0 h-10 ${
-              activeTab === 'inventory'
-                ? 'bg-indigo-600 text-white translate-y-[1px] shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'
-                : 'bg-zinc-850 hover:bg-zinc-800 border-transparent text-zinc-350'
-            }`}
-          >
-            <Home className="w-4 h-4 text-amber-500 shrink-0" />
-            <span>Estoque</span>
-          </button>
-
-          {/* Botão Agendamentos (Fixo após estoque) */}
-          <button
-            type="button"
-            onClick={() => {
-              triggerSensoryFeedback('click', accSettings);
-              setActiveTab('appointments');
-            }}
-            className={`px-4 py-2 text-xs font-black uppercase font-mono tracking-wider rounded-xl transition-all border-2 border-zinc-950 flex items-center gap-2 cursor-pointer shadow-[2.5px_2.5px_0px_0px_rgba(0,0,0,1)] shrink-0 h-10 ${
-              activeTab === 'appointments'
-                ? 'bg-indigo-600 text-white translate-y-[1px] shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'
-                : 'bg-zinc-850 hover:bg-zinc-800 border-transparent text-zinc-350'
-            }`}
-          >
-            <Calendar className="w-4 h-4 text-rose-400 shrink-0" />
-            <span>Agendamentos</span>
-          </button>
-
-          {/* Botão Simulador */}
-          <button
-            type="button"
-            onClick={() => {
-              triggerSensoryFeedback('click', accSettings);
-              setActiveTab('simulador');
-            }}
-            className={`px-4 py-2 text-xs font-black uppercase font-mono tracking-wider rounded-xl transition-all border-2 border-zinc-950 flex items-center gap-2 cursor-pointer shadow-[2.5px_2.5px_0px_0px_rgba(0,0,0,1)] shrink-0 h-10 ${
-              activeTab === 'simulador'
-                ? 'bg-indigo-600 text-white translate-y-[1px] shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'
-                : 'bg-zinc-850 hover:bg-zinc-800 border-transparent text-zinc-350'
-            }`}
-          >
-            <Calculator className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>Simulador</span>
-          </button>
-
-          {/* Botão Relatórios */}
-          <button
-            type="button"
-            onClick={() => {
-              triggerSensoryFeedback('click', accSettings);
-              setActiveTab('reports');
-            }}
-            className={`px-4 py-2 text-xs font-black uppercase font-mono tracking-wider rounded-xl transition-all border-2 border-zinc-950 flex items-center gap-2 cursor-pointer shadow-[2.5px_2.5px_0px_0px_rgba(0,0,0,1)] shrink-0 h-10 ${
-              activeTab === 'reports'
-                ? 'bg-indigo-600 text-white translate-y-[1px] shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'
-                : 'bg-zinc-850 hover:bg-zinc-800 border-transparent text-zinc-350'
-            }`}
-          >
-            <BarChart2 className="w-4 h-4 text-pink-400 shrink-0" />
-            <span>Relatórios</span>
-          </button>
-
-          {/* Botão Assistente AI (Com Workspace Integrado) */}
-          <button
-            type="button"
-            onClick={() => {
-              triggerSensoryFeedback('click', accSettings);
-              setActiveTab('gemini-server');
-            }}
-            className={`px-4 py-2 text-xs font-black uppercase font-mono tracking-wider rounded-xl transition-all border-2 border-zinc-950 flex items-center gap-2 cursor-pointer shadow-[2.5px_2.5px_0px_0px_rgba(0,0,0,1)] shrink-0 h-10 ${
-              activeTab === 'gemini-server'
-                ? 'bg-indigo-600 text-white translate-y-[1px] shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'
-                : 'bg-zinc-850 hover:bg-zinc-800 border-transparent text-zinc-350'
-            }`}
-          >
-            <Sparkles className="w-4 h-4 text-violet-400 shrink-0" />
-            <span>Assistente AI</span>
-          </button>
-
-          {/* Botão Usuário */}
-          <button
-            type="button"
-            onClick={() => {
-              triggerSensoryFeedback('click', accSettings);
-              setActiveTab('user-central');
-            }}
-            className={`px-4 py-2 text-xs font-black uppercase font-mono tracking-wider rounded-xl transition-all border-2 border-zinc-950 flex items-center gap-2 cursor-pointer shadow-[2.5px_2.5px_0px_0px_rgba(0,0,0,1)] shrink-0 h-10 ${
-              activeTab === 'user-central'
-                ? 'bg-indigo-600 text-white translate-y-[1px] shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'
-                : 'bg-zinc-850 hover:bg-zinc-800 border-transparent text-zinc-350'
-            }`}
-          >
-            <User className="w-4 h-4 text-cyan-400 shrink-0" />
-            <span>Usuário</span>
-          </button>
-        </div>
-
-        {/* Main dynamically scrolled workspace content viewport */}
-        <main className={`flex-1 overflow-y-auto p-4 md:p-8 space-y-8 transition-colors duration-300 ${
-          theme === 'claro' 
-            ? 'bg-zinc-100/50' 
-            : theme === 'escuro' 
-              ? 'bg-zinc-900/40' 
-              : 'bg-indigo-950/20 backdrop-blur-xs'
-        }`}>
-          {isQuotaExceeded && (
-            <div className="bg-amber-950/40 border-2 border-amber-500/70 rounded-2xl p-4 md:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-[0_4px_30px_rgba(0,0,0,0.5)] backdrop-blur-xs relative overflow-hidden group">
-              <div className="absolute top-0 right-0 p-4 opacity-10 font-mono tracking-tighter text-7xl select-none select-none pointer-events-none group-hover:scale-105 transition-all text-amber-500 font-extrabold font-black">
-                FIREBASE
-              </div>
-              <div className="flex gap-4 items-start max-w-3xl">
-                <div className="p-3 bg-amber-500/25 border border-amber-500/40 text-amber-400 rounded-xl shrink-0 mt-0.5">
-                  <AlertTriangle className="w-6 h-6 animate-pulse shrink-0" />
-                </div>
-                <div className="space-y-1.5 text-left">
-                  <h4 className="text-sm font-sans font-black uppercase text-amber-400 tracking-wider">
-                    ⚠️ COTA DO CLOUD FIRESTORE EXCEDIDA (SPARK FREE TIER)
-                  </h4>
-                  <p className="text-[12px] opacity-90 leading-relaxed text-amber-100">
-                    Você atingiu o limite gratuito diário de gravações ou leituras do Firebase Firestore para este projeto. O sistema ativou automaticamente o <strong>Modo Off-line Inteligente (Armazenamento Local)</strong> para que você possa continuar operando, cadastrando leads e usando a IA sem nenhuma interrupção ou perda de informações! Seus dados estão salvos com segurança no localStorage. O sincronismo retornará de forma transparente assim que o Google reiniciar a cota diária (geralmente à meia-noite PST). Mais informações sobre limites sob a coluna de plano <strong>Spark</strong> na seção <strong>Enterprise edition</strong> em <a href="https://firebase.google.com/pricing#cloud-firestore" target="_blank" rel="noreferrer" className="underline hover:text-amber-300 font-bold">Firebase Pricing</a>.
-                  </p>
-                  <div className="flex flex-wrap gap-x-4 gap-y-2 text-[10.5px] font-mono text-amber-300 font-bold uppercase mt-2">
-                    <span>• Banco ID: <code className="bg-zinc-950/50 px-1 py-0.5 rounded text-amber-100 italic font-normal text-[10px]">ai-studio-7295f37f-3832-47f6-8eec-a7e26d15c260</code></span>
-                    <span>• Projeto ID: <code className="bg-zinc-950/50 px-1 py-0.5 rounded text-amber-100 italic font-normal text-[10px]">project-06c00c3b-56af-4fcd-b6a</code></span>
-                  </div>
-                </div>
-              </div>
-              <div className="shrink-0 flex items-center md:self-center">
-                <a
-                  href="https://console.firebase.google.com/project/project-06c00c3b-56af-4fcd-b6a/firestore/databases/ai-studio-7295f37f-3832-47f6-8eec-a7e26d15c260/data?openUpgradeDialog=true"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="bg-amber-500 hover:bg-amber-600 active:translate-y-0.5 text-zinc-950 font-black font-sans text-xs tracking-wider uppercase px-4 py-3 rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all flex items-center gap-1.5 shrink-0"
-                >
-                  <span>UPGRADE NO CONSOLE</span>
-                  <ExternalLink className="w-4 h-4 shrink-0" />
-                </a>
-              </div>
-            </div>
-          )}
-
-          {/* Space between header bar and active tab content */}
-          <div className="pt-2"></div>
-
-          {/* RENDER ACTIVE TAB */}
-          
-          {/* 1. DASHBOARD OVERVIEW */}
-          {activeTab === 'dashboard' && (
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.22 }}
-              id="crm-dashboard-default"
-              className="space-y-8"
-            >
-              {/* BLOCO DE SAUDAÇÃO E INFORMAÇÕES CRM CONSOLIDADOS */}
-              <div className="bg-zinc-950 text-white border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] grid grid-cols-1 md:grid-cols-12 gap-6 relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-6 opacity-5 font-mono tracking-tighter text-8xl select-none pointer-events-none font-black uppercase">
-                  CRM
-                </div>
-                
-                {/* LADO ESQUERDO: SAUDAÇÃO, CRECI, DIA, HORÁRIO E CLIMA */}
-                <div className="md:col-span-6 space-y-4 z-10 text-left flex flex-col justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="text-3xl">
-                      {currentDateTime.getHours() < 12 ? '🌤️' : currentDateTime.getHours() < 18 ? '☀️' : '🌙'}
-                    </span>
-                    <div>
-                      <h2 className="text-xl font-black tracking-tight uppercase italic leading-tight text-white">
-                        {currentDateTime.getHours() < 12 ? 'Bom dia' : currentDateTime.getHours() < 18 ? 'Boa tarde' : 'Boa noite'}, <span className="text-indigo-400">{userName}</span>!
-                      </h2>
-                      <p className="text-[10px] text-zinc-400 font-mono font-bold uppercase tracking-wide text-left mt-0.5">
-                        🏡 {agencyName} • CRECI: {creciNumber || 'Não Integrado'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Date, Time & Clima display substituting old information block */}
-                  <div className="bg-zinc-900 border border-zinc-800/80 p-4 rounded-2xl space-y-2.5 text-left">
-                    <span className="text-[9.5px] font-mono font-black text-indigo-400 uppercase tracking-widest block text-left">
-                      🕒 DATA, HORÁRIO E CLIMA CORRENTE
-                    </span>
-                    
-                    <div className="space-y-1.5 font-mono text-[10.5px]">
-                      <div className="flex items-center gap-2 text-white">
-                        <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                        <span className="uppercase text-zinc-200 font-bold">
-                          {currentDateTime.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
-                        </span>
-                      </div>
-                      
-                      <div className="flex flex-wrap items-center gap-3">
-                        <span className="text-white text-lg font-black tracking-tight font-sans">
-                          {currentDateTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                        </span>
-                        <span className="w-1.5 h-1.5 bg-zinc-700 rounded-full hidden sm:inline" />
-                        <span className="text-emerald-400 font-black flex items-center gap-1">
-                          🌡️ 24°C • SÃO PAULO, SP
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* LADO DIREITO: OBJETIVOS OPERACIONAIS CONSOLIDADOS */}
-                <div className="md:col-span-6 bg-zinc-900 border border-zinc-850 p-5 rounded-2xl flex flex-col justify-between h-full relative overflow-hidden group z-10">
-                  <div className="space-y-1 text-left">
-                    <span className="text-[10px] font-mono font-black text-indigo-400 uppercase tracking-widest block">
-                      🎛️ INFORMAÇÕES CRM CONSOLIDADAS
-                    </span>
-                    <h4 className="text-xs font-black text-zinc-350 uppercase tracking-tight">Objetivos Operacionais de Venda</h4>
-                  </div>
-
-                  <div className="space-y-3 my-3">
-                    {/* Metric 1: Taxa de Negócios Fechados */}
-                    {(() => {
-                      const closedCount = leads.filter(l => l.status === 'fechado').length;
-                      const totalCount = leads.length;
-                      const pct = totalCount > 0 ? Math.round((closedCount / totalCount) * 105) : 0;
-                      const displayPct = Math.min(100, pct);
-                      return (
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between text-[11px]">
-                            <span className="font-bold text-zinc-300">🏆 Taxa de Negócios Fechados</span>
-                            <span className="font-mono font-black text-emerald-450">{displayPct}%</span>
-                          </div>
-                          <div className="w-full bg-zinc-950 h-2 rounded-full overflow-hidden border border-zinc-805">
-                            <div 
-                              className="bg-emerald-500 h-full rounded-full transition-all duration-1000" 
-                              style={{ width: `${displayPct}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                    {/* Metric 2: Meta de Leads */}
-                    {(() => {
-                      const count = leads.length;
-                      const pct = Math.min(Math.round((count / 10) * 100), 100);
-                      return (
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between text-[11px]">
-                            <span className="font-bold text-zinc-300">📈 Meta na Carteira Ativa</span>
-                            <span className="font-mono font-black text-indigo-400">{pct}%</span>
-                          </div>
-                          <div className="w-full bg-zinc-950 h-2 rounded-full overflow-hidden border border-zinc-805">
-                            <div 
-                              className="bg-indigo-500 h-full rounded-full transition-all duration-1000" 
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                    {/* Metric 3: Qualidade de Cadastro Real */}
-                    {(() => {
-                      const totalCrm = leads.length;
-                      const hasFictitious = leads.filter(l => l.phone && (l.phone.includes('99999-9999') || l.phone.includes('00000-0000'))).length;
-                      const realPct = totalCrm > 0 ? Math.round(((totalCrm - hasFictitious) / totalCrm) * 100) : 100;
-                      return (
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between text-[11px]">
-                            <span className="font-bold text-zinc-300">📞 Saneamento & Qualidade</span>
-                            <span className="font-mono font-black text-emerald-400">{realPct}%</span>
-                          </div>
-                          <div className="w-full bg-zinc-950 h-2 rounded-full overflow-hidden border border-zinc-805">
-                            <div 
-                              className="bg-emerald-500 h-full rounded-full transition-all duration-1000" 
-                              style={{ width: `${realPct}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-
-                  {/* Informações consolidadas custom user edit note */}
-                  <p className="text-[9px] text-zinc-400 font-sans italic border-t border-zinc-800/60 pt-2 text-left">
-                    💬 {consolidatedCrmInfo || 'Painel de faturamento integrado e atualizado via Google Workspace CRM.'}
-                  </p>
-                </div>
-              </div>
-
-              {/* KPIs indicators belt */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
-                <div className="bg-white border-4 border-zinc-950 p-5 rounded-2xl flex items-center justify-between shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-2px] transition-all duration-250">
-                  <div className="space-y-1">
-                    <span className="text-[10px] tracking-wider uppercase font-black text-zinc-500 font-mono">Total de Leads</span>
-                    <h3 className="text-3xl font-black text-zinc-900 tracking-tight">{totalLeads}</h3>
-                  </div>
-                  <div className="p-2 border-2 border-zinc-950 rounded-xl bg-indigo-50">
-                    <Users className="w-6 h-6 text-indigo-600" />
-                  </div>
-                </div>
-
-                <div className="bg-zinc-900 text-white border-4 border-zinc-950 p-5 rounded-2xl flex items-center justify-between shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-2px] transition-all duration-250">
-                  <div className="space-y-1">
-                    <span className="text-[10px] tracking-wider uppercase font-black text-indigo-400 font-mono">★ Potencial Estimado</span>
-                    <h3 className="text-2xl font-black text-white font-mono tracking-tight">
-                      {totalPipelineValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
-                    </h3>
-                  </div>
-                  <div className="p-2 border-2 border-zinc-950 rounded-xl bg-zinc-800">
-                    <DollarSign className="w-6 h-6 text-indigo-400" />
-                  </div>
-                </div>
-
-                <div className="bg-white border-4 border-zinc-950 p-5 rounded-2xl flex items-center justify-between shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-2px] transition-all duration-250">
-                  <div className="space-y-1">
-                    <span className="text-[10px] tracking-wider uppercase font-black text-zinc-500 font-mono">Taxa de Conversão</span>
-                    <h3 className="text-3xl font-black text-zinc-900 tracking-tight">
-                      <AnimatedCounter value={conversionRate} />%
-                    </h3>
-                  </div>
-                  <div className="p-2 border-2 border-zinc-950 rounded-xl bg-emerald-50">
-                    <TrendingUp className="w-6 h-6 text-emerald-600" />
-                  </div>
-                </div>
-
-                <div 
-                  id="crm-dashboard-winrate"
-                  className={`border-4 border-zinc-950 p-5 rounded-2xl flex items-center justify-between relative group hover:translate-y-[-2px] transition-all duration-250 ${
-                    theme === 'claro' 
-                      ? 'bg-gradient-to-br from-rose-50/80 via-zinc-50 to-white text-zinc-900 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)]'
-                      : theme === 'galatico'
-                      ? 'bg-gradient-to-br from-indigo-950 via-purple-950 to-pink-950 text-white border-indigo-500 shadow-[4px_4px_0px_0px_rgba(99,102,241,0.45)]'
-                      : 'bg-gradient-to-br from-zinc-900 via-zinc-950 to-zinc-900 text-white shadow-[4px_4px_0px_0px_rgba(24,24,27,1)]'
-                  }`}
-                >
-                  {/* Detailed Interactive Tooltip */}
-                  <div className="absolute bottom-[108%] left-1/2 -translate-x-1/2 w-72 bg-zinc-950 border-4 border-zinc-950 p-4 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-300 z-50 text-left space-y-2.5">
-                    <div className="flex items-center gap-1.5 border-b border-zinc-800 pb-2">
-                      <Trophy className="w-4 h-4 text-rose-400 shrink-0" />
-                      <span className="text-[10px] font-black uppercase text-zinc-100 font-mono tracking-wider">Metas e Win Rate</span>
-                    </div>
-                    <p className="text-[10px] text-zinc-300 font-sans leading-relaxed">
-                      Representa a taxa de conversão direta de leads que foram encerrados como <span className="text-emerald-400 font-bold">"Fechado (Concluído)"</span> com sucesso frente ao montante acumulado.
-                    </p>
-                    <div className="grid grid-cols-2 gap-2 text-center pt-1 border-t border-zinc-900/90 font-mono text-[9px]">
-                      <div className="bg-zinc-900 p-1.5 rounded-lg border border-zinc-805">
-                        <span className="text-zinc-500 block">FECHADOS</span>
-                        <span className="text-emerald-400 font-black text-xs">{leads.filter(l => l.status === 'fechado').length}</span>
-                      </div>
-                      <div className="bg-zinc-900 p-1.5 rounded-lg border border-zinc-805">
-                        <span className="text-zinc-500 block">TOTAL LEADS</span>
-                        <span className="text-white font-black text-xs">{totalLeads}</span>
-                      </div>
-                    </div>
-                    <div className="text-[8px] font-mono text-zinc-500 text-center uppercase">
-                      Fórmula: (Fechados / Total) * 100
-                    </div>
-                    {/* Tooltip arrow decoration */}
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 w-3 h-3 bg-zinc-950 border-r-4 border-b-4 border-zinc-950 rotate-45 -translate-y-1.5" />
-                  </div>
-
-                  <div className="space-y-1 relative z-10">
-                    <span className={`text-[10px] tracking-wider uppercase font-black font-mono ${theme === 'claro' ? 'text-rose-600' : theme === 'galatico' ? 'text-pink-400' : 'text-rose-400'}`}>
-                      Win Rate
-                    </span>
-                    <h3 className={`text-3xl font-black tracking-tight ${theme === 'claro' ? 'text-zinc-900' : 'text-white'}`}>
-                      <AnimatedCounter value={winRate} />%
-                    </h3>
-                  </div>
-                  <div className={`p-2 border-2 border-zinc-950 rounded-xl relative z-10 shrink-0 ${theme === 'claro' ? 'bg-rose-100 text-rose-700' : 'bg-rose-50 text-rose-600'}`}>
-                    <Trophy className="w-6 h-6" />
-                  </div>
-                </div>
-
-                <div className="bg-white border-4 border-zinc-950 p-5 rounded-2xl flex items-center justify-between shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-2px] transition-all duration-250">
-                  <div className="space-y-1">
-                    <span className="text-[10px] tracking-wider uppercase font-black text-zinc-500 font-mono">Automações Ativas</span>
-                    <h3 className="text-3xl font-black text-zinc-900 tracking-tight">{emailLogs.length}</h3>
-                  </div>
-                  <div className="p-2 border-2 border-zinc-950 rounded-xl bg-amber-50">
-                    <Mail className="w-6 h-6 text-amber-600" />
-                  </div>
-                </div>
-              </div>
-
-              {/* NEW PREMIUM KPI ROW (1/3 metrics, 2/3 Leads Control Pie Chart) */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 select-none animate-fade-in">
-                
-                {/* 1. Novo Gráfico: Origem de Captação dos Leads (Recharts BarChart) */}
-                <div className="bg-white border-4 border-zinc-950 p-6 rounded-3xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] flex flex-col justify-between h-[340px] select-none">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <span className="text-[10px] tracking-wider uppercase font-black text-indigo-650 font-mono">★ Canais de Marketing</span>
-                      <h3 className="text-lg font-black text-zinc-900 uppercase italic tracking-tighter">Origem de Captação</h3>
-                    </div>
-                  </div>
-
-                  {leads.length === 0 ? (
-                    <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
-                      <p className="text-zinc-500 text-xs font-mono uppercase font-bold">Sem captação registrada</p>
-                      <p className="text-zinc-400 text-[10px] max-w-xs mt-1 leading-tight">Cadastre novos leads com canais definidos para alimentar este gráfico gerencial.</p>
-                    </div>
-                  ) : (
-                    <div className="flex-1 flex flex-col justify-end mt-4 h-[210px] w-full">
-                      {(() => {
-                        const counts: Record<string, number> = {};
-                        leads.forEach(l => {
-                          let raw = l.origin || 'Outros';
-                          if (raw.toLowerCase().includes('chat')) raw = 'Chatbot';
-                          else if (raw.toLowerCase().includes('whats')) raw = 'WhatsApp';
-                          else if (raw.toLowerCase().includes('meta') || raw.toLowerCase().includes('face') || raw.toLowerCase().includes('insta')) raw = 'Meta Ads';
-                          else if (raw.toLowerCase().includes('indica')) raw = 'Indicação';
-                          else if (raw.toLowerCase().includes('site') || raw.toLowerCase().includes('web')) raw = 'Portal Web';
-                          else if (raw.toLowerCase().includes('manual') || raw.toLowerCase().includes('cadast')) raw = 'Manual';
-                          counts[raw] = (counts[raw] || 0) + 1;
-                        });
-
-                        const chartData = Object.entries(counts)
-                          .map(([name, value]) => ({ name, value }))
-                          .sort((a, b) => b.value - a.value)
-                          .slice(0, 4);
-
-                        const colors = ['#6366f1', '#10b981', '#06b6d4', '#f59e0b'];
-
-                        return (
-                          <div className="w-full h-full relative">
-                            <ResponsiveContainer width="100%" height={180}>
-                              <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 15, left: -10, bottom: 5 }}>
-                                <XAxis type="number" hide />
-                                <YAxis 
-                                  dataKey="name" 
-                                  type="category" 
-                                  axisLine={false}
-                                  tickLine={false} 
-                                  tick={{ fontSize: 9, fontWeight: 900, fill: '#18181b', fontFamily: 'monospace' }}
-                                  width={75}
-                                />
-                                <Tooltip 
-                                  cursor={{ fill: '#f4f4f5', opacity: 0.5 }}
-                                  content={({ active, payload }) => {
-                                    if (active && payload && payload.length) {
-                                      const data = payload[0].payload;
-                                      return (
-                                        <div className="bg-zinc-950 border-2 border-zinc-900 p-2 rounded-xl shadow-lg text-[9px] font-mono text-white">
-                                          <p className="font-bold">{data.name}</p>
-                                          <p className="text-zinc-300 mt-0.5">Leads: {data.value}</p>
-                                        </div>
-                                      );
-                                    }
-                                    return null;
-                                  }}
-                                />
-                                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14}>
-                                  {chartData.map((_, index) => (
-                                    <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
-                                  ))}
-                                </Bar>
-                              </BarChart>
-                            </ResponsiveContainer>
-                            
-                            {/* Premium Mini-Legend inline below */}
-                            <div className="flex flex-wrap gap-x-3 gap-y-1 justify-center pt-2 border-t border-zinc-100">
-                              {chartData.map((d, i) => (
-                                <div key={d.name} className="flex items-center gap-1 font-mono text-[8px] font-bold text-zinc-500 uppercase">
-                                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: colors[i % colors.length] }} />
-                                  <span>{d.name}: {d.value}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  )}
-
-                  <div className="border-t border-zinc-100 pt-2 flex items-center justify-between text-[8px] font-mono font-bold text-zinc-400 select-none">
-                    <span>CANAIS DE MARKETING</span>
-                    <span>ATUALIZAÇÃO TEMPO REAL</span>
-                  </div>
-                </div>
-
-                {/* 2. Leads Control Pie Chart (Take up 2 columns space of the layout) */}
-                <div className="lg:col-span-2 bg-white border-4 border-zinc-950 p-6 rounded-3xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] flex flex-col justify-between h-[340px]">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <span className="text-[10px] tracking-wider uppercase font-black text-indigo-650 font-mono">★ Gestão de Desempenho</span>
-                      <h3 className="text-lg font-black text-zinc-900 uppercase italic tracking-tighter">Indicador Gráfico de Leads (Pizza)</h3>
-                    </div>
-                    <div className="bg-indigo-50 border-2 border-zinc-950 rounded-xl px-2.5 py-1 text-[9.5px] font-mono font-black text-indigo-750 uppercase shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)]">
-                      Total Ativos: {leads.length}
-                    </div>
-                  </div>
-
-                  {leads.length === 0 ? (
-                    <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
-                      <div className="w-16 h-16 rounded-full border-4 border-dashed border-zinc-200 flex items-center justify-center text-zinc-300 font-bold text-xl font-mono">0%</div>
-                      <p className="text-zinc-500 text-xs font-mono mt-3 uppercase font-bold">Nenhum Lead ativo para exibir controle gráfico</p>
-                      <p className="text-zinc-400 text-[10px] max-w-sm mt-1 leading-tight">Cadastre alguns contatos na aba "Leads" para ativar o monitoramento em formato pizza.</p>
-                    </div>
-                  ) : (
-                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-12 gap-6 items-center my-1">
-                      
-                      {/* Left: The Pie Chart Canvas (5 columns) */}
-                      <div className="sm:col-span-5 flex justify-center items-center relative h-[210px] w-full">
-                        {(() => {
-                          const statusMeta = {
-                            novo: { label: 'Novo / Entrada', color: '#06b6d4', ringHex: 'rgba(6,182,212,0.15)' },
-                            em_contato: { label: 'Em Contato', color: '#f59e0b', ringHex: 'rgba(245,158,11,0.15)' },
-                            proposta: { label: 'Proposta Enviada', color: '#a855f7', ringHex: 'rgba(168,85,247,0.15)' },
-                            fechado: { label: 'Fechado (Ganho)', color: '#10b981', ringHex: 'rgba(16,185,129,0.15)' },
-                            perdido: { label: 'Perdido', color: '#f43f5e', ringHex: 'rgba(244,63,94,0.15)' },
-                          };
-
-                          const totalLeadsCount = leads.length;
-                          const slices = Object.keys(statusMeta).map((statusKey) => {
-                            const key = statusKey as LeadStatus;
-                            const filtered = leads.filter(l => l.status === key);
-                            const count = filtered.length;
-                            const pct = totalLeadsCount > 0 ? (count / totalLeadsCount) * 100 : 0;
-                            const value = filtered.reduce((acc, curr) => acc + (curr.value || 0), 0);
-                            return {
-                              status: key,
-                              label: statusMeta[key].label,
-                              color: statusMeta[key].color,
-                              ringHex: statusMeta[key].ringHex,
-                              count,
-                              pct,
-                              value
-                            };
-                          });
-
-                          const rechartsData = slices.filter(s => s.count > 0).map(s => ({
-                            name: s.label,
-                            value: s.count,
-                            color: s.color,
-                            pct: s.pct,
-                            totalValue: s.value,
-                            status: s.status
-                          }));
-
-                          const activeSlice = slices.find(s => s.status === hoveredStatusSlice) || null;
-
-                          return (
-                            <>
-                              <div className="w-full h-full relative flex items-center justify-center">
-                                <ResponsiveContainer width="100%" height={200}>
-                                  <PieChart>
-                                    <Pie
-                                      data={rechartsData.length > 0 ? rechartsData : [{ name: 'Sem dados', value: 1, color: '#e4e4e7', pct: 0, totalValue: 0, status: 'empty' }]}
-                                      cx="50%"
-                                      cy="50%"
-                                      innerRadius={55}
-                                      outerRadius={75}
-                                      paddingAngle={2}
-                                      dataKey="value"
-                                      animationDuration={700}
-                                      onMouseEnter={(_, index) => {
-                                        if (rechartsData[index]) {
-                                          setHoveredStatusSlice(rechartsData[index].status as any);
-                                        }
-                                      }}
-                                      onMouseLeave={() => {
-                                        setHoveredStatusSlice(null);
-                                      }}
-                                    >
-                                      {rechartsData.length > 0 ? (
-                                        rechartsData.map((entry, index) => (
-                                          <Cell 
-                                            key={`cell-${index}`} 
-                                            fill={entry.color}
-                                            style={{
-                                              filter: hoveredStatusSlice === entry.status ? 'drop-shadow(0px 3px 6px rgba(0,0,0,0.15))' : 'none',
-                                              cursor: 'pointer',
-                                              transition: 'all 0.2s ease',
-                                              transform: hoveredStatusSlice === entry.status ? 'scale(1.04)' : 'scale(1)',
-                                              transformOrigin: 'center'
-                                            }}
-                                          />
-                                        ))
-                                      ) : (
-                                        <Cell fill="#e4e4e7" />
-                                      )}
-                                    </Pie>
-                                    <Tooltip 
-                                      content={({ active, payload }) => {
-                                        if (active && payload && payload.length && rechartsData.length > 0) {
-                                          const data = payload[0].payload;
-                                          return (
-                                            <div className="bg-zinc-950 border-2 border-zinc-900 p-2.5 rounded-xl shadow-xl text-[10px] font-mono text-white max-w-[180px]">
-                                              <p className="font-black uppercase tracking-wider text-indigo-300">{data.name}</p>
-                                              <p className="text-zinc-300 mt-1">Leads: {data.value} ({data.pct.toFixed(0)}%)</p>
-                                              <p className="text-emerald-450 font-bold mt-0.5">
-                                                {data.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
-                                              </p>
-                                            </div>
-                                          );
-                                        }
-                                        return null;
-                                      }}
-                                    />
-                                  </PieChart>
-                                </ResponsiveContainer>
-
-                                {/* Absolute Centered Label */}
-                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center text-center pointer-events-none select-none">
-                                  {activeSlice ? (
-                                    <>
-                                      <strong className="text-2xl font-sans font-black text-zinc-900 leading-none">
-                                        {activeSlice.count}
-                                      </strong>
-                                      <span className="text-[8px] font-bold text-zinc-400 uppercase tracking-widest mt-0.5 font-mono">
-                                        {activeSlice.count === 1 ? 'LEAD' : 'LEADS'}
-                                      </span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <strong className="text-xs font-sans font-black text-indigo-600 uppercase tracking-wider leading-none">
-                                        FUNIL
-                                      </strong>
-                                      <span className="text-[7px] font-black text-zinc-400 uppercase tracking-widest mt-0.5 font-mono">
-                                        REALTIME
-                                      </span>
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                            </>
-                          );
-                        })()}
-                      </div>
-
-                      {/* Right: The Grid Legend & Data breakdown list (7 columns) */}
-                      <div className="sm:col-span-7 space-y-1.5 font-sans">
-                        {(() => {
-                          const statusMeta = {
-                            novo: { label: 'Novo / Entrada', color: '#06b6d4', bg: 'bg-cyan-50', text: 'text-cyan-700' },
-                            em_contato: { label: 'Prospecção / Tratativa', color: '#f59e0b', bg: 'bg-amber-50', text: 'text-amber-700' },
-                            proposta: { label: 'Proposta Enviada', color: '#a855f7', bg: 'bg-purple-50', text: 'text-purple-705' },
-                            fechado: { label: 'Vendido / Fechado', color: '#10b981', bg: 'bg-emerald-50', text: 'text-emerald-700' },
-                            perdido: { label: 'Sem Sucesso', color: '#f43f5e', bg: 'bg-rose-50', text: 'text-rose-700' },
-                          };
-
-                          const totalLeadsCount = leads.length;
-                          return Object.keys(statusMeta).map((statusKey) => {
-                            const key = statusKey as LeadStatus;
-                            const filtered = leads.filter(l => l.status === key);
-                            const count = filtered.length;
-                            const pct = totalLeadsCount > 0 ? (count / totalLeadsCount) * 100 : 0;
-                            const value = filtered.reduce((acc, curr) => acc + (curr.value || 0), 0);
-                            const meta = statusMeta[key];
-                            const isSelected = hoveredStatusSlice === key;
-
-                            return (
-                              <div
-                                key={key}
-                                onMouseEnter={() => setHoveredStatusSlice(key)}
-                                onMouseLeave={() => setHoveredStatusSlice(null)}
-                                className={`flex items-center justify-between p-1.5 rounded-xl border transition-all cursor-pointer ${
-                                  isSelected 
-                                    ? 'bg-zinc-50 border-zinc-950 translate-x-1 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' 
-                                    : 'bg-white border-zinc-105 hover:border-zinc-300'
-                                }`}
-                              >
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: meta.color }} />
-                                  <span className="text-[10px] font-black text-zinc-700">{meta.label}</span>
-                                </div>
-                                <div className="flex items-center gap-2 text-[10px] font-mono text-right pl-4">
-                                  <span className="text-zinc-400">({count})</span>
-                                  <span className={`px-1.5 py-0.5 rounded-md font-bold ${meta.bg} ${meta.text}`}>
-                                    {pct.toFixed(0)}%
-                                  </span>
-                                  <span className="font-bold text-zinc-850 w-16 truncate">
-                                    {value > 0 ? value.toLocaleString('pt-BR', { notation: 'compact' }) : 'R$ 0'}
-                                  </span>
-                                </div>
-                              </div>
-                            );
-                          });
-                        })()}
-                      </div>
-
-                    </div>
-                  )}
-
-                  <div className="border-t border-zinc-100 pt-2 flex items-center justify-between text-[8.5px] font-mono font-bold text-zinc-400 select-none">
-                    <span>💡 DICA: PASSE O MOUSE SOBRE OS SEGMENTOS PARA FILTRAR OS DETALHES DE STATUS</span>
-                    <span>PAINEL REALTIME CICLOCRED</span>
-                  </div>
-                </div>
-
-              </div>
-
-              {/* INTERACTIVE LEADS DA SORTE ROULLETTE */}
-              <div className="bg-zinc-900 border-4 border-zinc-950 rounded-3xl p-6 select-none shadow-[6px_6px_0px_0px_rgba(24,24,27,1)] text-white relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-indigo-950/25 to-transparent pointer-events-none" />
-                
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-zinc-800 pb-4 mb-4 gap-4">
-                  <div>
-                    <span className="text-[10.5px] font-mono font-black text-indigo-400 uppercase tracking-widest block">
-                      🎰 DISTRIBUIDOR DE OPORTUNIDADES
-                    </span>
-                    <h2 className="text-xl font-black text-zinc-100 uppercase italic tracking-tighter flex items-center gap-2">
-                      <span>Leads da Sorte cicloCRED</span>
-                    </h2>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-[10px] font-mono text-zinc-400 bg-zinc-850 px-2.5 py-1 rounded-xl border border-zinc-800">
-                      Disponível: {leads.length} Leads
-                    </span>
-                    <button
-                      onClick={drawLuckyLead}
-                      disabled={isSpinningSorte || leads.length === 0}
-                      className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-xs font-black text-white rounded-xl uppercase tracking-wider border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(255,255,255,1)] hover:translate-y-[-1px] transition duration-200 outline-none flex items-center gap-2 cursor-pointer"
-                    >
-                      <Gift className="w-4 h-4 animate-bounce" />
-                      {isSpinningSorte ? 'Sorteando...' : '🎰 Sortear Lead da Sorte'}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
-                  
-                  {/* Left Column: Roulette Animation Display or Idle State */}
-                  <div className="md:col-span-6 bg-zinc-950 rounded-2xl border-2 border-zinc-850 p-6 h-[180px] flex flex-col justify-center items-center relative overflow-hidden">
-                    <div className="absolute top-2 left-3 text-[8px] font-mono text-zinc-650 tracking-wider">VISUALIZADOR REALTIME</div>
-                    
-                    {isSpinningSorte && (
-                      <div className="text-center space-y-3">
-                        <div className="text-2xl font-black tracking-widest text-indigo-400 font-mono animate-pulse uppercase truncate max-w-xs transition-all duration-75">
-                          🎰 {currentSpinningName}
-                        </div>
-                        <p className="text-[10px] text-zinc-500 font-mono tracking-widest uppercase font-bold animate-pulse">Girando roleta da fortuna corporativa...</p>
-                        <div className="flex items-center justify-center gap-1">
-                          <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce delay-100"></span>
-                          <span className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce delay-200"></span>
-                          <span className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-bounce delay-300"></span>
-                        </div>
-                      </div>
-                    )}
-
-                    {!isSpinningSorte && !luckyLead && (
-                      <div className="text-center space-y-2">
-                        <p className="text-sm font-semibold text-zinc-350">Precisa focar em um novo contato?</p>
-                        <p className="text-xs text-zinc-500 max-w-sm">Gire a roleta de distribuição inteligente para receber sugestão da IA para o seu próximo follow-up de alta conversão! (+150 XP de bônus ao sortear)</p>
-                      </div>
-                    )}
-
-                    {!isSpinningSorte && luckyLead && (
-                      <div className="text-center space-y-2.5 w-full">
-                        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-emerald-400 text-[10px] font-mono font-black uppercase">
-                          ⭐ Lead Premiado do Dia
-                        </div>
-                        <h3 className="text-2xl font-black text-zinc-100 uppercase truncate px-4">{luckyLead.name}</h3>
-                        <p className="text-xs font-mono text-zinc-400">Origem: {luckyLead.origin} · R$ {luckyLead.value.toLocaleString('pt-BR')}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Right Column: Information & Actions of Chosen Lead */}
-                  <div className="md:col-span-6 space-y-4">
-                    {luckyLead ? (
-                      <div className="bg-zinc-850 rounded-2xl p-4.5 border-2 border-zinc-950 space-y-3.5 select-text animate-fadeIn text-xs">
-                        <div className="flex justify-between items-center text-[10px] font-mono font-bold text-zinc-400 border-b border-zinc-800 pb-2">
-                          <span>📋 AÇÕES DE ALTA CONVERSÃO RECOMENDADAS:</span>
-                          <span className="text-emerald-500 font-black">+150 XP CONCEDIDO 💰</span>
-                        </div>
-                        
-                        <div className="space-y-2 font-sans font-medium text-zinc-300 leading-relaxed text-left">
-                          <p>🎯 <strong>Renda Declarada:</strong> {luckyLead.familyIncome ? `R$ ${luckyLead.familyIncome.toLocaleString('pt-BR')}` : 'Não cadastrada'}</p>
-                          <p>📞 <strong>Telefone:</strong> {luckyLead.phone} · ✉️ <strong>Email:</strong> {luckyLead.email}</p>
-                          <p className="truncate">📝 <strong>Notas Rápidas:</strong> {luckyLead.notes || 'Sem anotações no cadastro deste lead.'}</p>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-3 pt-2">
-                          <button
-                            onClick={() => {
-                              setSelectedLeadForDetails(luckyLead);
-                              setIsDetailsModalOpen(true);
-                            }}
-                            className="w-full text-center py-2 bg-indigo-600 hover:bg-indigo-700 text-[10px] font-black text-white rounded-lg border-2 border-zinc-950 shadow-[1.5px_1.5px_0px_0px_rgba(255,255,255,1)] uppercase transition cursor-pointer"
-                          >
-                            Abrir Dossiê Preditivo 🔬
-                          </button>
-                          <a
-                            href={`https://wa.me/55${luckyLead.phone.replace(/\D/g, '')}?text=Olá%20${encodeURIComponent(luckyLead.name)}!%20Aqui%20é%20o%20credenciado%20da%20cicloCRED.%25Sorteado!`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="w-full text-center py-2 bg-emerald-600 hover:bg-emerald-700 text-[10px] font-black text-white rounded-lg border-2 border-zinc-950 shadow-[1.5px_1.5px_0px_0px_rgba(255,255,255,1)] uppercase transition inline-flex items-center justify-center gap-1 cursor-pointer"
-                          >
-                            Chamar no Whatsapp 💬
-                          </a>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="h-full flex flex-col justify-center items-center text-center p-4 border border-dashed border-zinc-800 rounded-2xl">
-                        <p className="text-zinc-500 font-mono uppercase font-black text-[10px] tracking-wider mb-1">🎰 NENHUM LEAD CONVOCADO</p>
-                        <p className="text-[10px] text-zinc-400">Clique em "Sortear Lead da Sorte" acima para rodar o distribuidor acelerado!</p>
-                      </div>
-                    )}
-                  </div>
-
-                </div>
-              </div>
-
-              {/* GOOGLE WORKSPACE EXPANDED DASHBOARD BENTO BOX */}
-              <div className="bg-gradient-to-br from-indigo-950 via-zinc-950 to-zinc-900 border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] text-white select-none relative overflow-hidden my-2">
-                <div className="absolute right-4 bottom-2 text-8xl text-white/5 font-black font-mono select-none pointer-events-none">G-WORK</div>
-                
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800/80 pb-4 mb-4">
-                  <div className="space-y-1 text-left">
-                    <span className="text-[10px] uppercase font-black text-indigo-400 font-mono tracking-widest flex items-center gap-1.5">
-                      <Cloud className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
-                      <span>Sincronismo Global Google Workspace</span>
-                    </span>
-                    <h3 className="text-md md:text-lg font-black uppercase text-zinc-100 font-sans italic">Hub Avançado de Desempenho & Ações Digitais</h3>
-                  </div>
-                  
-                  {getWorkspaceToken() ? (
-                    <div className="flex items-center gap-2">
-                      <span className="bg-emerald-950/80 border border-emerald-500 text-emerald-400 text-[10px] px-3 py-1 rounded-full font-mono font-black uppercase flex items-center gap-1.5">
-                        <span className="w-2 h-2 bg-emerald-400 rounded-full animate-ping shrink-0" />
-                        <span>WORKSPACE CONECTADO</span>
-                      </span>
-                      <button
-                        onClick={() => {
-                          triggerSensoryFeedback('click', accSettings);
-                          setActiveTab('google-workspace');
-                        }}
-                        className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[9.5px] px-3 py-1 rounded-full font-mono font-black uppercase transition cursor-pointer"
-                      >
-                        Configurar APIs
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                      <span className="bg-amber-950/80 border border-amber-600 text-amber-300 text-[9px] px-3 py-1 rounded-full font-mono font-black uppercase text-center font-bold">
-                        ⚠️ AGUARDANDO AUTENTICAÇÃO OAUTH
-                      </span>
-                      <button
-                        onClick={() => {
-                          triggerSensoryFeedback('click', accSettings);
-                          setActiveTab('google-workspace');
-                        }}
-                        className="bg-indigo-650 hover:bg-indigo-700 hover:translate-y-[-1px] text-white text-[9.5px] px-3.5 py-1 rounded-full font-mono font-black uppercase text-center transition cursor-pointer"
-                      >
-                        Ativar Workspace Já!
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
-                  {/* Calendar Widget */}
-                  <div className="bg-zinc-950/40 border border-zinc-800 p-4 rounded-2xl flex flex-col justify-between space-y-3">
-                    <div className="space-y-1">
-                      <h4 className="text-xs font-black text-indigo-400 uppercase font-mono flex items-center gap-1.5">
-                        <Calendar className="w-4 h-4 text-indigo-450" />
-                        <span>Compromissos Google Calendar</span>
-                      </h4>
-                      <p className="text-[10px] text-zinc-400 font-sans leading-relaxed">
-                        Sua agenda de visitas habitacionais e reuniões de alinhamento corporativo integrados.
-                      </p>
-                    </div>
-                    {getWorkspaceToken() ? (
-                      <div className="space-y-2">
-                        <div className="p-2 bg-zinc-900 border border-zinc-800 text-[10px] rounded space-y-0.5">
-                          <span className="font-sans font-black text-white block">Revisão SBPE MCMV - Sr. Silva</span>
-                          <span className="text-[8.5px] text-zinc-500 font-mono block">Amanhã · 14:00 (Google Calendar Sync)</span>
-                        </div>
-                        <button
-                          onClick={() => { triggerSensoryFeedback('click', accSettings); setActiveTab('appointments'); }}
-                          className="w-full text-center py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-850 rounded text-[9.5px] font-mono font-black uppercase text-zinc-350 cursor-pointer"
-                        >
-                          Visualizar Escala
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="text-[10px] text-zinc-650 italic font-mono">Conecte sua conta Google para ler a agenda.</span>
-                    )}
-                  </div>
-
-                  {/* Gmail Widget */}
-                  <div className="bg-zinc-950/40 border border-zinc-800 p-4 rounded-2xl flex flex-col justify-between space-y-3">
-                    <div className="space-y-1">
-                      <h4 className="text-xs font-black text-red-400 uppercase font-mono flex items-center gap-1.5">
-                        <Mail className="w-4 h-4 text-red-450" />
-                        <span>API de E-mails do Gmail</span>
-                      </h4>
-                      <p className="text-[10px] text-zinc-400 font-sans leading-relaxed">
-                        Frequência de follow-up automatizado de vendas e reaquecimento ativo de leads desengajados.
-                      </p>
-                    </div>
-                    {getWorkspaceToken() ? (
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center text-[10px] font-mono">
-                          <span className="text-zinc-500 font-bold">STATUS API GMAIL:</span>
-                          <span className="text-emerald-400 font-black">ATIVA & PRONTA</span>
-                        </div>
-                        <div className="w-full bg-zinc-900 h-1 rounded-full overflow-hidden">
-                          <div className="bg-emerald-500 h-full w-full" />
-                        </div>
-                        <button
-                          onClick={() => { triggerSensoryFeedback('click', accSettings); setActiveTab('automation-flows'); }}
-                          className="w-full text-center py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-850 rounded text-[9.5px] font-mono font-black uppercase text-zinc-350 cursor-pointer"
-                        >
-                          Roteiros e Disparos
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="text-[10px] text-zinc-650 italic font-mono">Autentique para habilitar disparos velozes.</span>
-                    )}
-                  </div>
-
-                  {/* Sheets & Drive Integration Widget */}
-                  <div className="bg-zinc-950/40 border border-zinc-800 p-4 rounded-2xl flex flex-col justify-between space-y-3">
-                    <div className="space-y-1">
-                      <h4 className="text-xs font-black text-emerald-400 uppercase font-mono flex items-center gap-1.5">
-                        <LineChart className="w-4 h-4 text-emerald-450" />
-                        <span>Controle de Planilhas & Drive</span>
-                      </h4>
-                      <p className="text-[10px] text-zinc-400 font-sans leading-relaxed">
-                        Extraia cadastros de planilhas do Google Drive ou envie backups para armazenamento em nuvem.
-                      </p>
-                    </div>
-                    {getWorkspaceToken() ? (
-                      <div className="space-y-2">
-                        <div className="p-2 bg-zinc-900 border border-zinc-800 text-[10px] rounded flex justify-between items-center">
-                          <span className="text-zinc-300 font-sans truncate">Backup_CicloCred.xlsx</span>
-                          <span className="text-[8.5px] text-emerald-400 bg-emerald-950 font-black px-1.5 py-0.5 rounded uppercase font-mono shrink-0">Ativo</span>
-                        </div>
-                        <button
-                          onClick={() => { triggerSensoryFeedback('click', accSettings); setActiveTab('google-workspace'); }}
-                          className="w-full text-center py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-850 rounded text-[9.5px] font-mono font-black uppercase text-zinc-350 cursor-pointer"
-                        >
-                          Importar / Exportar Planilhas
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="text-[10px] text-zinc-650 italic font-mono">Faça login para importar planilhas corporativas.</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Split Body Layout: Left Feed, Right Quick Actions and Leads Summary */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                
-                {/* Recent Activities (7 Columns) */}
-                <div className="lg:col-span-7 bg-white border-4 border-zinc-950 rounded-3xl p-6 space-y-5 shadow-[6px_6px_0px_0px_rgba(24,24,27,1)]">
-                  <div className="flex justify-between items-start flex-wrap gap-2">
-                    <div>
-                      <h2 className="text-lg font-black text-zinc-900 uppercase italic tracking-tighter">Disparos Recentes</h2>
-                      <p className="text-xs text-zinc-500 mt-1 font-medium">Últimos e-mails disparados via campanhas automatizadas.</p>
-                    </div>
-                    {emailLogs.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          requestConfirmation(
-                            "Zerar Histórico de Envio",
-                            "Deseja realmente apagar de forma definitiva todo o histórico de disparos de e-mails? Essa operação não pode ser desfeita.",
-                            () => {
-                              setEmailLogs([]);
-                              addNotification(
-                                '🧹 HISTÓRICO ZERADO',
-                                'O histórico de disparos de e-mail foi limpo com sucesso.',
-                                'info'
-                              );
-                            },
-                            'danger'
-                          );
-                        }}
-                        className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 border-2 border-zinc-950 text-rose-700 hover:text-rose-800 text-[10px] font-mono font-black uppercase tracking-wider rounded-xl transition shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] flex items-center gap-1 cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>Zerar Histórico</span>
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
-                    {emailLogs.length === 0 ? (
-                      <p className="text-xs text-zinc-400 py-10 text-center font-mono font-medium">Nenhum e-mail enviado recentemente.</p>
-                    ) : (
-                      emailLogs.slice(0, 5).map(log => (
-                        <div key={log.id} className="flex gap-3 text-xs bg-zinc-50 p-3.5 rounded-xl border-2 border-zinc-950 items-start shadow-[2px_2px_0px_0px_rgba(24,24,27,1)]">
-                          <div className="p-1 border border-zinc-950 rounded bg-emerald-100 shrink-0">
-                            <Mail className="w-4 h-4 text-emerald-700" />
-                          </div>
-                          <div className="space-y-1 min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-extrabold text-zinc-900 text-xs">{log.leadName}</span>
-                              <ChevronRight className="w-3 h-3 text-zinc-400" />
-                              <span className="text-[9px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded border border-zinc-950 bg-amber-100 text-amber-900 font-mono">
-                                {log.templateName}
-                              </span>
-                            </div>
-                            <p className="text-zinc-700 font-bold truncate">{log.subject}</p>
-                            <p className="text-[10px] text-zinc-500 font-mono">{log.sentAt}</p>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {/* Quick Leads review summary (5 Columns) */}
-                <div className="lg:col-span-5 bg-white border-4 border-zinc-950 rounded-3xl p-6 space-y-5 shadow-[6px_6px_0px_0px_rgba(24,24,27,1)]">
-                  <div>
-                    <h2 className="text-lg font-black text-zinc-900 uppercase italic tracking-tighter">Recém Cadastrados</h2>
-                    <p className="text-xs text-zinc-500 mt-1 font-medium">Leads captados recentemente nos canais integrados.</p>
-                  </div>
-
-                  <div className="space-y-3">
-                    {leads.slice(0, 4).map(lead => (
-                      <div 
-                        key={lead.id} 
-                        className="flex items-center justify-between p-3.5 bg-zinc-50 rounded-xl border-2 border-zinc-950 select-none hover:bg-zinc-100/80 transition-all shadow-[2px_2px_0px_0px_rgba(24,24,27,1)]"
-                      >
-                        <div className="min-w-0">
-                          <button
-                            onClick={() => {
-                              setSelectedLeadForDetails(lead);
-                              setIsDetailsModalOpen(true);
-                            }}
-                            className="text-xs font-black text-zinc-900 truncate text-left w-full hover:text-indigo-600 block transition"
-                          >
-                            {lead.name}
-                          </button>
-                          <p className="text-[10px] text-zinc-500 mt-0.5 font-mono">{lead.origin} · {new Date(lead.createdAt).toLocaleDateString('pt-BR')}</p>
-                        </div>
-
-                        <span className="font-mono text-xs text-indigo-600 font-black shrink-0 pl-2">
-                          {lead.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {leads.length > 4 && (
-                    <button
-                      onClick={() => setActiveTab('leads')}
-                      className="w-full text-center py-3 bg-indigo-600 hover:bg-indigo-700 text-xs font-black text-white rounded-xl border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-1px] transition block"
-                    >
-                      Acessar carteira completa →
-                    </button>
-                  )}
-                </div>
-
-              </div>
-            </motion.div>
-          )}
-
-          {/* 2 & 3. UNIFIED GESTÃO DE LEADS (TABELA / STATUS / FOLLOW-UP MULTI-MODE) */}
-          {activeTab === 'leads' && (
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.22 }}
-              className="w-full space-y-5"
-            >
-              {/* BLOCO 1: NAVEGAÇÃO DE STATUS E FUNIL COMPLETO DO CRM (SEM TÍTULOS REPETIDOS) */}
-              <div className="bg-zinc-900 border-4 border-zinc-950 p-2.5 rounded-2xl shadow-[6px_6px_0px_0px_rgba(24,24,27,1)] select-none animate-fadeIn w-full">
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 bg-zinc-950 p-1.5 border-2 border-zinc-800 rounded-xl gap-2 w-full">
-                  {/* 1. Tabela */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLeadsViewMode('list');
-                      triggerSensoryFeedback('click', accSettings);
-                    }}
-                    className={`px-3 py-3 rounded-xl text-[10.5px] font-mono font-black uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
-                      leadsViewMode === 'list'
-                        ? 'bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
-                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900 border-transparent'
-                    }`}
-                  >
-                    <FileSpreadsheet className="w-3.5 h-3.5 shrink-0 text-indigo-400" />
-                    <span>Tabela</span>
-                  </button>
-
-                  {/* 2. Funil (Renomeado de Status) */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLeadsViewMode('kanban');
-                      triggerSensoryFeedback('click', accSettings);
-                    }}
-                    className={`px-3 py-3 rounded-xl text-[10.5px] font-mono font-black uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
-                      leadsViewMode === 'kanban'
-                        ? 'bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
-                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900 border-transparent'
-                    }`}
-                  >
-                    <Sliders className="w-3.5 h-3.5 shrink-0 text-pink-400" />
-                    <span>Funil</span>
-                  </button>
-
-                  {/* 3. Follow-ups */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLeadsViewMode('followup');
-                      triggerSensoryFeedback('click', accSettings);
-                    }}
-                    className={`px-3 py-3 rounded-xl text-[10.5px] font-mono font-black uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
-                      leadsViewMode === 'followup'
-                        ? 'bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
-                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900 border-transparent'
-                    }`}
-                  >
-                    <Users className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
-                    <span>Follow-ups</span>
-                  </button>
-
-                  {/* 4. Scripts e fluxos (Integrated) */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLeadsViewMode('automation-flows');
-                      triggerSensoryFeedback('click', accSettings);
-                    }}
-                    className={`px-3 py-3 rounded-xl text-[10.5px] font-mono font-black uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
-                      leadsViewMode === 'automation-flows'
-                        ? 'bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] font-extrabold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
-                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900 border-transparent'
-                    }`}
-                  >
-                    <Cpu className="w-3.5 h-3.5 shrink-0 text-cyan-400" />
-                    <span>Scripts e Fluxos</span>
-                  </button>
-
-                  {/* 5. Disparos (Renomeado) */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLeadsViewMode('marketing');
-                      triggerSensoryFeedback('click', accSettings);
-                    }}
-                    className={`px-3 py-3 rounded-xl text-[10.5px] font-mono font-black uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
-                      leadsViewMode === 'marketing'
-                        ? 'bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] font-extrabold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
-                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900 border-transparent'
-                    }`}
-                  >
-                    <Mail className="w-3.5 h-3.5 shrink-0 text-teal-400" />
-                    <span>Disparos</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* BLOCO 2: DESTAQUE PARA BARRA DE PESQUISA & FILTROS AVANÇADOS (ALTÍSSIMO CONTRASTE) */}
-              <div className="bg-white border-4 border-zinc-950 p-5 rounded-2xl shadow-[6px_6px_0px_0px_rgba(24,24,27,1)] flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-5 animate-fadeIn">
-                
-                {/* MASSIVO DESTAQUE PARA BARRA DE PESQUISA */}
-                <div className="relative flex-grow max-w-xl group">
-                  <div className="absolute inset-0 bg-indigo-500/10 rounded-2xl blur-md group-hover:bg-indigo-500/15 transition duration-300"></div>
-                  <div className="relative flex items-center">
-                    <Search className="absolute left-4 top-4.5 w-4.5 h-4.5 text-indigo-600 animate-pulse stroke-[2.5]" />
-                    <input
-                      type="text"
-                      placeholder="PESQUISAR CLIENTES POR NOME, CONTRATO OU TELEFONE..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full bg-zinc-50 border-4 border-zinc-950 rounded-2xl pl-12 pr-4 py-3.5 text-xs text-zinc-950 focus:outline-none focus:bg-white focus:ring-4 focus:ring-indigo-100 font-extrabold placeholder-zinc-500 tracking-wider uppercase font-mono transition-all"
-                    />
-                  </div>
-                </div>
-
-                {/* DROPDOWNS E FILTROS COMPLEMENTARES */}
-                <div className="flex flex-wrap items-center gap-2">
-                  {/* Status */}
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => {
-                      setStatusFilter(e.target.value);
-                      triggerSensoryFeedback('click', accSettings);
-                    }}
-                    className="bg-white border-2 border-zinc-950 rounded-xl px-4 py-3.5 text-[10.5px] font-black text-zinc-950 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 uppercase font-mono cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-zinc-50"
-                  >
-                    <option value="todos">Status: Todos</option>
-                    {getKanbanColumns().map(col => (
-                      <option key={col.id} value={col.id}>{col.label}</option>
-                    ))}
-                  </select>
-
-                  {/* Origem */}
-                  <select
-                    value={originFilter}
-                    onChange={(e) => {
-                      setOriginFilter(e.target.value);
-                      triggerSensoryFeedback('click', accSettings);
-                    }}
-                    className="bg-white border-2 border-zinc-950 rounded-xl px-4 py-3.5 text-[10.5px] font-black text-zinc-950 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 uppercase font-mono cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-zinc-50"
-                  >
-                    <option value="todos">Origem: Todas</option>
-                    {Array.from(new Set(leads.map(l => l.origin || 'outros'))).filter(Boolean).map(origin => (
-                      <option key={origin} value={origin}>{origin}</option>
-                    ))}
-                  </select>
-
-                  {/* Alfabeto */}
-                  <select
-                    value={initialLetterFilter}
-                    onChange={(e) => {
-                      setInitialLetterFilter(e.target.value);
-                      triggerSensoryFeedback('click', accSettings);
-                    }}
-                    className="bg-white border-2 border-zinc-950 rounded-xl px-4 py-3.5 text-[10.5px] font-black text-zinc-950 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 uppercase font-mono cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-zinc-50"
-                  >
-                    <option value="todos">Letra Inicial: Todas</option>
-                    {Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)).map(letter => (
-                      <option key={letter} value={letter}>{letter}</option>
-                    ))}
-                  </select>
-
-                  {/* Importar Button */}
-                  <button
-                    onClick={() => {
-                      triggerSensoryFeedback('click', accSettings);
-                      setIsImportModalOpen(true);
-                    }}
-                    className="text-[10px] font-mono font-black text-white bg-emerald-600 hover:bg-emerald-700 px-4 py-3.5 rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase transition-all flex items-center gap-1.5 shrink-0 cursor-pointer hover:translate-y-[-1px] active:translate-y-0.5"
-                    title="Importar dados deste painel"
-                  >
-                    <Download className="w-3.5 h-3.5 shrink-0 text-emerald-100" />
-                    <span>Importar</span>
-                  </button>
-
-                  {/* Exportar Button */}
-                  <button
-                    onClick={() => {
-                      triggerSensoryFeedback('click', accSettings);
-                      setIsExportModalOpen(true);
-                    }}
-                    className="text-[10px] font-mono font-black text-white bg-indigo-600 hover:bg-indigo-700 px-4 py-3.5 rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase transition-all flex items-center gap-1.5 shrink-0 cursor-pointer hover:translate-y-[-1px] active:translate-y-0.5"
-                    title="Exportar dados deste painel"
-                  >
-                    <Upload className="w-3.5 h-3.5 shrink-0 text-indigo-100" />
-                    <span>Exportar</span>
-                  </button>
-                </div>
-              </div>
-
-              {leadsViewMode === 'list' ? (
-                <LeadList 
-                  leads={unifiedFilteredLeads}
-                  searchTerm={searchTerm}
-                  setSearchTerm={setSearchTerm}
-                  statusFilter={statusFilter}
-                  setStatusFilter={setStatusFilter}
-                  originFilter={originFilter}
-                  setOriginFilter={setOriginFilter}
-                  initialLetterFilter={initialLetterFilter}
-                  setInitialLetterFilter={setInitialLetterFilter}
-                  externalShowImporter={isPlanilhasModalOpen}
-                  setExternalShowImporter={setIsPlanilhasModalOpen}
-                  externalShowPlanner={isConversaoModalOpen}
-                  setExternalShowPlanner={setIsConversaoModalOpen}
-                  onOpenLeadDetails={(lead) => {
-                    setSelectedLeadForDetails(lead);
-                    setIsDetailsModalOpen(true);
-                  }}
-                  onOpenEditModal={(lead) => {
-                    setSelectedLeadForEdit(lead);
-                    setIsLeadModalOpen(true);
-                  }}
-                  onDeleteLead={handleDeleteLead}
-                  onOpenCreateModal={() => {
-                    setSelectedLeadForEdit(null);
-                    setDefaultStatusForCreate('novo');
-                    setIsLeadModalOpen(true);
-                  }}
-                  onMoveLead={handleMoveLead}
-                  onAddBulkLeads={handleAddBulkLeads}
-                  onDeleteMultipleLeads={(ids) => {
-                    requestConfirmation(
-                      'Apagar Leads Selecionados?',
-                      `Tem certeza que deseja apagar os ${ids.length} leads selecionados permanentemente? Esta ação é irreversível de forma integral.`,
-                      () => {
-                        setLeads(prev => prev.filter(l => !ids.includes(l.id)));
-                        triggerSensoryFeedback('warning', accSettings);
-                        addNotification('🗑️ LEADS EXCLUÍDOS', `${ids.length} contatos foram excluídos permanentemente.`, 'warning');
-                      },
-                      'danger'
-                    );
-                  }}
-                  onMoveMultipleLeads={(ids, newStatus) => {
-                    setLeads(prev => prev.map(l => ids.includes(l.id) ? { ...l, status: newStatus } : l));
-                    triggerSensoryFeedback('success', accSettings);
-                    addNotification('⚡ ATUALIZAÇÃO EM MASSA', `${ids.length} leads migrados no funil para "${newStatus}".`, 'success');
-                  }}
-                  onUpdateMultipleLeads={(updatedLeads) => {
-                    setLeads(updatedLeads);
-                    triggerSensoryFeedback('success', accSettings);
-                    addNotification('🧹 CONFIGURAÇÃO SANEADA', `Contatos ajustados e sincronizados com sucesso na base!`, 'success');
-                  }}
-                  onRequestConfirm={requestConfirmation}
-                  awardXP={awardXP}
-                  addNotification={addNotification}
-                  appointments={appointments}
-                  setAppointments={setAppointments}
-                />
-              ) : leadsViewMode === 'kanban' ? (
-                <KanbanBoard 
-                  leads={unifiedFilteredLeads}
-                  onMoveLead={handleMoveLead}
-                  onOpenLeadDetails={(lead) => {
-                    setSelectedLeadForDetails(lead);
-                    setIsDetailsModalOpen(true);
-                  }}
-                  onOpenEditModal={(lead) => {
-                    setSelectedLeadForEdit(lead);
-                    setIsLeadModalOpen(true);
-                  }}
-                  onOpenCreateModal={(status) => {
-                    setSelectedLeadForEdit(null);
-                    setDefaultStatusForCreate(status || 'novo');
-                    setIsLeadModalOpen(true);
-                  }}
-                />
-              ) : leadsViewMode === 'followup' ? (
-                <FollowUpManager
-                  leads={unifiedFilteredLeads}
-                  followUps={followUps}
-                  onAddFollowUp={handleAddFollowUp}
-                  onDeleteFollowUp={handleDeleteFollowUp}
-                  accSettings={accSettings}
-                />
-              ) : leadsViewMode === 'automation-flows' ? (
-                <AutomationFlowsTab
-                  templates={templates}
-                  setTemplates={setTemplates}
-                  awardXP={(xp) => awardXP(xp)}
-                  addNotification={addNotification}
-                  accSettings={accSettings}
+              {localStorage.getItem("ciclocred_user_photo") &&
+              localStorage.getItem("ciclocred_user_photo") !== "" ? (
+                <img
+                  src={
+                    localStorage.getItem("ciclocred_user_photo") || undefined
+                  }
+                  alt="Perfil"
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
                 />
               ) : (
-                <MultiLevelMarketingTab
-                  leads={unifiedFilteredLeads}
-                  templates={templates}
-                  logs={emailLogs}
-                  onAddTemplate={handleAddTemplate}
-                  onEditTemplate={handleEditTemplate}
-                  onDeleteTemplate={handleDeleteTemplate}
-                  onSendEmailSimulated={handleSendEmailSimulated}
-                  properties={properties}
-                  theme={theme}
+                <div className="w-full h-full bg-indigo-500 font-black text-xs text-zinc-950 flex items-center justify-center uppercase">
+                  {userName ? userName.slice(0, 2).toUpperCase() : "U"}
+                </div>
+              )}
+            </button>
+          </div>
+
+          {/* Page Visibility / Actions Options (3 dots vertical) - Colado no canto */}
+          <button
+            onClick={() => {
+              triggerSensoryFeedback("click", accSettings);
+              alert(
+                "Ajustes de edições referentes à página e visibilidade específica aberta e vísivel.",
+              );
+            }}
+            className="absolute right-0 top-0 h-full w-10 md:w-12 bg-zinc-900 border-l border-zinc-700/0 text-zinc-300 hover:bg-zinc-800 hover:text-white transition flex items-center justify-center shrink-0 cursor-pointer"
+            title="Ajustes e Visibilidade da Página"
+          >
+            <MoreVertical className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Floating elements removed, integrated natively into the sticky viewport sub-header */}
+
+        <div
+          onMouseEnter={() => setIsSidebarVisible(!isSidebarVisible)}
+          onClick={() => setIsSidebarVisible(!isSidebarVisible)}
+          className="fixed bottom-[30%] right-3 w-8 h-48 z-[60] pointer-events-auto cursor-pointer opacity-0 bg-transparent"
+          title="Alternar Ferramentas CRM"
+        />
+
+        {/* Vertical Panel Strip: Rich, side-aligned high-level CRM tools */}
+        {(() => {
+          const isVisibleFinal =
+            isSidebarVisible ||
+            isAIAssistantOpen ||
+            isRuleEngineOpen ||
+            isNotificationsOpen;
+
+          const floatingRightPosition = "right-6 md:right-6";
+
+          const handleTabClick = (tab: string) => {
+            triggerSensoryFeedback("click", accSettings);
+            setActiveTab(tab);
+          };
+
+          return (
+            <div
+              className={`fixed bottom-6 z-50 pointer-events-auto select-none ${floatingRightPosition} ${
+                isVisibleFinal
+                  ? "block"
+                  : "hidden text-transparent pointer-events-none"
+              }`}
+            >
+              {/* Vertical toolbar panel */}
+              <div className="flex flex-col flex-nowrap items-center justify-start gap-1 pb-1 pt-1 px-1 bg-zinc-950/90 border-2 border-zinc-700/80 rounded-2xl shadow-[4px_4px_0px_0px_rgba(24,24,27,0.5)] backdrop-blur-md w-11">
+                {/* 1. Dashboard WhatsApp */}
+                <button
+                  onClick={() => {
+                    triggerSensoryFeedback("click", accSettings);
+                    handleTabClick("dashboard");
+                  }}
+                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border-2 transition-all cursor-pointer ${
+                    activeTab === "dashboard"
+                      ? "bg-emerald-600 border-white text-white shadow-inner scale-95"
+                      : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-emerald-400"
+                  }`}
+                  title="WhatsApp Dashboard"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    className="w-4 h-4"
+                  >
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z" />
+                  </svg>
+                </button>
+
+                {/* 2. Leads */}
+                <button
+                  onClick={() => handleTabClick("leads")}
+                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-all cursor-pointer ${
+                    activeTab === "leads"
+                      ? "bg-indigo-600 border-indigo-400 text-white shadow-inner scale-95"
+                      : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-indigo-300"
+                  }`}
+                  title="Leads/Clientes"
+                >
+                  👥
+                </button>
+
+                
+
+                {/* 5. Scripts e Roteiros */}
+                <button
+                  onClick={() => handleTabClick("automation-flows")}
+                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-all cursor-pointer ${
+                    activeTab === "automation-flows" ||
+                    activeTab === "scripts-roteiros" ||
+                    activeTab === "disparos" ||
+                    activeTab === "envios-realizados"
+                      ? "bg-indigo-600 border-indigo-400 text-white shadow-inner scale-95"
+                      : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-indigo-300"
+                  }`}
+                  title="Scripts e Roteiros"
+                >
+                  💬
+                </button>
+
+                
+
+                {/* 7. Simulador */}
+                <button
+                  onClick={() => handleTabClick("simulador")}
+                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-all cursor-pointer ${
+                    activeTab === "simulador"
+                      ? "bg-sky-600 border-sky-400 text-white shadow-inner scale-95"
+                      : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-sky-300"
+                  }`}
+                  title="Simulador de Financiamento"
+                >
+                  🧮
+                </button>
+
+                {/* 8. Estoque */}
+                <button
+                  onClick={() => handleTabClick("inventory")}
+                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-all cursor-pointer ${
+                    activeTab === "inventory"
+                      ? "bg-orange-600 border-orange-400 text-white shadow-inner scale-95"
+                      : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-orange-300"
+                  }`}
+                  title="Estoque / Carteira"
+                >
+                  🏢
+                </button>
+
+                {/* 9. Configurações */}
+                <button
+                  onClick={() => {
+                    handleTabClick("settings");
+                    setSettingsModalTab("profile");
+                  }}
+                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-all cursor-pointer ${
+                    activeTab === "settings" && settingsModalTab === "profile"
+                      ? "bg-indigo-700 border-indigo-400 text-white shadow-inner scale-95"
+                      : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-slate-300"
+                  }`}
+                  title="Configurações do Perfil"
+                >
+                  ⚙️
+                </button>
+
+                {/* 10. Logs e Dados */}
+                <button
+                  onClick={() => {
+                    handleTabClick("settings");
+                    setSettingsModalTab("database");
+                  }}
+                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-all cursor-pointer ${
+                    activeTab === "settings" && settingsModalTab === "database"
+                      ? "bg-rose-700 border-rose-450 text-white shadow-inner scale-95"
+                      : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-rose-300"
+                  }`}
+                  title="Backup / Logs e Dados"
+                >
+                  💾
+                </button>
+
+                {/* 11. Assistente AI */}
+                <button
+                  onClick={() => {
+                    triggerSensoryFeedback("click", accSettings);
+                    setActiveTab("gemini-server");
+                  }}
+                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-all cursor-pointer ${
+                    activeTab === "gemini-server"
+                      ? "bg-purple-600 border-purple-400 text-white shadow-inner scale-95"
+                      : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-purple-300"
+                  }`}
+                  title="Assistente AI cicloCRED"
+                >
+                  ✨
+                </button>
+
+                {/* 12. Painel Geral */}
+                <button
+                  onClick={() => handleTabClick("painel-geral")}
+                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-all cursor-pointer ${
+                    activeTab === "painel-geral"
+                      ? "bg-indigo-600 border-indigo-400 text-white shadow-inner scale-95"
+                      : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-indigo-300"
+                  }`}
+                  title="Painel Geral"
+                >
+                  📊
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+        {false && (
+          <>
+            {(() => {
+              const floatingRightPosition =
+                isNotificationsOpen || isRuleEngineOpen
+                  ? "md:right-[472px]"
+                  : isAIAssistantOpen
+                    ? "md:right-[408px]"
+                    : "md:right-6";
+              return (
+                <>
+                  {/* WhatsApp float button stacked precisely above the 👁️ button on the far right */}
+                  <div
+                    className={`fixed bottom-[74px] right-6 ${floatingRightPosition} z-50 pointer-events-auto select-none transition-all duration-300 ease-in-out`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerSensoryFeedback("click", accSettings);
+                        const leadCtx =
+                          selectedLeadForDetails || selectedLeadForEdit;
+                        if (leadCtx && leadCtx.phone) {
+                          const num = leadCtx.phone.replace(/\D/g, "");
+                          window.location.href = `whatsapp://send?phone=55${num}`;
+                        } else {
+                          window.location.href = "whatsapp://send";
+                        }
+                      }}
+                      className="h-11 w-11 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-2px] hover:shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] active:translate-y-[1px] active:shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] cursor-pointer transition-all"
+                      title="Abrir WhatsApp"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        className="w-5.5 h-5.5"
+                      >
+                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <div
+                    className={`fixed bottom-6 right-6 ${floatingRightPosition} z-50 flex flex-row items-center gap-2 pointer-events-auto select-none transition-all duration-300 ease-in-out`}
+                  >
+                    {/* Button 🔍: Toggle page zoom mode (hyperfocus) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerSensoryFeedback("click", accSettings);
+                        setGlobalHyperfocus((prev) => !prev);
+                      }}
+                      className={`font-mono font-black w-11 h-11 rounded-full flex items-center justify-center border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-2px] hover:shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] active:translate-y-[1px] active:shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] transition-all cursor-pointer`}
+                      title="🔍 Zoom da Página (Hiperfoco 80%)"
+                      style={{
+                        backgroundColor: globalHyperfocus
+                          ? "#f59e0b"
+                          : "#18181b",
+                        color: globalHyperfocus ? "#09090b" : "#f4f4f5",
+                      }}
+                    >
+                      <span className="text-base select-none leading-none">
+                        🔍
+                      </span>
+                    </button>
+
+                    {/* Button 🔻: Toggle filter search bar */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerSensoryFeedback("click", accSettings);
+                        setSearchFiltersVisibility((prev) =>
+                          prev === 0 ? 2 : 0,
+                        );
+                      }}
+                      className={`font-mono font-black w-11 h-11 rounded-full flex items-center justify-center border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-2px] hover:shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] active:translate-y-[1px] active:shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] transition-all cursor-pointer`}
+                      title="🔻 Alternar barra de pesquisa e filtros"
+                      style={{
+                        backgroundColor:
+                          searchFiltersVisibility !== 0 ? "#4f46e5" : "#18181b",
+                        color: "#f4f4f5",
+                      }}
+                    >
+                      <span className="text-base select-none leading-none">
+                        🔻
+                      </span>
+                    </button>
+
+                    {/* Button 👁️: Cycle view modes of open tab */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerSensoryFeedback("click", accSettings);
+                        if (activeTab === "leads") {
+                          cycleLeadsViewMode();
+
+                        } else {
+                          cycleVisibilityFilter();
+                        }
+                      }}
+                      className="bg-purple-600 hover:bg-purple-700 text-white font-black h-11 rounded-full px-3.5 flex items-center justify-center gap-2 border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-2px] hover:shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] active:translate-y-[1px] active:shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] transition-all cursor-pointer select-none"
+                      title="👁️ Troca a visibilidade da página aberta"
+                    >
+                      <span className="text-base select-none leading-none">
+                        👁️
+                      </span>
+                      <span className="uppercase text-[8.5px] tracking-wider font-extrabold max-w-[110px] truncate block select-none">
+                        {activeTab === "leads"
+                          ? leadsViewMode
+                          : visibilityFilter === "todos"
+                            ? "Geral"
+                            : visibilityFilter === "my_leads"
+                              ? "Meus"
+                              : "Prioridade"}
+                      </span>
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
+          </>
+        )}
+
+        {/* Main dynamically scrolled workspace content viewport */}
+        <main
+          style={{ zoom: globalHyperfocus ? "80%" : "100%" }}
+          className={`relative flex-1 overflow-x-auto overflow-hidden flex flex-col ${
+            theme === "claro"
+              ? "bg-zinc-100/50"
+              : theme === "escuro"
+                ? "bg-zinc-900/40"
+                : "bg-indigo-950/20 backdrop-blur-xs"
+          }`}
+        >
+          {/* FLOATING SUB-HEADER: Invisible limit line, transparent, and floating controls */}
+          <div className="flex items-center justify-between px-6 md:px-10 py-3 bg-zinc-900/5 dark:bg-zinc-100/5 backdrop-blur-xs text-zinc-950 dark:text-white border-b border-transparent relative z-30 shrink-0 select-none rounded-2xl mx-8 md:mx-16 lg:mx-24 my-3">
+            {/* Left Nav & Greeting */}
+            <div className="flex items-center gap-3">
+              <div className="font-sans font-black text-[11px] md:text-sm uppercase tracking-tight text-zinc-500 truncate max-w-[150px] sm:max-w-none">
+                👋{" "}
+                {(() => {
+                  const h = new Date().getHours();
+                  return h < 12
+                    ? "Bom dia"
+                    : h < 18
+                      ? "Boa tarde"
+                      : "Boa noite";
+                })()}
+                ,{" "}
+                <span className="font-black text-indigo-500 dark:text-indigo-400">
+                  {userName ? userName.split(" ")[0] : "Usuário"}
+                </span>
+              </div>
+            </div>
+
+            {/* Right Status / Clock / Nav */}
+            <div className="flex items-center gap-3">
+              <div className="font-mono text-[9px] md:text-xs tracking-wider flex items-center gap-2 text-zinc-650 dark:text-zinc-400 shrink-0 bg-zinc-500/5 px-2.5 py-1.5 rounded-xl border border-zinc-500/5">
+                <span className="hidden sm:inline font-bold uppercase">
+                  {new Date()
+                    .toLocaleDateString("pt-BR", {
+                      weekday: "short",
+                      day: "numeric",
+                      month: "long",
+                    })
+                    .replace("-feira", "")}
+                </span>
+                <span className="opacity-30 hidden sm:inline">|</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-extrabold font-mono">
+                  ⏰{" "}
+                  {new Date().toLocaleTimeString("pt-BR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+                <span className="opacity-30">|</span>
+                <span className="text-indigo-600 dark:text-indigo-400 font-extrabold flex items-center gap-1">
+                  🌤️ 26°C
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* SCROLLABLE WORKSPACE AREA: Scrollbar starts below the header nav buttons */}
+          <div className="flex-1 overflow-y-auto px-8 md:px-16 lg:px-24 py-4 md:py-8 flex flex-col w-full h-full space-y-8 pr-2 custom-scrollbar">
+            {isQuotaExceeded && (
+              <div className="bg-amber-950/40 border-2 border-amber-500/70 rounded-2xl p-4 md:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-[0_4px_30px_rgba(0,0,0,0.5)] backdrop-blur-xs relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-4 opacity-10 font-mono tracking-tighter text-7xl select-none select-none pointer-events-none group-hover:scale-105 transition-all text-amber-500 font-extrabold font-black">
+                  FIREBASE
+                </div>
+                <div className="flex gap-4 items-start max-w-3xl">
+                  <div className="p-3 bg-amber-500/25 border border-amber-500/40 text-amber-400 rounded-xl shrink-0 mt-0.5">
+                    <AlertTriangle className="w-6 h-6  shrink-0" />
+                  </div>
+                  <div className="space-y-1.5 text-left">
+                    <h4 className="text-sm font-sans font-black uppercase text-amber-400 tracking-wider">
+                      ⚠️ COTA DO CLOUD FIRESTORE EXCEDIDA (SPARK FREE TIER)
+                    </h4>
+                    <p className="text-[12px] opacity-90 leading-relaxed text-amber-100">
+                      Você atingiu o limite gratuito diário de gravações ou
+                      leituras do Firebase Firestore para este projeto. O
+                      sistema ativou automaticamente o{" "}
+                      <strong>
+                        Modo Off-line Inteligente (Armazenamento Local)
+                      </strong>{" "}
+                      para que você possa continuar operando, cadastrando leads
+                      e usando a IA sem nenhuma interrupção ou perda de
+                      informações! Seus dados estão salvos com segurança no
+                      localStorage. O sincronismo retornará de forma
+                      transparente assim que o Google reiniciar a cota diária
+                      (geralmente à meia-noite PST). Mais informações sobre
+                      limites sob a coluna de plano <strong>Spark</strong> na
+                      seção <strong>Enterprise edition</strong> em{" "}
+                      <a
+                        href="https://firebase.google.com/pricing#cloud-firestore"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline hover:text-amber-300 font-bold"
+                      >
+                        Firebase Pricing
+                      </a>
+                      .
+                    </p>
+                    <div className="flex flex-wrap gap-x-4 gap-y-2 text-[10.5px] font-mono text-amber-300 font-bold uppercase mt-2">
+                      <span>
+                        • Banco ID:{" "}
+                        <code className="bg-zinc-950/50 px-1 py-0.5 rounded text-amber-100 italic font-normal text-[10px]">
+                          ai-studio-7295f37f-3832-47f6-8eec-a7e26d15c260
+                        </code>
+                      </span>
+                      <span>
+                        • Projeto ID:{" "}
+                        <code className="bg-zinc-950/50 px-1 py-0.5 rounded text-amber-100 italic font-normal text-[10px]">
+                          project-06c00c3b-56af-4fcd-b6a
+                        </code>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="shrink-0 flex items-center gap-3 md:self-center">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleForceLocalMode(true)}
+                    className="bg-zinc-950 text-amber-500 hover:text-amber-400 font-black font-sans text-xs tracking-wider uppercase px-4 py-3 rounded-xl border border-amber-500/50 hover:border-amber-500 transition-all flex items-center gap-1.5 shrink-0"
+                  >
+                    <Database className="w-4 h-4 shrink-0" />
+                    ATIVAR MEMÓRIA LOCAL PERMANENTE
+                  </button>
+                  <a
+                    href="https://console.firebase.google.com/project/project-06c00c3b-56af-4fcd-b6a/firestore/databases/ai-studio-7295f37f-3832-47f6-8eec-a7e26d15c260/data?openUpgradeDialog=true"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="bg-amber-500 hover:bg-amber-600 active:translate-y-0.5 text-zinc-950 font-black font-sans text-xs tracking-wider uppercase px-4 py-3 rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all flex items-center gap-1.5 shrink-0"
+                  >
+                    <span>UPGRADE NO CONSOLE</span>
+                    <ExternalLink className="w-4 h-4 shrink-0" />
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {/* RENDER ACTIVE TAB */}
+
+            <Suspense
+              fallback={<div className="p-8 text-white">Carregando...</div>}
+            >
+              {/* 1. PAINEL GERAL (REPORTS) */}
+              {activeTab === "painel-geral" && (
+                <div
+                  id="crm-dashboard-default"
+                  className="flex flex-col flex-1 min-h-0 space-y-6 overflow-hidden"
+                >
+                  <Reports
+                    leads={leads}
+                    appointments={appointments}
+                    emailLogs={emailLogs}
+                    goals={gamificationGoals}
+                  />
+                </div>
+              )}
+
+              {/* 0. DYNAMIC WHATSAPP DASHBOARD */}
+              {activeTab === "dashboard" && (
+                <div
+                  id="crm-dashboard-whatsapp"
+                  className="flex flex-col flex-1 min-h-0 space-y-6 select-none animate-fadeIn"
+                >
+                  <div className="bg-gradient-to-br from-zinc-900 to-emerald-950/70 border-4 border-zinc-950 p-6 md:p-8 rounded-[30px] shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] text-white relative overflow-hidden group min-h-[300px] flex flex-col justify-center">
+                    <div className="absolute top-0 right-0 p-6 opacity-5 font-mono tracking-tighter text-8xl select-none pointer-events-none font-black uppercase">
+                      WA.CONN
+                    </div>
+
+                    <div className="relative z-10 space-y-5">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-[10px] font-black uppercase tracking-wider">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block" />
+                        Iniciação Automática Ativa
+                      </span>
+
+                      <div className="space-y-2">
+                        <h1 className="text-3xl md:text-4xl font-black uppercase italic tracking-tight text-white flex items-center gap-3">
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                            className="w-8 h-8 text-emerald-400 shrink-0"
+                          >
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z" />
+                          </svg>
+                          <span>Porta de Comunicação WhatsApp</span>
+                        </h1>
+                        <p className="text-xs text-zinc-350 leading-relaxed font-sans max-w-2xl">
+                          Sempre que o cicloCRED CRM é iniciado, este canal
+                          prepara a esteira de conexões para disparos
+                          automatizados de crédito. Se o seu navegador bloquear
+                          ou não abrir automaticamente o WhatsApp, utilize o
+                          acionamento direto abaixo.
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap gap-4 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            triggerSensoryFeedback("success", accSettings);
+                            window.location.href = "whatsapp://send";
+                          }}
+                          className="bg-emerald-500 hover:bg-emerald-600 active:translate-y-0.5 text-zinc-950 font-black font-sans text-xs tracking-wider uppercase px-6 py-4 rounded-xl border-4 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(255,255,255,1)] transition-all flex items-center gap-2 cursor-pointer"
+                        >
+                          <span>ABRIR WHATSAPP MANUALMENTE</span>
+                          <ExternalLink className="w-4 h-4 shrink-0" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            triggerSensoryFeedback("click", accSettings);
+                            setActiveTab("imoveis");
+                          }}
+                          className="bg-zinc-800 hover:bg-zinc-700 active:translate-y-0.5 text-white font-black font-sans text-xs tracking-wider uppercase px-6 py-4 rounded-xl border-4 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(255,255,255,1)] transition-all flex items-center gap-2 cursor-pointer"
+                        >
+                          <span>IR PARA ESTOQUE E LANÇAMENTOS</span>
+                          <span className="text-zinc-400">🏢</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Operational Status Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="bg-zinc-900 border-4 border-zinc-950 p-5 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between space-y-2">
+                      <div className="flex items-center justify-between text-xs font-mono uppercase text-zinc-400 font-bold">
+                        <span>Gateway de Transmissão</span>
+                        <span className="px-2 py-0.5 text-[8px] bg-emerald-950 text-emerald-400 rounded-full border border-emerald-500/20 font-black">
+                          ONLINE
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="text-lg font-black uppercase italic tracking-tight text-white leading-none">
+                          Canal Estabilizado
+                        </h4>
+                        <p className="text-[10px] text-zinc-500 font-sans leading-normal">
+                          Seu app cicloCRED está sincronizado com as instâncias
+                          do WhatsApp Business e portabilidades de contratos.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="bg-zinc-900 border-4 border-zinc-950 p-5 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between space-y-2">
+                      <div className="flex items-center justify-between text-xs font-mono uppercase text-zinc-400 font-bold">
+                        <span>Envios Autônomos</span>
+                        <span className="px-2 py-0.5 text-[8px] bg-indigo-950 text-indigo-400 rounded-full border border-indigo-500/20 font-black">
+                          AUTONOMY ACTIVE
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="text-lg font-black uppercase italic tracking-tight text-white leading-none">
+                          Paciência Cognitiva
+                        </h4>
+                        <p className="text-[10px] text-zinc-500 font-sans leading-normal">
+                          Os robôs respondem em segundo plano baseando-se nos
+                          scripts de copywriting e inteligência integrada.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="bg-zinc-900 border-4 border-zinc-950 p-5 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between space-y-2">
+                      <div className="flex items-center justify-between text-xs font-mono uppercase text-zinc-400 font-bold">
+                        <span>Monitoramento</span>
+                        <span className="text-emerald-400 font-mono text-[10px] font-bold">
+                          ⚡ SYNC OK
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="text-lg font-black uppercase italic tracking-tight text-white leading-none">
+                          {leads.length} Leads Ativos
+                        </h4>
+                        <p className="text-[10px] text-zinc-500 font-sans leading-normal">
+                          A base completa de leads no seu funil está pronta para
+                          receber ações automáticas ou manuais.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* cicloCRED WhatsApp Dashboard Sub-Visibilities Section */}
+                  <div className="border-t-4 border-zinc-950 pt-6 mt-2 space-y-6">
+                    {/* Integrated Sub-tab Component */}
+                    <div className="w-full animate-fadeIn">
+                      <MultiLevelMarketingTab
+                        leads={leads}
+                        globalFilteredLeads={unifiedFilteredLeads}
+                        globalSearchTerm={searchTerm}
+                        templates={templates}
+                        logs={emailLogs}
+                        onAddTemplate={handleAddTemplate}
+                        onEditTemplate={handleEditTemplate}
+                        onDeleteTemplate={handleDeleteTemplate}
+                        onSendEmailSimulated={handleSendEmailSimulated}
+                        properties={properties}
+                        theme={theme}
+                        accSettings={accSettings}
+                        awardXP={(xp, cause) => awardXP(xp)}
+                        addNotification={addNotification}
+                        onTriggerConversao={() => setIsConversaoModalOpen(true)}
+                        tableHeaderComponent={(ids, actions) =>
+                          renderTableSearchBar({
+                            selectedLeadIds: ids,
+                            blockActions: actions,
+                          })
+                        }
+                        forcedSubTab={
+                          dashboardVisibility === "disparos"
+                            ? "massa"
+                            : dashboardVisibility === "scripts-roteiros"
+                              ? "templates"
+                              : "logs"
+                        }
+                        setEmailLogs={setEmailLogs}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 2 & 3. UNIFIED GESTÃO DE LEADS (TABELA / STATUS / FOLLOW-UP MULTI-MODE) */}
+              {activeTab === "leads" && (
+                <div className="w-full flex-1 flex flex-col min-h-0 space-y-5">
+                  {(() => {
+                    const hasActiveFilters =
+                      searchTerm !== "" ||
+                      statusFilter !== "todos" ||
+                      stageFilter !== "todos" ||
+                      profileFilter !== "todos" ||
+                      originFilter !== "todos" ||
+                      initialLetterFilter !== "todos" ||
+                      regionFilter !== "todos" ||
+                      sqmMattersFilter !== "todos" ||
+                      incomeTypeFilter !== "todos" ||
+                      deadlineMattersFilter !== "todos" ||
+                      deliveryExpectedFilter !== "todos" ||
+                      genderFilter !== "todos" ||
+                      ageBracketFilter !== "todos" ||
+                      objectionsFilter !== "todos";
+
+                    const nowTimeVal = Date.now();
+
+                    const leadsAtivos = unifiedFilteredLeads.filter((l) => {
+                      const createdTime = new Date(
+                        l.createdAt || nowTimeVal,
+                      ).getTime();
+                      const elapsedH =
+                        (nowTimeVal - createdTime) / (1000 * 60 * 60);
+                      const hasInteraction = !!(
+                        l.lastInteractionAt &&
+                        l.lastInteractionAt !== l.createdAt
+                      );
+
+                      // Cannot be active if explicitly archived or lost
+                      if (
+                        l.status === "arquivado" ||
+                        l.status === "perdido" ||
+                        l.status === "fechado"
+                      ) {
+                        return false;
+                      }
+
+                      // If elapsed time > 24h and no interaction, it's archived, so NOT active
+                      if (elapsedH > 24 && !hasInteraction) {
+                        return false;
+                      }
+
+                      // To be active, it must have received an interaction (if within 24h, it appears here and in recent; if >24h, must have interaction)
+                      return hasInteraction;
+                    });
+
+                    const leadsRecentes = unifiedFilteredLeads.filter((l) => {
+                      if (hasActiveFilters) return true;
+
+                      const createdTime = new Date(
+                        l.createdAt || nowTimeVal,
+                      ).getTime();
+                      const elapsedH =
+                        (nowTimeVal - createdTime) / (1000 * 60 * 60);
+                      const hasInteraction = !!(
+                        l.lastInteractionAt &&
+                        l.lastInteractionAt !== l.createdAt
+                      );
+
+                      if (l.status === "arquivado" || l.status === "perdido") {
+                        return false;
+                      }
+
+                      // If elapsed time > 24h and no interaction, it's archived, so NOT recent
+                      if (elapsedH > 24 && !hasInteraction) {
+                        return false;
+                      }
+
+                      // Remains in recent if creation age <= 24 hours (with or without interaction)
+                      return elapsedH <= 24;
+                    });
+
+                    const currentLeadsArray =
+                      leadsViewMode === "recentes" ||
+                      (leadsViewMode as any) === "novos"
+                        ? leadsRecentes
+                        : leadsViewMode === "ativos"
+                          ? leadsAtivos
+                          : leadsViewMode === "archived"
+                            ? unifiedFilteredLeads.filter(
+                                (l) =>
+                                  l.status === "perdido" ||
+                                  l.status === "arquivado" ||
+                                  l.status === "fechado",
+                              )
+                            : unifiedFilteredLeads;
+
+
+
+                    return (
+                      <div className="w-full flex-1 flex flex-col min-h-0 space-y-6">
+                        
+
+                        {/* KANBAN/FUNNEL COMPONENT DIRECTLY INTEGRATED IN LEADS LIST */}
+                        <div
+                          id="integrated-kanban-board-scroll"
+                          className={`flex flex-col gap-4 flex-none shrink-0 border-t-4 border-dashed border-zinc-800 pt-8 mt-6`}
+                        >
+                          <div
+                            className={`flex-1 ${kanbanHyperfocus === 1 ? "overflow-visible" : "overflow-hidden"}`}
+                          >
+                            <KanbanBoard
+                              leads={leads}
+                              onMoveLead={handleMoveLead}
+                              onOpenLeadDetails={(lead) => {
+                                setSelectedLeadForDetails(lead);
+                                setIsDetailsModalOpen(true);
+                              }}
+
+                              onOpenEditModal={(lead) => {
+                                setSelectedLeadForEdit(lead);
+                                setIsLeadModalOpen(true);
+                              }}
+                              onOpenCreateModal={(status) => {
+                                setSelectedLeadForEdit(null);
+                                setDefaultStatusForCreate(status || "novo");
+                                setIsLeadModalOpen(true);
+                              }}
+                              showOrganizer={kanbanShowOrganizer}
+                              setShowOrganizer={setKanbanShowOrganizer}
+                              hyperfocusActive={kanbanHyperfocus}
+                              setHyperfocusActive={setKanbanHyperfocus}
+                              triggerCreateStatus={kanbanTriggerCreateStatus}
+                              setTriggerCreateStatus={
+                                setKanbanTriggerCreateStatus
+                              }
+                              triggerCreatePage={kanbanTriggerCreatePage}
+                              setTriggerCreatePage={setKanbanTriggerCreatePage}
+                              triggerEditPage={kanbanTriggerEditPage}
+                              setTriggerEditPage={setKanbanTriggerEditPage}
+                              triggerDeletePage={kanbanTriggerDeletePage}
+                              setTriggerDeletePage={setKanbanTriggerDeletePage}
+                              triggerHyperfocus={kanbanTriggerHyperfocus}
+                              setTriggerHyperfocus={setKanbanTriggerHyperfocus}
+                              onOpenAIAssistant={handleOpenAIAssistant}
+                              onOpenRuleEngine={handleOpenRuleEngine}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {activeTab === "automation-flows" && (
+                <ScriptsAndFlows
+                  leads={leads}
+                  onUpdateLeadField={handleUpdateLeadField}
                   accSettings={accSettings}
-                  awardXP={(xp, cause) => awardXP(xp)}
+                  triggerSensoryFeedback={triggerSensoryFeedback}
                   addNotification={addNotification}
-                  onTriggerConversao={() => setIsConversaoModalOpen(true)}
+                  initialSearchTerm={scriptSearchTerm}
+                  onChangeSearchTerm={setScriptSearchTerm}
+                  onDeleteLead={handleDeleteLead}
+                  onDeleteMultipleLeads={handleDeleteMultipleLeadsHandler}
+                  operationalFlows={operationalFlows}
+                  setOperationalFlows={setOperationalFlows}
                 />
               )}
-            </motion.div>
-          )}
 
-          {/* DEDICATED APPOINTMENTS TAB */}
-          {activeTab === 'appointments' && (
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.22 }}
-              className="w-full"
-            >
-              <Appointments
-                leads={leads}
-                appointments={appointments}
-                onAddAppointment={handleAddAppointment}
-                onUpdateAppointmentStatus={handleUpdateAppointmentStatus}
-                onDeleteAppointment={handleDeleteAppointment}
-                accSettings={accSettings}
-              />
-            </motion.div>
-          )}
+              {/* 4.6. REAL ESTATE INVENTORY MODULE */}
+              {activeTab === "inventory" && (
+                <div className="w-full">
+                  <RealEstateInventory
+                    leads={leads}
+                    globalFilteredLeads={unifiedFilteredLeads}
+                    globalSearchTerm={searchTerm}
+                    properties={properties}
+                    setProperties={setProperties}
+                    onAddProperty={handleAddProperty}
+                    onAddBulkProperties={handleAddBulkProperties}
+                    onAddBulkLeads={handleAddBulkLeads}
+                    onDeleteProperty={handleDeleteProperty}
+                    onDeleteMultipleProperties={
+                      handleDeleteMultiplePropertiesHandler
+                    }
+                    onUpdatePropertyStatus={handleUpdatePropertyStatus}
+                    onUpdateProperty={handleUpdateProperty}
+                    theme={theme}
+                    accSettings={accSettings}
+                    addNotification={addNotification}
+                    awardXP={(xp, cause) => awardXP(xp)}
+                  />
+                </div>
+              )}
 
-          {/* DEDICATED MARKETING TAB */}
-          {activeTab === 'marketing' && (
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.22 }}
-              className="w-full"
-            >
-              <MultiLevelMarketingTab
-                leads={leads}
-                templates={templates}
-                logs={emailLogs}
-                onAddTemplate={handleAddTemplate}
-                onEditTemplate={handleEditTemplate}
-                onDeleteTemplate={handleDeleteTemplate}
-                onSendEmailSimulated={handleSendEmailSimulated}
-                properties={properties}
-                theme={theme}
-                accSettings={accSettings}
-                awardXP={(xp, cause) => awardXP(xp)}
-                addNotification={addNotification}
-                onTriggerConversao={() => setIsConversaoModalOpen(true)}
-              />
-            </motion.div>
-          )}
+              {/* 6. STANDALONE FINANCE SIMULATOR */}
+              {activeTab === "simulador" && (
+                <div className="w-full">
+                  <FinanceSimulatorTab
+                    leads={leads}
+                    theme={theme}
+                    accSettings={accSettings}
+                    addNotification={addNotification}
+                    awardXP={(xp, cause) => awardXP(xp)}
+                  />
+                </div>
+              )}
 
-          {/* 4.6. REAL ESTATE INVENTORY MODULE */}
-          {activeTab === 'inventory' && (
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.22 }}
-              className="w-full"
-            >
-              <RealEstateInventory
-                leads={leads}
-                properties={properties}
-                onAddProperty={handleAddProperty}
-                onAddBulkProperties={handleAddBulkProperties}
-                onAddBulkLeads={handleAddBulkLeads}
-                onDeleteProperty={handleDeleteProperty}
-                onUpdatePropertyStatus={handleUpdatePropertyStatus}
-                onUpdateProperty={handleUpdateProperty}
-                theme={theme}
-                accSettings={accSettings}
-                addNotification={addNotification}
-                awardXP={(xp, cause) => awardXP(xp)}
-              />
-            </motion.div>
-          )}
+              {/* 6.1. SITE DE CAPTAÇÃO PÚBLICO (DISABLED BECAUSE IT IS REPLACED WITH PORTAL CICLOCRED) */}
+              {activeTab === "public-portal-disabled" && (
+                <div className="w-full">
+                  <PublicPortal
+                    properties={properties}
+                    onAddCapturedLead={handleAddNewLeadCapturedPublicly}
+                    accSettings={accSettings}
+                  />
+                </div>
+              )}
 
-          {/* 5. INTEGRATED ANALYTICAL REPORTS */}
-          {activeTab === 'reports' && (
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.22 }}
-              className="w-full"
-            >
-              <Reports 
-                leads={leads} 
-                appointments={appointments} 
-                emailLogs={emailLogs} 
-                goals={gamificationGoals} 
-              />
-            </motion.div>
-          )}
 
-          {/* 6. STANDALONE FINANCE SIMULATOR */}
-          {activeTab === 'simulador' && (
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.22 }}
-              className="w-full"
-            >
-              <FinanceSimulatorTab
-                leads={leads}
-                theme={theme}
-                accSettings={accSettings}
-                addNotification={addNotification}
-                awardXP={(xp, cause) => awardXP(xp)}
-              />
-            </motion.div>
-          )}
+              {/* 7.1. GEMINI NEURAL SERVER MANAGEMENT MODULE */}
+              {activeTab === "gemini-server" && (
+                <div className="w-full">
+                  <GeminiServerTab
+                    accSettings={accSettings}
+                    awardXP={awardXP}
+                    addNotification={addNotification}
+                    leads={leads}
+                    setLeads={setLeads}
+                    templates={templates}
+                    appointments={appointments}
+                    setAppointments={setAppointments}
+                    emailLogs={emailLogs}
+                    setEmailLogs={setEmailLogs}
+                  />
+                </div>
+              )}
 
-          {/* 6.1. SITE DE CAPTAÇÃO PÚBLICO (DISABLED BECAUSE IT IS REPLACED WITH PORTAL CICLOCRED) */}
-          {activeTab === 'public-portal-disabled' && (
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.22 }}
-              className="w-full"
-            >
-              <PublicPortal 
-                properties={properties}
-                onAddCapturedLead={handleAddNewLeadCapturedPublicly}
-                accSettings={accSettings}
-              />
-            </motion.div>
-          )}
+              {/* 8. CHILDREN FINANCIAL LITERACY & GAME ROOM */}
+              {activeTab === "kids" && (
+                <div className="w-full">
+                  <KidsTab awardXP={awardXP} accSettings={accSettings} />
+                </div>
+              )}
 
-          {/* 7.1. GEMINI NEURAL SERVER MANAGEMENT MODULE */}
-          {activeTab === 'gemini-server' && (
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.22 }}
-              className="w-full"
-            >
-              <GeminiServerTab
-                accSettings={accSettings}
-                awardXP={awardXP}
-                addNotification={addNotification}
-                leads={leads}
-                setLeads={setLeads}
-                templates={templates}
-                appointments={appointments}
-                setAppointments={setAppointments}
-                emailLogs={emailLogs}
-                setEmailLogs={setEmailLogs}
-              />
-            </motion.div>
-          )}
+              {/* 9. CENTRAL USER PANEL (GAMIFICATION + SETTINGS + LEADERBOARD + ADMIN CONTROLS) */}
+              {activeTab === "user-central" && (
+                <div className="w-full">
+                  <UserCentralTab
+                    accSettings={accSettings}
+                    setAccSettings={setAccSettings}
+                    userXP={userXP}
+                    setUserXP={setUserXP}
+                    userLevel={userLevel}
+                    setUserLevel={setUserLevel}
+                    userName={userName}
+                    setUserName={setUserName}
+                    userEmail={userEmail}
+                    setUserEmail={setUserEmail}
+                    creciNumber={creciNumber}
+                    setCreciNumber={setCreciNumber}
+                    userRole={userRole}
+                    setUserRole={setUserRole}
+                    agencyName={agencyName}
+                    setAgencyName={setAgencyName}
+                    subscriptionPlan={subscriptionPlan}
+                    setSubscriptionPlan={setSubscriptionPlan}
+                    theme={theme}
+                    setTheme={setTheme}
+                    galaxyPreset={galaxyPreset}
+                    setGalaxyPreset={setGalaxyPreset}
+                    leads={leads}
+                    properties={properties}
+                    goals={gamificationGoals}
+                    setGoals={setGamificationGoals}
+                    projects={gamificationProjects}
+                    setProjects={setGamificationProjects}
+                    onResetGamification={handleResetGamification}
+                    onWipeLeads={handleWipeLeads}
+                    onWipeEstoque={handleWipeProperties}
+                    onRequestConfirm={requestConfirmation}
+                    isAutonomyActive={isAutonomyActive}
+                    setIsAutonomyActive={setIsAutonomyActive}
+                    autonomyIntervalSec={autonomyIntervalSec}
+                    setAutonomyIntervalSec={setAutonomyIntervalSec}
+                    consolidatedCrmInfo={consolidatedCrmInfo}
+                    setConsolidatedCrmInfo={setConsolidatedCrmInfo}
+                    awardXP={awardXP}
+                  />
+                </div>
+              )}
 
-          {/* 8. CHILDREN FINANCIAL LITERACY & GAME ROOM */}
-          {activeTab === 'kids' && (
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.22 }}
-              className="w-full"
-            >
-              <KidsTab
-                awardXP={awardXP}
-                accSettings={accSettings}
-              />
-            </motion.div>
-          )}
+              {/* 10. SETTINGS & ADMINISTRATION TAB */}
+              {activeTab === "settings" && (
+                <div className="w-full flex-1 flex flex-col min-h-0 space-y-6 animate-fadeIn pb-10">
+                  {/* Top Page Title Header (Broadcast Style) */}
+                  <div className="bg-zinc-900 border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] flex flex-col md:flex-row md:items-center md:justify-between gap-4 select-none relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-6 opacity-5 font-mono tracking-tighter text-8xl select-none pointer-events-none font-black uppercase group-hover:scale-105 transition-all">
+                      CONFIG
+                    </div>
+                    <div className="flex-1 z-10">
+                      <h2 className="text-3xl font-black tracking-tighter text-white uppercase italic flex items-center gap-3">
+                        <Settings className="w-8 h-8 text-indigo-400 animate-spin-slow" />
+                        <span>Gestão & Administração</span>
+                      </h2>
+                      <p className="text-xs text-zinc-400 font-bold font-mono mt-1 flex items-center gap-2">
+                        <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                        Acesse seu perfil, ajuste metas de gamificação e
+                        gerencie backups do CRM.
+                      </p>
+                    </div>
+                  </div>
 
-          {/* 9. CENTRAL USER PANEL (GAMIFICATION + SETTINGS + LEADERBOARD + ADMIN CONTROLS) */}
-          {activeTab === 'user-central' && (
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.22 }}
-              className="w-full"
-            >
-              <UserCentralTab
-                accSettings={accSettings}
-                setAccSettings={setAccSettings}
-                userXP={userXP}
-                setUserXP={setUserXP}
-                userLevel={userLevel}
-                setUserLevel={setUserLevel}
-                userName={userName}
-                setUserName={setUserName}
-                userEmail={userEmail}
-                setUserEmail={setUserEmail}
-                creciNumber={creciNumber}
-                setCreciNumber={setCreciNumber}
-                userRole={userRole}
-                setUserRole={setUserRole}
-                agencyName={agencyName}
-                setAgencyName={setAgencyName}
-                subscriptionPlan={subscriptionPlan}
-                setSubscriptionPlan={setSubscriptionPlan}
-                theme={theme}
-                setTheme={setTheme}
-                galaxyPreset={galaxyPreset}
-                setGalaxyPreset={setGalaxyPreset}
-                leads={leads}
-                properties={properties}
-                followUpsCount={followUps.length}
-                goals={gamificationGoals}
-                setGoals={setGamificationGoals}
-                projects={gamificationProjects}
-                setProjects={setGamificationProjects}
-                onResetGamification={handleResetGamification}
-                onWipeLeads={handleWipeLeads}
-                onWipeEstoque={handleWipeProperties}
-                onRequestConfirm={requestConfirmation}
-                isAutonomyActive={isAutonomyActive}
-                setIsAutonomyActive={setIsAutonomyActive}
-                autonomyIntervalSec={autonomyIntervalSec}
-                setAutonomyIntervalSec={setAutonomyIntervalSec}
-                consolidatedCrmInfo={consolidatedCrmInfo}
-                setConsolidatedCrmInfo={setConsolidatedCrmInfo}
-                awardXP={awardXP}
-              />
-            </motion.div>
-          )}
+                  {/* Header Decoration and Tabs */}
+                  <div
+                    className={`flex flex-col sm:flex-row border-4 border-zinc-950 p-1.5 rounded-2xl gap-2 select-none shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] ${theme === "claro" ? "bg-zinc-100" : "bg-zinc-900"}`}
+                  >
+                    {(["config", "database"] as const).map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => {
+                          triggerSensoryFeedback("click", accSettings);
+                          setSettingsModalTab(
+                            t === "config" ? "profile" : "database",
+                          );
+                        }}
+                        className={`flex-1 px-5 py-3 font-black text-xs uppercase tracking-widest transition-all rounded-xl border-2 text-center ${
+                          (settingsModalTab === "profile" && t === "config") ||
+                          (settingsModalTab === "database" && t === "database")
+                            ? "bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                            : "border-transparent hover:bg-zinc-800 " +
+                              (theme === "claro"
+                                ? "text-zinc-600"
+                                : "text-zinc-400")
+                        }`}
+                      >
+                        {t === "config"
+                          ? "👤 Perfil & Gamificação"
+                          : "💾 Banco de Dados & Log"}
+                      </button>
+                    ))}
+                  </div>
 
-          {/* Google Workspace Connectors Module */}
-          {activeTab === 'google-workspace' && (
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.22 }}
-              className="w-full"
-            >
-              <GoogleWorkspace
-                leads={leads}
-                setLeads={setLeads}
-                appointments={appointments}
-                setAppointments={setAppointments}
-                templates={templates}
-                emailLogs={emailLogs}
-                setEmailLogs={setEmailLogs}
-                awardXP={awardXP}
-                addNotification={addNotification}
-                accSettings={accSettings}
-              />
-            </motion.div>
-          )}
+                  {/* Search bar context - using the unified component */}
+                  {renderTableSearchBar({})}
 
-          {/* Settings and Administration Tabs Removed */}
+                  {/* Scrollable Content Container */}
+                  <div className="flex-1 min-h-0">
+                    {settingsModalTab === "profile" ? (
+                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                        {/* 3 Column Layout inspired by UserCentralModal */}
 
+                        {/* Col 1: Profile UI */}
+                        <div
+                          className={`lg:col-span-4 border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] space-y-6 ${theme === "claro" ? "bg-white" : "bg-zinc-900"}`}
+                        >
+                          <div
+                            className={`border-b-2 pb-4 ${theme === "claro" ? "border-zinc-100" : "border-zinc-800"}`}
+                          >
+                            <h3
+                              className={`text-sm font-black uppercase italic tracking-tighter flex items-center gap-2 ${theme === "claro" ? "text-zinc-950" : "text-white"}`}
+                            >
+                              <User className="w-4 h-4 text-indigo-600" />
+                              Identidade do Corretor
+                            </h3>
+                          </div>
+
+                          <div className="flex flex-col items-center gap-4 text-center">
+                            <div className="relative w-32 h-32 rounded-3xl overflow-hidden border-4 border-zinc-950 bg-indigo-500 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] group">
+                              {localStorage.getItem("ciclocred_user_photo") ? (
+                                <img
+                                  src={
+                                    localStorage.getItem(
+                                      "ciclocred_user_photo",
+                                    )!
+                                  }
+                                  alt="User"
+                                  className="w-full h-full object-cover transition-transform group-hover:scale-110"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center font-black text-4xl text-white select-none">
+                                  {userName.substring(0, 2).toUpperCase()}
+                                </div>
+                              )}
+                            </div>
+                            <div className="space-y-4 w-full">
+                              <div className="space-y-1.5 text-left">
+                                <label className="block text-[10px] font-mono font-black uppercase text-zinc-500">
+                                  Nome Profissional
+                                </label>
+                                <input
+                                  type="text"
+                                  value={userName}
+                                  onChange={(e) => setUserName(e.target.value)}
+                                  className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-3 text-xs font-bold uppercase"
+                                />
+                              </div>
+                              <div className="space-y-1.5 text-left">
+                                <label className="block text-[10px] font-mono font-black uppercase text-zinc-500">
+                                  Registro CRECI / CRM
+                                </label>
+                                <input
+                                  type="text"
+                                  value={creciNumber}
+                                  onChange={(e) =>
+                                    setCreciNumber(e.target.value)
+                                  }
+                                  className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-3 text-xs font-mono font-bold"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Col 2: Gamification & System UI */}
+                        <div className="lg:col-span-5 space-y-8">
+                          {/* XP & PROGRESS */}
+                          <div className="bg-zinc-950 text-white border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] relative overflow-hidden group">
+                            <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform">
+                              <Trophy className="w-32 h-32 text-amber-500" />
+                            </div>
+                            <div className="relative z-10 space-y-4">
+                              <div className="flex justify-between items-end">
+                                <div>
+                                  <span className="text-[10px] font-mono font-bold text-indigo-400 uppercase tracking-widest">
+                                    PATENTE GALAXY
+                                  </span>
+                                  <h4 className="text-2xl font-black italic tracking-tighter uppercase">
+                                    NÍVEL {userLevel}
+                                  </h4>
+                                </div>
+                                <div className="text-right">
+                                  <span className="text-[10px] font-mono font-bold text-zinc-500 uppercase tracking-widest">
+                                    XP ACUMULADO
+                                  </span>
+                                  <p className="text-lg font-black text-white">
+                                    {userXP} XP
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="w-full h-3 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700 p-0.5">
+                                <div
+                                  className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-400 rounded-full transition-all duration-1000"
+                                  style={{ width: `${(userXP % 500) / 5}%` }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* SYSTEM PREFERENCES (Style like UserCentralModal Col 3) */}
+                          <div
+                            className={`border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] space-y-5 ${theme === "claro" ? "bg-white" : "bg-zinc-900"}`}
+                          >
+                            <div
+                              className={`border-b-2 pb-3 ${theme === "claro" ? "border-zinc-100" : "border-zinc-800"}`}
+                            >
+                              <h3
+                                className={`text-sm font-black uppercase italic tracking-tighter flex items-center gap-2 ${theme === "claro" ? "text-zinc-950" : "text-white"}`}
+                              >
+                                <Sliders className="w-4 h-4 text-amber-600" />
+                                Preferências & Acessibilidade
+                              </h3>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 flex items-center justify-between">
+                                <span className="text-[10px] font-black uppercase text-zinc-700">
+                                  Som & Alertas
+                                </span>
+                                <button
+                                  onClick={() => {
+                                    const next = {
+                                      ...accSettings,
+                                      soundsEnabled: !accSettings.soundsEnabled,
+                                    };
+                                    setAccSettings(next);
+                                    triggerSensoryFeedback("chime", next);
+                                  }}
+                                  className={`w-10 h-6 rounded-full p-1 transition-colors ${accSettings.soundsEnabled ? "bg-indigo-600" : "bg-zinc-300"}`}
+                                >
+                                  <div
+                                    className={`w-4 h-4 rounded-full bg-white shadow-md transform transition-transform ${accSettings.soundsEnabled ? "translate-x-4" : "translate-x-0"}`}
+                                  />
+                                </button>
+                              </div>
+                              <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 flex items-center justify-between">
+                                <span className="text-[10px] font-black uppercase text-zinc-700">
+                                  Feedback Tátil
+                                </span>
+                                <button
+                                  onClick={() => {
+                                    const next = {
+                                      ...accSettings,
+                                      hapticsEnabled:
+                                        !accSettings.hapticsEnabled,
+                                    };
+                                    setAccSettings(next);
+                                    triggerSensoryFeedback("click", next);
+                                  }}
+                                  className={`w-10 h-6 rounded-full p-1 transition-colors ${accSettings.hapticsEnabled ? "bg-indigo-600" : "bg-zinc-300"}`}
+                                >
+                                  <div
+                                    className={`w-4 h-4 rounded-full bg-white shadow-md transform transition-transform ${accSettings.hapticsEnabled ? "translate-x-4" : "translate-x-0"}`}
+                                  />
+                                </button>
+                              </div>
+                            </div>
+                            <div className="space-y-3">
+                              <label className="block text-[10px] font-mono font-black uppercase text-zinc-500">
+                                Tamanho Visual da Interface
+                              </label>
+                              <div className="grid grid-cols-3 gap-2">
+                                {(
+                                  ["normal", "large", "extra-large"] as const
+                                ).map((sz) => (
+                                  <button
+                                    key={sz}
+                                    onClick={() => {
+                                      setAccSettings({
+                                        ...accSettings,
+                                        fontSizeClass: sz,
+                                      });
+                                      triggerSensoryFeedback(
+                                        "click",
+                                        accSettings,
+                                      );
+                                    }}
+                                    className={`py-2 rounded-xl border-2 font-black text-[9px] uppercase tracking-tighter ${
+                                      accSettings.fontSizeClass === sz
+                                        ? "bg-zinc-950 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                                        : "bg-zinc-50 border-zinc-200 text-zinc-500"
+                                    }`}
+                                  >
+                                    {sz === "normal"
+                                      ? "Padrão"
+                                      : sz === "large"
+                                        ? "Grande"
+                                        : "Super"}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Col 3: Advanced CRM Settings (Legacy Settings Component) */}
+                        <div className="lg:col-span-3 bg-zinc-950 border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] space-y-6">
+                          <div className="border-b-2 border-zinc-800 pb-4">
+                            <h3 className="text-sm font-black uppercase italic tracking-tighter text-indigo-400 flex items-center gap-2">
+                              <Shield className="w-4 h-4" />
+                              Segurança & Sistema
+                            </h3>
+                          </div>
+                          <SettingsView
+                            theme={theme}
+                            setTheme={setTheme}
+                            galaxyPreset={galaxyPreset}
+                            setGalaxyPreset={setGalaxyPreset}
+                            accSettings={accSettings}
+                            setAccSettings={setAccSettings}
+                            userName={userName}
+                            setUserName={setUserName}
+                            userEmail={userEmail}
+                            setUserEmail={setUserEmail}
+                            creciNumber={creciNumber}
+                            setCreciNumber={setCreciNumber}
+                            userRole={userRole}
+                            setUserRole={setUserRole}
+                            agencyName={agencyName}
+                            setAgencyName={setAgencyName}
+                            subscriptionPlan={subscriptionPlan}
+                            setSubscriptionPlan={setSubscriptionPlan}
+                            userLevel={userLevel}
+                            userXP={userXP}
+                            properties={properties}
+                            leads={leads}
+                            isAutonomyActive={isAutonomyActive}
+                            setIsAutonomyActive={setIsAutonomyActive}
+                            autonomyIntervalSec={autonomyIntervalSec}
+                            setAutonomyIntervalSec={setAutonomyIntervalSec}
+                            leadsCount={leads.length}
+                            propertiesCount={properties.length}
+                            inventoryCount={properties.length}
+                            onWipeLeads={handleWipeLeads}
+                            onWipeEstoque={handleWipeProperties}
+                            onRequestConfirm={requestConfirmation}
+                            forceLocalStorageMode={forceLocalStorageMode}
+                            onToggleForceLocalMode={handleToggleForceLocalMode}
+                            consolidatedCrmInfo={consolidatedCrmInfo}
+                            setConsolidatedCrmInfo={setConsolidatedCrmInfo}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-white border-4 border-zinc-950 rounded-3xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+                        <BackupManager
+                          leads={leads}
+                          setLeads={setLeads}
+                          properties={properties}
+                          setProperties={setProperties}
+                          appointments={appointments}
+                          setAppointments={setAppointments}
+                          inventory={inventory}
+                          setInventory={setInventory}
+                          templates={templates}
+                          setTemplates={setTemplates}
+                          goals={gamificationGoals}
+                          setGoals={setGamificationGoals}
+                          projects={gamificationProjects}
+                          setProjects={setGamificationProjects}
+                          userXP={userXP}
+                          setUserXP={setUserXP}
+                          userLevel={userLevel}
+                          setUserLevel={setUserLevel}
+                          accSettings={accSettings}
+                          onAddNotification={addNotification}
+                          onRequestConfirm={requestConfirmation}
+                          awardXP={awardXP}
+                          theme={theme}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Google Workspace Connectors Module */}
+              {activeTab === "google-workspace" && (
+                <div className="w-full">
+                  <GoogleWorkspace
+                    leads={leads}
+                    setLeads={setLeads}
+                    appointments={appointments}
+                    setAppointments={setAppointments}
+                    templates={templates}
+                    emailLogs={emailLogs}
+                    setEmailLogs={setEmailLogs}
+                    awardXP={awardXP}
+                    addNotification={addNotification}
+                    accSettings={accSettings}
+                  />
+                </div>
+              )}
+
+              {/* Settings and Administration Tabs Removed */}
+            </Suspense>
+          </div>
         </main>
       </div>
 
       {/* SHARED MODALS */}
 
       {/* D. CUSTOM STYLED CONFIRMATION OVERLAY */}
-      <AnimatePresence>
-        {confirmModal && confirmModal.isOpen && (
-          <div className="fixed inset-0 bg-zinc-950/80 flex items-center justify-center p-4 z-[9999] select-none backdrop-blur-xs">
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white border-4 border-zinc-950 p-6 rounded-3xl w-full max-w-sm shadow-[6px_6px_0px_0px_rgba(24,24,27,1)] space-y-4 text-zinc-950"
-            >
-              <div className="flex items-start gap-3">
-                <div className={`p-2.5 border-2 border-zinc-950 rounded-2xl shrink-0 ${
-                  confirmModal.type === 'danger' ? 'bg-rose-100 text-rose-600 animate-pulse' : 'bg-amber-100 text-amber-700 animate-pulse'
-                }`}>
-                  <AlertTriangle className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-xs font-black uppercase font-mono tracking-tight leading-snug">
-                    {confirmModal.title}
-                  </h3>
-                  <span className="text-[8px] font-mono font-black text-zinc-400 block uppercase pt-0.5">
-                    SEGURANÇA ATIVA COMERCIAL · cicloCRED
-                  </span>
-                </div>
-              </div>
 
-              <p className="text-[10.5px] text-zinc-500 leading-relaxed font-sans font-bold">
-                {confirmModal.description}
-              </p>
-
-              <div className="flex gap-2 justify-end pt-2 border-t border-zinc-150">
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerSensoryFeedback('click', accSettings);
-                    setConfirmModal(null);
-                  }}
-                  className="px-3.5 py-1.5 border border-zinc-450 text-zinc-700 rounded-xl hover:bg-zinc-100 font-mono font-black text-[9px] uppercase transition"
-                >
-                  Regressar (Cancelar)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    confirmModal.onConfirm();
-                  }}
-                  className={`px-4 py-1.5 text-white border-2 border-zinc-950 rounded-xl font-mono font-black text-[9px] uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition active:translate-y-0 ${
-                    confirmModal.type === 'danger' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-500 hover:bg-amber-600'
-                  }`}
-                >
-                  Confirmar Operação
-                </button>
+      {confirmModal && confirmModal.isOpen && (
+        <div className="fixed inset-0 bg-zinc-950/80 flex items-center justify-center p-4 z-[9999] select-none backdrop-blur-xs">
+          <div className="bg-white border-4 border-zinc-950 p-6 rounded-3xl w-full max-w-sm shadow-[6px_6px_0px_0px_rgba(24,24,27,1)] space-y-4 text-zinc-950">
+            <div className="flex items-start gap-3">
+              <div
+                className={`p-2.5 border-2 border-zinc-950 rounded-2xl shrink-0 ${
+                  confirmModal.type === "danger"
+                    ? "bg-rose-100 text-rose-600 "
+                    : "bg-amber-100 text-amber-700 "
+                }`}
+              >
+                <AlertTriangle className="w-5 h-5" />
               </div>
-            </motion.div>
+              <div>
+                <h3 className="text-xs font-black uppercase font-mono tracking-tight leading-snug">
+                  {confirmModal.title}
+                </h3>
+                <span className="text-[8px] font-mono font-black text-zinc-400 block uppercase pt-0.5">
+                  SEGURANÇA ATIVA COMERCIAL
+                </span>
+              </div>
+            </div>
+
+            <p className="text-[10.5px] text-zinc-500 leading-relaxed font-sans font-bold">
+              {confirmModal.description}
+            </p>
+
+            <div className="flex gap-2 justify-end pt-2 border-t border-zinc-150">
+              <button
+                type="button"
+                onClick={() => {
+                  triggerSensoryFeedback("click", accSettings);
+                  setConfirmModal(null);
+                }}
+                className="px-3.5 py-1.5 border border-zinc-450 text-zinc-700 rounded-xl hover:bg-zinc-100 font-mono font-black text-[9px] uppercase transition"
+              >
+                Regressar (Cancelar)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  confirmModal.onConfirm();
+                }}
+                className={`px-4 py-1.5 text-white border-2 border-zinc-950 rounded-xl font-mono font-black text-[9px] uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition active:translate-y-0 ${
+                  confirmModal.type === "danger"
+                    ? "bg-rose-600 hover:bg-rose-700"
+                    : "bg-amber-500 hover:bg-amber-600"
+                }`}
+              >
+                Confirmar Operação
+              </button>
+            </div>
           </div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
 
       {/* A. Lead Edit/Create Modal overlay */}
       <LeadModal
         isOpen={isLeadModalOpen}
         lead={selectedLeadForEdit}
         defaultStatus={defaultStatusForCreate}
+        operationalFlows={operationalFlows}
+        setOperationalFlows={setOperationalFlows}
         onClose={() => {
           setIsLeadModalOpen(false);
           setSelectedLeadForEdit(null);
@@ -4014,1167 +6570,1559 @@ export default function App() {
         onUpdateLeadNotes={handleUpdateNotes}
         onUpdateLeadStatus={handleMoveLead}
         onUpdateLeadFamilyIncome={handleUpdateFamilyIncome}
+        onUpdateLeadFull={handleUpdateLeadFull}
         awardXP={(xp) => awardXP(xp)}
+        onOpenAIAssistant={handleOpenAIAssistant}
+        onOpenRuleEngine={handleOpenRuleEngine}
+
+        onOpenEditModal={(lead) => {
+          setSelectedLeadForEdit(lead);
+          setIsLeadModalOpen(true);
+        }}
+        onDeleteLead={handleDeleteLead}
       />
 
-      {/* ADAPTIVE IMPORT AND EXPORT MODALS */}
-      <AnimatePresence>
-        {isImportModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-4 backdrop-blur-md select-none overflow-y-auto">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white border-4 border-zinc-950 rounded-3xl w-full max-w-xl shadow-[8px_8px_0px_0px_rgba(24,24,27,1)] overflow-hidden flex flex-col max-h-[85vh]"
+      {/* C. CEO Copilot Floating Insights Board */}
+      {ceoResponse && (
+        <div className="fixed bottom-4 right-4 z-50 w-full max-w-md bg-zinc-950 border-4 border-zinc-900 rounded-3xl p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white select-none">
+          <div className="flex items-center justify-between border-b-2 border-zinc-900 pb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">💼</span>
+              <div>
+                <h3 className="text-[10px] font-black uppercase tracking-wider text-purple-400">
+                  Diretoria Executiva cicloCRED
+                </h3>
+                <h2 className="text-[8px] font-bold text-zinc-400 uppercase tracking-widest">
+                  Painel de Decisões do CEO
+                </h2>
+              </div>
+            </div>
+            <button
+              onClick={() => setCeoResponse(null)}
+              className="text-zinc-400 hover:text-white font-black font-mono text-[9px] bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 px-2 py-1 rounded-lg transition-all cursor-pointer uppercase"
             >
-              <div className="p-4 bg-emerald-600 text-white font-sans font-black flex items-center justify-between border-b-4 border-zinc-950">
-                <div className="flex items-center gap-2">
-                  <Download className="w-5 h-5 text-white" />
-                  <span className="uppercase tracking-wider text-xs">Importador Adaptável ({activeTab === 'leads' ? 'Leads' : activeTab === 'inventory' ? 'Estoque' : activeTab === 'appointments' ? 'Agenda' : 'Geral'})</span>
+              Fechar ✕
+            </button>
+          </div>
+
+          <div className="mt-3">
+            <span className="text-[7px] font-mono tracking-widest font-black uppercase text-zinc-500 bg-zinc-900 px-1.5 py-0.5 rounded">
+              Sua pergunta como COFO
+            </span>
+            <p className="text-zinc-200 text-[10px] font-bold font-mono pl-1 mt-1 italic border-l-2 border-zinc-700">
+              "{ceoResponse.query}"
+            </p>
+          </div>
+
+          <div className="mt-4 max-h-80 overflow-y-auto bg-zinc-900/60 rounded-2xl p-4 border border-zinc-900 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+            {isCeoLoading ? (
+              <div className="flex flex-col items-center justify-center py-10 gap-3">
+                <div className="w-8 h-8 rounded-full border-4 border-purple-500 border-t-transparent animate-spin"></div>
+                <p className="text-zinc-400 text-[9px] font-mono uppercase tracking-widest animate-pulse">
+                  Consultando dados de leads...
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {renderCeoMarkdown(ceoResponse.message)}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-4 flex gap-2 justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(ceoResponse.message);
+                addNotification(
+                  "Copiado!",
+                  "Visão executiva copiada para a área de transferência.",
+                  "success",
+                );
+              }}
+              className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border-2 border-zinc-950 text-white font-mono font-black text-[9px] uppercase rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition hover:translate-y-[-1px] active:translate-y-0 cursor-pointer"
+            >
+              📋 Copiar Diretrizes
+            </button>
+            <button
+              type="button"
+              onClick={() => setCeoResponse(null)}
+              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 border-2 border-zinc-950 text-white font-mono font-black text-[9px] uppercase rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition hover:translate-y-[-1px] active:translate-y-0 cursor-pointer"
+            >
+              Ciente, CEO! 🤝
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ADAPTIVE IMPORT AND EXPORT MODALS */}
+
+      {isImportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-4 backdrop-blur-md">
+          <div className="bg-zinc-50 border-4 border-zinc-950 rounded-3xl w-full max-w-md shadow-[8px_8px_0px_0px_rgba(24,24,27,1)] overflow-hidden flex flex-col">
+            <div className="p-4 bg-emerald-500 border-b-4 border-zinc-950 flex items-center justify-between">
+              <h3 className="font-black text-zinc-950 uppercase italic text-sm tracking-widest flex items-center gap-2">
+                <span>📥</span> IMPORTAÇÃO
+              </h3>
+              <button
+                onClick={() => setIsImportModalOpen(false)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white rounded p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              <div>
+                <h4 className="font-mono font-black text-xs text-zinc-800 uppercase mb-2">
+                  Fluxo Operacional (Obrigatório)*:
+                </h4>
+                <div className="flex flex-col gap-2">
+                  <select
+                    className="w-full bg-white border-2 border-zinc-950 p-2.5 rounded-xl font-mono text-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={importPipeline}
+                    onChange={(e) => {
+                      if (e.target.value === "new") {
+                        const newName = prompt(
+                          "Nome do novo fluxo operacional:",
+                        );
+                        if (newName) {
+                          const newFlow = createDefaultFlow(
+                            `flow-${Date.now()}`,
+                            newName,
+                          );
+                          setOperationalFlows((prev) => [...prev, newFlow]);
+                          setImportPipeline(newFlow.id);
+                        }
+                      } else {
+                        setImportPipeline(e.target.value);
+                      }
+                    }}
+                  >
+                    <option value="">Selecione um fluxo...</option>
+                    {operationalFlows.map((flow) => (
+                      <option key={flow.id} value={flow.id}>
+                        {flow.name}
+                      </option>
+                    ))}
+                    <option value="new">+ Criar Novo Fluxo</option>
+                  </select>
                 </div>
-                <button onClick={() => setIsImportModalOpen(false)} className="bg-zinc-950 hover:bg-zinc-900 border border-zinc-750 text-white rounded-lg p-1.5 transition cursor-pointer">
-                  <X className="w-4 h-4" />
-                </button>
               </div>
 
-              <div className="p-6 overflow-y-auto space-y-4">
-                <p className="text-zinc-600 text-xs font-mono font-bold uppercase select-none">
-                  Insira abaixo os dados estruturados em texto ou JSON para alimentar o painel do seu CRM de forma direta e persistente:
-                </p>
-
-                {activeTab === 'leads' && (
-                  <div className="space-y-3">
-                    <div className="bg-emerald-50 border-2 border-emerald-500 rounded-xl p-3 text-emerald-800 text-[10px] font-mono leading-relaxed select-none">
-                      💡 <strong>Dica de formato de Importação de Leads:</strong> Copie e cole linhas como <code>Nome, Renda Bruta, Telefone, Email</code> ou insira uma lista simples. Se preferir, use o botão rápido abaixo para auto-popular dados de teste reais.
-                    </div>
-                    <textarea
-                      id="importLeadsTextarea"
-                      rows={5}
-                      className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-3 text-xs font-mono text-zinc-950 focus:outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500"
-                      placeholder="Ana Silva, 5500, 11988887777, ana.silva@email.com&#10;Bruno Santana, 7200, 21977778888, bruno@email.com"
-                    />
-                    <div className="flex gap-2 justify-between">
-                      <button
-                        onClick={() => {
-                          const textarea = document.getElementById('importLeadsTextarea') as HTMLTextAreaElement;
-                          if (textarea) {
-                            textarea.value = JSON.stringify([
-                              { name: 'Gabriel Toledo', familyGrossIncome: 8500, phone: '11981234567', email: 'gabriel.toledo@email.com', origin: 'Indicação' },
-                              { name: 'Larissa Alencar', familyGrossIncome: 12400, phone: '21983456789', email: 'larissa.a@email.com', origin: 'Instagram' }
-                            ], null, 2);
-                          }
+              {importPipeline ? (
+                <div>
+                  <h4 className="font-mono font-black text-xs text-zinc-800 uppercase mb-2">
+                    Origem dos Dados:
+                  </h4>
+                  <div className="flex flex-col gap-2">
+                    <label className="flex items-center gap-2 cursor-pointer p-2 border-2 border-zinc-200 rounded-lg hover:border-emerald-500 transition">
+                      <input
+                        type="radio"
+                        value="upload"
+                        checked={importOrigin === "upload"}
+                        onChange={() => setImportOrigin("upload")}
+                        className="accent-emerald-600 w-4 h-4"
+                      />
+                      <span className="font-bold text-sm text-zinc-700">
+                        Upload de Arquivo Local
+                      </span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer p-2 border-2 border-zinc-200 rounded-lg hover:border-emerald-500 transition">
+                      <input
+                        type="radio"
+                        value="google_sheets"
+                        checked={importOrigin === "google_sheets"}
+                        onChange={() => {
+                          setImportOrigin("google_sheets");
+                          handleGoogleSheetsImport();
                         }}
-                        className="px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 border-2 border-zinc-950 rounded-lg text-[9px] font-mono font-black uppercase shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] cursor-pointer"
-                      >
-                        Carregar Exemplo JSON
-                      </button>
-                      <button
-                        onClick={() => {
-                          const textarea = document.getElementById('importLeadsTextarea') as HTMLTextAreaElement;
-                          if (textarea && textarea.value.trim()) {
-                            try {
-                              let count = 0;
-                              const content = textarea.value.trim();
-                              if (content.startsWith('[')) {
-                                const parsed = JSON.parse(content);
-                                if (Array.isArray(parsed)) {
-                                  parsed.forEach(item => {
-                                    const newLead: any = {
-                                      id: 'imported_' + Math.random().toString(36).substring(2, 9),
-                                      name: item.name || 'Contato Importado',
-                                      familyGrossIncome: Number(item.familyGrossIncome) || 4500,
-                                      phone: item.phone || '11900000000',
-                                      email: item.email || 'importado@email.com',
-                                      origin: item.origin || 'Importação Direta',
-                                      status: 'novo',
+                        className="accent-emerald-600 w-4 h-4"
+                      />
+                      <span className="font-bold text-sm text-zinc-700 flex items-center gap-2">
+                        Google Sheets / Drive{" "}
+                        <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-black">
+                          LIVE
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer p-2 border-2 border-zinc-200 rounded-lg hover:border-emerald-500 transition">
+                      <input
+                        type="radio"
+                        value="copy"
+                        checked={importOrigin === "copy"}
+                        onChange={() => setImportOrigin("copy")}
+                        className="accent-emerald-600 w-4 h-4"
+                      />
+                      <span className="font-bold text-sm text-zinc-700">
+                        Copiar & Colar
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 bg-amber-50 border-2 border-amber-200 rounded-xl text-amber-800 font-mono text-[10px] text-center font-black">
+                  SELECIONE OU CRIE UM FLUXO OPERACIONAL PARA CONTINUAR A
+                  IMPORTAÇÃO DE CONTATOS.
+                </div>
+              )}
+
+              {importPipeline && (
+                <>
+                  <div className="border-4 border-dashed border-zinc-300 rounded-2xl p-6 flex flex-col items-center justify-center text-center hover:bg-zinc-100 transition cursor-pointer group">
+                    <Upload className="w-8 h-8 text-zinc-400 group-hover:text-emerald-500 mb-2" />
+                    <p className="font-black text-sm text-zinc-700">
+                      ARRASTE ARQUIVO
+                    </p>
+                    <p className="font-mono text-xs text-zinc-500">
+                      .xlsx, .csv, .txt
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    {importOrigin === "upload" && (
+                      <>
+                        <label className="w-full py-2.5 bg-zinc-200 hover:bg-zinc-300 border-2 border-zinc-950 rounded-xl font-black text-xs uppercase text-zinc-900 transition shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] text-center cursor-pointer">
+                          Selecionar Arquivo CSV/JSON
+                          <input
+                            type="file"
+                            accept=".csv,.json,application/json,text/csv"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const reader = new FileReader();
+                              reader.onload = (evt) => {
+                                const content = evt.target?.result as string;
+                                try {
+                                  let count = 0;
+                                  const bulkLeadsToImport: Lead[] = [];
+
+                                  if (file.name.endsWith(".json")) {
+                                    const parsed = JSON.parse(content);
+                                    const list = Array.isArray(parsed)
+                                      ? parsed
+                                      : [parsed];
+                                    list.forEach((item) => {
+                                      let finalPhone =
+                                        item.phone || "11900000000";
+                                      let finalName = item.name || "Contato";
+                                      let finalEmail =
+                                        item.email || "contato@email.com";
+
+                                      if (isFictitiousPhone(finalPhone)) {
+                                        const emailExt =
+                                          extractPhoneFromString(finalEmail);
+                                        if (emailExt.extractedPhone) {
+                                          finalPhone = emailExt.extractedPhone;
+                                          finalEmail =
+                                            emailExt.cleanedText || finalEmail;
+                                        } else {
+                                          const nameExt =
+                                            extractPhoneFromString(finalName);
+                                          if (nameExt.extractedPhone) {
+                                            finalPhone = nameExt.extractedPhone;
+                                            finalName =
+                                              nameExt.cleanedText || finalName;
+                                          }
+                                        }
+                                      }
+
+                                      const newLead = {
+                                        id:
+                                          "imported_" +
+                                          Math.random()
+                                            .toString(36)
+                                            .substring(2, 9),
+                                        name: finalName,
+                                        familyIncome:
+                                          Number(
+                                            item.familyIncome ||
+                                              item.familyGrossIncome,
+                                          ) || 4500,
+                                        familyGrossIncome:
+                                          Number(
+                                            item.familyIncome ||
+                                              item.familyGrossIncome,
+                                          ) || 4500,
+                                        phone: finalPhone,
+                                        email: finalEmail,
+                                        origin: item.origin || "Upload Arquivo",
+                                        status: "novo" as const,
+                                        createdAt: new Date().toISOString(),
+                                        notes: "Importado por upload file",
+                                        stage: "abordagem",
+                                        tags: ["Importado"],
+                                        value: Number(item.value) || 0,
+                                        fluxoId: importPipeline,
+                                      };
+                                      bulkLeadsToImport.push(newLead);
+                                      count++;
+                                    });
+                                  } else {
+                                    const { parsedItems } =
+                                      processFileOrPasteContent(
+                                        content,
+                                        "Upload Arquivo",
+                                      );
+                                    parsedItems.forEach((item) => {
+                                      const familyIncomeVal =
+                                        item.familyIncome !== undefined
+                                          ? item.familyIncome
+                                          : 4500;
+                                      const newLead: Lead = {
+                                        id:
+                                          "imported_" +
+                                          Math.random()
+                                            .toString(36)
+                                            .substring(2, 9),
+                                        name: item.name || "Contato",
+                                        email:
+                                          item.email || "contato@email.com",
+                                        phone: item.phone || "11900000000",
+                                        familyIncome: familyIncomeVal,
+                                        familyGrossIncome: familyIncomeVal,
+                                        value: item.value || 0,
+                                        origin: item.origin || "Upload Arquivo",
+                                        status: item.status || "novo",
+                                        stage: item.stage || "abordagem",
+                                        createdAt: new Date().toISOString(),
+                                        notes: item.notes || "Importado CSV",
+                                        tags: ["Importado"],
+                                        region: item.region,
+                                        propertyInterest: item.propertyInterest,
+                                        objection: item.objection,
+                                        gender: item.gender,
+                                        ageBracket: item.ageBracket,
+                                        cpf: item.cpf,
+                                        birthDate: item.birthDate,
+                                        maritalStatus: item.maritalStatus,
+                                        fgtsSaldo: item.fgtsSaldo,
+                                        restricaoBacen: item.restricaoBacen,
+                                        possuiImovel: item.possuiImovel,
+                                        programaDesejado: item.programaDesejado,
+                                        checklist: item.checklist || {
+                                          interesse: true,
+                                        },
+                                        fluxoId: importPipeline,
+                                      };
+
+                                      bulkLeadsToImport.push(newLead);
+                                      count++;
+                                    });
+                                  }
+
+                                  handleAddBulkLeads(bulkLeadsToImport);
+                                  addNotification(
+                                    "📥 IMPORTAÇÃO CONCLUÍDA",
+                                    `${count} leads carregados.`,
+                                    "success",
+                                  );
+                                  triggerSensoryFeedback(
+                                    "success",
+                                    accSettings,
+                                  );
+                                  setIsImportModalOpen(false);
+                                } catch (err: any) {
+                                  alert("Erro ao ler arquivo: " + err.message);
+                                }
+                              };
+                              reader.readAsText(file);
+                            }}
+                          />
+                        </label>
+                      </>
+                    )}
+                    {importOrigin === "copy" && (
+                      <>
+                        <textarea
+                          id="importPastedData"
+                          placeholder="Cole o JSON ou CSV aqui..."
+                          className="w-full h-32 p-3 font-mono text-xs border-2 border-zinc-950 rounded-xl"
+                        />
+                        <button
+                          onClick={() => {
+                            const textarea = document.getElementById(
+                              "importPastedData",
+                            ) as HTMLTextAreaElement;
+                            if (textarea && textarea.value.trim()) {
+                              try {
+                                let count = 0;
+                                const content = textarea.value.trim();
+                                const bulkPastedLeadsToImport: Lead[] = [];
+
+                                if (content.startsWith("[")) {
+                                  const parsed = JSON.parse(content);
+                                  parsed.forEach((item: any) => {
+                                    let finalPhone =
+                                      item.phone || "11900000000";
+                                    let finalName = item.name || "Contato";
+                                    let finalEmail =
+                                      item.email || "contato@email.com";
+
+                                    if (isFictitiousPhone(finalPhone)) {
+                                      const emailExt =
+                                        extractPhoneFromString(finalEmail);
+                                      if (emailExt.extractedPhone) {
+                                        finalPhone = emailExt.extractedPhone;
+                                        finalEmail =
+                                          emailExt.cleanedText || finalEmail;
+                                      } else {
+                                        const nameExt =
+                                          extractPhoneFromString(finalName);
+                                        if (nameExt.extractedPhone) {
+                                          finalPhone = nameExt.extractedPhone;
+                                          finalName =
+                                            nameExt.cleanedText || finalName;
+                                        }
+                                      }
+                                    }
+
+                                    const newLead = {
+                                      id:
+                                        "imported_" +
+                                        Math.random()
+                                          .toString(36)
+                                          .substring(2, 9),
+                                      name: finalName,
+                                      familyIncome:
+                                        Number(
+                                          item.familyIncome ||
+                                            item.familyGrossIncome,
+                                        ) || 4500,
+                                      familyGrossIncome:
+                                        Number(
+                                          item.familyIncome ||
+                                            item.familyGrossIncome,
+                                        ) || 4500,
+                                      phone: finalPhone,
+                                      email: finalEmail,
+                                      origin: item.origin || "Copiar/Colar",
+                                      stage: item.stage || "abordagem",
+                                      status: item.status || "novo",
                                       createdAt: new Date().toISOString(),
-                                      history: [{ date: new Date().toISOString().substring(0, 10), text: 'Lead importado via carga adaptável.' }],
-                                      tags: ['Importado']
+                                      notes: item.notes || "",
+                                      tags: item.tags || ["Importado"],
+                                      value: Number(item.value) || 0,
+                                      cpf: item.cpf,
+                                      birthDate: item.birthDate,
+                                      maritalStatus: item.maritalStatus,
+                                      restricaoBacen: item.restricaoBacen,
+                                      possuiImovel: item.possuiImovel,
+                                      programaDesejado: item.programaDesejado,
+                                      region: item.region,
+                                      gender: item.gender,
+                                      ageBracket: item.ageBracket,
+                                      objections: item.objections || [],
+                                      profiles: item.profiles || [],
+                                      fgtsSaldo: item.fgtsSaldo,
+                                      checklist: item.checklist || {
+                                        interesse: true,
+                                      },
+                                      fluxoId: importPipeline,
                                     };
-                                    setLeads(prev => [newLead, ...prev]);
+                                    bulkPastedLeadsToImport.push(newLead);
+                                    count++;
+                                  });
+                                } else {
+                                  const { parsedItems } =
+                                    processFileOrPasteContent(
+                                      content,
+                                      "Copiar/Colar",
+                                    );
+                                  parsedItems.forEach((item) => {
+                                    const familyIncomeVal =
+                                      item.familyIncome !== undefined
+                                        ? item.familyIncome
+                                        : 4500;
+                                    const newLead: Lead = {
+                                      id:
+                                        "imported_" +
+                                        Math.random()
+                                          .toString(36)
+                                          .substring(2, 9),
+                                      name: item.name || "Contato",
+                                      email: item.email || "contato@email.com",
+                                      phone: item.phone || "11900000000",
+                                      familyIncome: familyIncomeVal,
+                                      familyGrossIncome: familyIncomeVal,
+                                      value: item.value || 0,
+                                      origin: item.origin || "Copiar/Colar",
+                                      status: item.status || "novo",
+                                      stage: item.stage || "abordagem",
+                                      createdAt: new Date().toISOString(),
+                                      notes: item.notes || "",
+                                      tags: ["Importado"],
+                                      region: item.region || "",
+                                      propertyInterest:
+                                        item.propertyInterest || "",
+                                      objection: item.objection || "",
+                                      gender: item.gender,
+                                      ageBracket: item.ageBracket,
+                                      cpf: item.cpf || "",
+                                      birthDate: item.birthDate || "",
+                                      maritalStatus: item.maritalStatus,
+                                      fgtsSaldo: item.fgtsSaldo || 0,
+                                      restricaoBacen: item.restricaoBacen,
+                                      possuiImovel: item.possuiImovel,
+                                      programaDesejado: item.programaDesejado,
+                                      checklist: item.checklist || {
+                                        interesse: true,
+                                      },
+                                      fluxoId: importPipeline,
+                                    };
+                                    // legacy name
+                                    // legacy email
+
+                                    // legacy check replaced
+                                    bulkPastedLeadsToImport.push(newLead);
                                     count++;
                                   });
                                 }
-                              } else {
-                                const lines = content.split('\n');
-                                lines.forEach(line => {
-                                  if (line.trim()) {
-                                    const parts = line.split(',');
-                                    const newLead: any = {
-                                      id: 'imported_' + Math.random().toString(36).substring(2, 9),
-                                      name: parts[0]?.trim() || 'Contato Sem Nome',
-                                      familyGrossIncome: Number(parts[1]) || 5000,
-                                      phone: parts[2] ? parts[2].trim() : '11900000000',
-                                      email: parts[3] ? parts[3].trim() : 'import@email.com',
-                                      origin: 'Importação Manual',
-                                      status: 'novo',
-                                      createdAt: new Date().toISOString(),
-                                      history: [{ date: new Date().toISOString().substring(0, 10), text: 'Contato importado CSV manual.' }],
-                                      tags: ['Importado']
-                                    };
-                                    setLeads(prev => [newLead, ...prev]);
-                                    count++;
-                                  }
-                                });
+
+                                handleAddBulkLeads(bulkPastedLeadsToImport);
+                                addNotification(
+                                  "📥 IMPORTAÇÃO CONCLUÍDA",
+                                  `${count} leads carregados.`,
+                                  "success",
+                                );
+                                triggerSensoryFeedback("success", accSettings);
+                                setIsImportModalOpen(false);
+                              } catch (e: any) {
+                                alert(
+                                  "Erro ao processar. Verifique a semântica JSON ou CSV.",
+                                );
                               }
-                              triggerSensoryFeedback('success', accSettings);
-                              addNotification('📥 IMPORTAÇÃO EXECUTADA', `${count} novos leads injetados no CRM com sucesso!`, 'success');
-                              setIsImportModalOpen(false);
-                            } catch (e) {
-                              alert('Erro ao processar dados de entrada. Verifique a semântica.');
                             }
-                          }
-                        }}
-                        className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white border-2 border-zinc-950 rounded-lg text-[9px] font-mono font-black uppercase shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] cursor-pointer"
-                      >
-                        Salvar e Importar Leads
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {activeTab === 'inventory' && (
-                  <div className="space-y-3">
-                    <div className="bg-emerald-50 border-2 border-emerald-500 rounded-xl p-3 text-emerald-800 text-[10px] font-mono leading-relaxed select-none">
-                      🏢 <strong>Importar Lançamento Imobiliário:</strong> Insira o JSON do imóvel. O estoque persistirá instantaneamente com os novos ativos no painel de vendas.
-                    </div>
-                    <textarea
-                      id="importInventoryTextarea"
-                      rows={5}
-                      className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-3 text-xs font-mono text-zinc-950 focus:outline-none"
-                      placeholder='{ "title": "Cury Jardim de Alah", "price": 275000, "typology": "Apartamento 2D", "city": "Rio de Janeiro" }'
-                    />
-                    <div className="flex justify-end gap-2">
-                      <button
-                        onClick={() => {
-                          const textarea = document.getElementById('importInventoryTextarea') as HTMLTextAreaElement;
-                          if (textarea && textarea.value.trim()) {
-                            try {
-                              const parsed = JSON.parse(textarea.value.trim());
-                              const list = Array.isArray(parsed) ? parsed : [parsed];
-                              list.forEach(prop => {
-                                const newId = Math.random().toString(36).substring(2, 9);
-                                setProperties(prev => [
-                                  {
-                                    id: prop.id || 'imported-' + newId,
-                                    title: prop.title || 'Lançamento Cury Importado',
-                                    price: Number(prop.price) || 289000,
-                                    typology: prop.typology || 'Apartamento 2 Dorms',
-                                    builder: prop.builder || 'Cury Construtora',
-                                    region: prop.region || 'Metropolitana',
-                                    city: prop.city || 'São Paulo',
-                                    parameters: prop.parameters || { maxFinancingRatio: 0.8, baseInterestRate: 0.0829 }
-                                  },
-                                  ...prev
-                                ]);
-                              });
-                              triggerSensoryFeedback('success', accSettings);
-                              addNotification('🏢 ESTOQUE EXPANDIDO', `Novas propriedades de Cury adicionadas de forma durável!`, 'success');
-                              setIsImportModalOpen(false);
-                            } catch (err) {
-                              alert('Dados JSON inválidos. Favor corrigir a sintaxe.');
-                            }
-                          }
-                        }}
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-mono font-black text-[10px] uppercase border-2 border-zinc-950 rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] cursor-pointer"
-                      >
-                        Carregar Unidades
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {activeTab !== 'leads' && activeTab !== 'inventory' && (
-                  <div className="space-y-3">
-                    <p className="text-[10px] text-zinc-500 font-mono select-none">
-                      Não há importadores adicionais necessários para a aba "{activeTab}". Use os importadores customizados nativos do cicloCRED CRM.
-                    </p>
-                    <button
-                      onClick={() => setIsImportModalOpen(false)}
-                      className="px-4 py-2 bg-zinc-900 border-2 border-zinc-950 text-white rounded-xl text-xs font-mono font-black uppercase cursor-pointer block text-center w-full"
-                    >
-                      Entendido / Fechar Janela
-                    </button>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </div>
-        )}
-
-        {isExportModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-4 backdrop-blur-md select-none overflow-y-auto">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white border-4 border-zinc-950 rounded-3xl w-full max-w-xl shadow-[8px_8px_0px_0px_rgba(24,24,27,1)] overflow-hidden flex flex-col max-h-[85vh]"
-            >
-              <div className="p-4 bg-indigo-600 text-white font-sans font-black flex items-center justify-between border-b-4 border-zinc-950">
-                <div className="flex items-center gap-2">
-                  <Upload className="w-5 h-5 text-white" />
-                  <span className="uppercase tracking-wider text-xs">Exportar Dados ({activeTab === 'leads' ? 'Leads' : activeTab === 'inventory' ? 'Ativos Estoque' : 'Relatórios & Parâmetros'})</span>
-                </div>
-                <button onClick={() => setIsExportModalOpen(false)} className="bg-zinc-950 hover:bg-zinc-900 border border-zinc-750 text-white rounded-lg p-1.5 transition cursor-pointer">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="p-6 overflow-y-auto space-y-4">
-                <div className="bg-indigo-50 border-2 border-indigo-400 p-3 rounded-xl text-indigo-900 text-[10px] font-mono leading-relaxed select-none">
-                  Sincronização Ativa & Exportação Dinâmica. Abaixo, copie ou baixe a representação codificada dos seus dados no CRM.
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-[10px] text-zinc-950 font-black font-mono uppercase">Snapshot JSON Atual:</label>
-                  <pre className="bg-zinc-900 text-green-400 p-4 rounded-xl text-[10px] font-mono overflow-auto max-h-[250px] whitespace-pre-wrap select-all">
-                    {activeTab === 'leads' ? (
-                      JSON.stringify(unifiedFilteredLeads.map(l => ({ name: l.name, email: l.email, phone: l.phone, income: l.familyGrossIncome, status: l.status, origin: l.origin })), null, 2)
-                    ) : activeTab === 'inventory' ? (
-                      JSON.stringify(properties, null, 2)
-                    ) : activeTab === 'appointments' ? (
-                      JSON.stringify(appointments, null, 2)
-                    ) : (
-                      JSON.stringify({
-                        exportedAt: new Date().toISOString(),
-                        currentActiveTab: activeTab,
-                        leadsFilteredCount: unifiedFilteredLeads.length
-                      }, null, 2)
+                          }}
+                          className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 border-2 border-zinc-950 rounded-xl font-black text-xs uppercase text-zinc-950 transition shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                        >
+                          Processar e Importar
+                        </button>
+                      </>
                     )}
-                  </pre>
-                </div>
-
-                <div className="flex justify-between gap-2">
-                  <button
-                    onClick={() => {
-                      const text = activeTab === 'leads' ? (
-                        JSON.stringify(unifiedFilteredLeads, null, 2)
-                      ) : activeTab === 'inventory' ? (
-                        JSON.stringify(properties, null, 2)
-                      ) : (
-                        JSON.stringify(appointments, null, 2)
-                      );
-                      navigator.clipboard.writeText(text);
-                      triggerSensoryFeedback('success', accSettings);
-                      addNotification('📋 COPIADO', 'Os dados estruturados foram copiados para sua área de transferência.', 'success');
-                    }}
-                    className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white font-mono font-black text-[10px] uppercase border-2 border-zinc-950 rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] cursor-pointer"
-                  >
-                    Copiar Clipboard
-                  </button>
-                  <button
-                    onClick={() => {
-                      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(
-                        activeTab === 'leads' ? JSON.stringify(unifiedFilteredLeads) : JSON.stringify(properties)
-                      );
-                      const downloadAnchor = document.createElement('a');
-                      downloadAnchor.setAttribute("href", dataStr);
-                      downloadAnchor.setAttribute("download", `ciclocred-${activeTab}-export.json`);
-                      document.body.appendChild(downloadAnchor);
-                      downloadAnchor.click();
-                      downloadAnchor.remove();
-                      addNotification('💾 ARQUIVO SALVO', 'Exportação realizada e transferida com êxito!', 'success');
-                    }}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-mono font-black text-[10px] uppercase border-2 border-zinc-950 rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] cursor-pointer"
-                  >
-                    Baixar Arquivo .json
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* BB. Settings & Administration Modal Overlay */}
-      <AnimatePresence>
-        {isSettingsModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-4 backdrop-blur-md select-none overflow-y-auto">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white border-4 border-zinc-950 rounded-3xl w-full max-w-5xl shadow-[8px_8px_0px_0px_rgba(24,24,27,1)] overflow-hidden max-h-[90vh] flex flex-col"
-            >
-              {/* Header */}
-              <div className="p-4.5 border-b-4 border-zinc-950 bg-zinc-900 text-white flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Settings className="w-5 h-5 text-indigo-400 animate-spin-slow" />
-                  <h3 className="font-sans font-black text-sm uppercase italic tracking-tight">
-                    ⚙️ Administração & Configurações cicloCRED
-                  </h3>
-                </div>
-                <button 
-                  onClick={() => setIsSettingsModalOpen(false)}
-                  className="text-zinc-400 hover:text-white p-1 rounded-lg border border-transparent hover:border-zinc-700 hover:bg-zinc-800 transition"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Tab Selector Inside Modal */}
-              <div className="px-6 py-2.5 bg-zinc-800 text-white flex gap-4 border-b-4 border-zinc-950 text-xs font-mono font-black uppercase select-none">
-                <button
-                  onClick={() => {
-                    triggerSensoryFeedback('click', accSettings);
-                    setSettingsModalTab('profile');
-                  }}
-                  className={`pb-1 border-b-2 transition ${settingsModalTab === 'profile' ? 'border-indigo-400 text-white' : 'border-transparent text-zinc-400 hover:text-zinc-250'}`}
-                >
-                  👤 Perfil & Ajustes CRM
-                </button>
-                <button
-                  onClick={() => {
-                    triggerSensoryFeedback('click', accSettings);
-                    setSettingsModalTab('database');
-                  }}
-                  className={`pb-1 border-b-2 transition ${settingsModalTab === 'database' ? 'border-indigo-400 text-white' : 'border-transparent text-zinc-400 hover:text-zinc-250'}`}
-                >
-                  💾 Banco de Dados & Backups
-                </button>
-              </div>
-
-              {/* Scrollable Content Container */}
-              <div className="p-6 overflow-y-auto bg-zinc-50 flex-1 text-zinc-800">
-                {settingsModalTab === 'profile' ? (
-                  <SettingsView
-                    theme={theme}
-                    setTheme={setTheme}
-                    galaxyPreset={galaxyPreset}
-                    setGalaxyPreset={setGalaxyPreset}
-                    accSettings={accSettings}
-                    setAccSettings={setAccSettings}
-                    userName={userName}
-                    setUserName={setUserName}
-                    userEmail={userEmail}
-                    setUserEmail={setUserEmail}
-                    creciNumber={creciNumber}
-                    setCreciNumber={setCreciNumber}
-                    userRole={userRole}
-                    setUserRole={setUserRole}
-                    agencyName={agencyName}
-                    setAgencyName={setAgencyName}
-                    subscriptionPlan={subscriptionPlan}
-                    setSubscriptionPlan={setSubscriptionPlan}
-                    userLevel={userLevel}
-                    userXP={userXP}
-                    properties={properties}
-                    leads={leads}
-                    isAutonomyActive={isAutonomyActive}
-                    setIsAutonomyActive={setIsAutonomyActive}
-                    autonomyIntervalSec={autonomyIntervalSec}
-                    setAutonomyIntervalSec={setAutonomyIntervalSec}
-                    leadsCount={leads.length}
-                    propertiesCount={properties.length}
-                    inventoryCount={properties.length}
-                    onWipeLeads={handleWipeLeads}
-                    onWipeEstoque={handleWipeProperties}
-                    onRequestConfirm={requestConfirmation}
-                    forceLocalStorageMode={forceLocalStorageMode}
-                    onToggleForceLocalMode={handleToggleForceLocalMode}
-                    consolidatedCrmInfo={consolidatedCrmInfo}
-                    setConsolidatedCrmInfo={setConsolidatedCrmInfo}
-                  />
-                ) : (
-                  <BackupManager
-                    leads={leads}
-                    setLeads={setLeads}
-                    properties={properties}
-                    setProperties={setProperties}
-                    appointments={appointments}
-                    setAppointments={setAppointments}
-                    inventory={inventory}
-                    setInventory={setInventory}
-                    templates={templates}
-                    setTemplates={setTemplates}
-                    goals={gamificationGoals}
-                    setGoals={setGamificationGoals}
-                    projects={gamificationProjects}
-                    setProjects={setGamificationProjects}
-                    userXP={userXP}
-                    setUserXP={setUserXP}
-                    userLevel={userLevel}
-                    setUserLevel={setUserLevel}
-                    accSettings={accSettings}
-                    onAddNotification={addNotification}
-                    onRequestConfirm={requestConfirmation}
-                  />
-                )}
-              </div>
-
-              {/* Footer */}
-              <div className="p-4 bg-zinc-100 border-t-4 border-zinc-950 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setIsSettingsModalOpen(false)}
-                  className="px-5 py-2 bg-zinc-900 hover:bg-zinc-850 text-white font-mono font-black text-xs uppercase border-2 border-zinc-950 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition active:translate-y-0"
-                >
-                  Sair das Configurações
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* C. Dynamic Conversational CRM Notifications Drawer overlay */}
-      <AnimatePresence>
-        {isNotificationsOpen && (
-          <div className="fixed inset-0 z-50 overflow-hidden">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.6 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsNotificationsOpen(false)}
-              className="absolute inset-0 bg-black/70 backdrop-blur-xs"
-            />
-            <div className="absolute inset-y-0 right-0 max-w-full pl-10 flex">
-              <motion.div
-                initial={{ x: '100%' }}
-                animate={{ x: 0 }}
-                exit={{ x: '100%' }}
-                transition={{ type: 'spring', damping: 25, stiffness: 180 }}
-                className="w-screen max-w-md bg-zinc-950 text-zinc-100 border-l-4 border-zinc-900 shadow-[0_0_40px_rgba(0,0,0,0.6)] flex flex-col h-full font-sans"
-              >
-                {/* Header title block */}
-                <div className="p-6 border-b-2 border-zinc-900 bg-gradient-to-r from-indigo-950 to-zinc-950">
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                      <Cpu className="w-5 h-5 text-indigo-400" />
-                      <div>
-                        <h3 className="text-sm font-black uppercase font-mono tracking-wider text-white">Canal CRM Autônomo</h3>
-                        <p className="text-[10px] text-indigo-300 font-semibold font-mono">Conversão Ativa em Tempo Real</p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setIsNotificationsOpen(false)}
-                      className="p-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-white transition"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
                   </div>
-
-                  <div className="grid grid-cols-2 gap-2 mt-4 text-[9px] font-mono font-bold text-zinc-400">
-                    <div className="bg-zinc-900/60 p-2 rounded-lg border border-zinc-900">
-                      <span className="block text-[8px] uppercase text-zinc-500">Histórico de Alertas</span>
-                      <span className="text-white text-xs font-black">{notifications.length} registros</span>
-                    </div>
-                    <div className="bg-zinc-950 p-2 rounded-lg border border-indigo-950 flex items-center gap-1.5 justify-between">
-                      <div>
-                        <span className="block text-[8px] uppercase text-indigo-400">NÍVEL ATUAL</span>
-                        <span className="text-indigo-300 text-xs font-black">Galaxy {userLevel}</span>
-                      </div>
-                      <span className="rounded-full bg-indigo-900/40 p-1 text-[10px] text-white">🚀</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Notification Feed */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-zinc-950/90 h-[calc(100vh-230px)]">
-                  {notifications.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-16 text-center space-y-3.5">
-                      <Bell className="w-8 h-8 text-zinc-600 animate-bounce" />
-                      <div>
-                        <h4 className="text-xs font-black uppercase font-mono text-zinc-400">Tudo Silencioso no Espaço</h4>
-                        <p className="text-[10px] text-zinc-500 max-w-xs mt-1">Nenhum evento detectado. Use o botão abaixo para simular alertas imediatamente!</p>
-                      </div>
-                    </div>
-                  ) : (
-                    notifications.map((notify) => (
-                      <div
-                        key={notify.id}
-                        className={`p-3.5 rounded-xl border-2 transition-all duration-350 ${
-                          notify.read 
-                            ? 'bg-zinc-905 bg-opacity-30 border-zinc-900 text-zinc-400' 
-                            : 'bg-zinc-900 border-indigo-900 text-white shadow-[0_2px_8px_rgba(99,102,241,0.15)]'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-2">
-                            {notify.type === 'ai' && <Sparkles className="w-3.5 h-3.5 text-indigo-400 shrink-0" />}
-                            {notify.type === 'alarm' && <BellRing className="w-4 h-4 text-rose-500 shrink-0 animate-pulse" />}
-                            {notify.type === 'success' && <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />}
-                            {notify.type === 'warning' && <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
-                            {notify.type === 'info' && <Cpu className="w-3.5 h-3.5 text-cyan-400 shrink-0" />}
-                            
-                            <span className="text-xs font-black uppercase font-mono tracking-tight text-white">{notify.title}</span>
-                          </div>
-                          <span className="text-[9px] font-mono text-zinc-500 tracking-wider shrink-0 ml-1">{notify.timestamp}</span>
-                        </div>
-                        <p className="text-[11px] font-semibold text-zinc-300 mt-2 font-sans leading-relaxed">{notify.message}</p>
-                        
-                        <div className="flex justify-between items-center mt-2.5 pt-2 border-t border-zinc-800/80">
-                          {!notify.read && (
-                            <button
-                              onClick={() => {
-                                setNotifications(prev => prev.map(n => n.id === notify.id ? { ...n, read: true } : n));
-                                triggerSensoryFeedback('click', accSettings);
-                              }}
-                              className="text-[9px] font-mono font-black uppercase text-indigo-400 hover:text-indigo-300 transition"
-                            >
-                              Marcar como lido
-                            </button>
-                          )}
-                          <button
-                            onClick={() => {
-                              setNotifications(prev => prev.filter(n => n.id !== notify.id));
-                              triggerSensoryFeedback('warning', accSettings);
-                            }}
-                            className="text-[9px] font-mono text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition ml-auto"
-                            title="Deletar notificação"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                            <span>Remover</span>
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                {/* Footer and test trigger */}
-                <div className="p-4 border-t-2 border-zinc-900 bg-zinc-950 space-y-2 mt-auto">
-                  <button
-                    onClick={() => {
-                      triggerSensoryFeedback('click', accSettings);
-                      simulateCRMAction();
-                    }}
-                    className="w-full flex items-center justify-center gap-1.5 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-lg text-xs uppercase border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition-all"
-                  >
-                    <Sparkles className="w-4 h-4 text-indigo-200" />
-                    <span>DIAGNOSTICAR OPORTUNIDADES REAL 🔍</span>
-                  </button>
-
-                  <div className="grid grid-cols-2 gap-2 text-center text-[10px] font-mono font-black">
-                    <button
-                      onClick={() => {
-                        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-                        triggerSensoryFeedback('success', accSettings);
-                      }}
-                      className="py-2.5 bg-zinc-905 bg-opacity-40 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 rounded-lg uppercase transition"
-                    >
-                      Ler Todas
-                    </button>
-                    <button
-                      onClick={() => {
-                        setNotifications([]);
-                        triggerSensoryFeedback('warning', accSettings);
-                      }}
-                      className="py-2.5 bg-zinc-905 bg-opacity-40 hover:bg-zinc-800 border border-zinc-800 text-rose-400 rounded-lg uppercase transition"
-                    >
-                      Limpar Tudo
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
+                </>
+              )}
             </div>
           </div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
 
-      {/* D. Real-Time Scheduled Task Alarm Modal */}
-      <AnimatePresence>
-        {activeAlarm && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-red-950/80 backdrop-blur-xs"
-            />
-            <motion.div
-              initial={{ scale: 0.9, y: 30 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 30 }}
-              className="relative w-full max-w-md bg-white border-8 border-red-600 rounded-3xl p-6 text-zinc-900 shadow-[0_0_50px_rgba(239,68,68,0.5)] flex flex-col space-y-4"
-            >
-              <div className="flex flex-col items-center justify-center text-center space-y-3.5">
-                <div className="relative flex items-center justify-center">
-                  <div className="absolute inset-x-0 w-16 h-16 rounded-full bg-red-500/20 animate-ping pointer-events-none" />
-                  <div className="rounded-full bg-zinc-950 border-4 border-zinc-950 p-4 relative z-10">
-                    <BellRing className="w-8 h-8 text-rose-500 animate-bounce" />
+      {isExportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-4 backdrop-blur-md">
+          <div className="bg-zinc-50 border-4 border-zinc-950 rounded-3xl w-full max-w-md shadow-[8px_8px_0px_0px_rgba(24,24,27,1)] overflow-hidden flex flex-col">
+            <div className="p-4 bg-indigo-500 border-b-4 border-zinc-950 flex items-center justify-between">
+              <h3 className="font-black text-white uppercase italic text-sm tracking-widest flex items-center gap-2">
+                <span>📤</span> EXPORTAÇÃO
+              </h3>
+              <button
+                onClick={() => setIsExportModalOpen(false)}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              <div>
+                <h4 className="font-mono font-black text-xs text-zinc-800 uppercase mb-2">
+                  Destino dos Dados:
+                </h4>
+                <div className="flex flex-col gap-2">
+                  <label className="flex items-center gap-2 cursor-pointer p-2 border-2 border-zinc-200 rounded-lg hover:border-indigo-500 transition">
+                    <input
+                      type="radio"
+                      value="download"
+                      checked={exportTarget === "download"}
+                      onChange={() => setExportTarget("download")}
+                      className="accent-indigo-600 w-4 h-4"
+                    />
+                    <span className="font-bold text-sm text-zinc-700">
+                      Baixar Localmente
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer p-2 border-2 border-zinc-200 rounded-lg hover:border-indigo-500 transition">
+                    <input
+                      type="radio"
+                      value="clipboard"
+                      checked={exportTarget === "clipboard"}
+                      onChange={() => setExportTarget("clipboard")}
+                      className="accent-indigo-600 w-4 h-4"
+                    />
+                    <span className="font-bold text-sm text-zinc-700">
+                      Copiar p/ área de transferência
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer p-2 border-2 border-zinc-200 rounded-lg hover:border-indigo-500 transition">
+                    <input
+                      type="radio"
+                      value="email"
+                      checked={exportTarget === "email"}
+                      onChange={() => setExportTarget("email")}
+                      className="accent-indigo-600 w-4 h-4"
+                    />
+                    <span className="font-bold text-sm text-zinc-700">
+                      Enviar por e-mail
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-mono font-black text-xs text-zinc-800 uppercase mb-2">
+                  Formato:
+                </h4>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="flex items-center gap-2 cursor-pointer p-2 border-2 border-zinc-200 rounded-lg hover:border-indigo-500 transition">
+                    <input
+                      type="radio"
+                      value="xlsx"
+                      checked={exportFormat === "xlsx"}
+                      onChange={() => setExportFormat("xlsx")}
+                      className="accent-indigo-600 w-4 h-4"
+                    />
+                    <span className="font-bold text-sm text-zinc-700">
+                      XLSX
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer p-2 border-2 border-zinc-200 rounded-lg hover:border-indigo-500 transition">
+                    <input
+                      type="radio"
+                      value="csv"
+                      checked={exportFormat === "csv"}
+                      onChange={() => setExportFormat("csv")}
+                      className="accent-indigo-600 w-4 h-4"
+                    />
+                    <span className="font-bold text-sm text-zinc-700">CSV</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer p-2 border-2 border-zinc-200 rounded-lg hover:border-indigo-500 transition">
+                    <input
+                      type="radio"
+                      value="pdf"
+                      checked={exportFormat === "pdf"}
+                      onChange={() => setExportFormat("pdf")}
+                      className="accent-indigo-600 w-4 h-4"
+                    />
+                    <span className="font-bold text-sm text-zinc-700">PDF</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer p-2 border-2 border-zinc-200 rounded-lg hover:border-indigo-500 transition">
+                    <input
+                      type="radio"
+                      value="json"
+                      checked={exportFormat === "json"}
+                      onChange={() => setExportFormat("json")}
+                      className="accent-indigo-600 w-4 h-4"
+                    />
+                    <span className="font-bold text-sm text-zinc-700">
+                      JSON
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2 pt-2">
+                <button className="w-full py-2.5 bg-zinc-200 hover:bg-zinc-300 border-2 border-zinc-950 rounded-xl font-black text-xs uppercase text-zinc-900 transition shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                  Selecionar Planilha
+                </button>
+                <button
+                  onClick={() => {
+                    let csvContent =
+                      "data:text/csv;charset=utf-8,ID;Nome;Email;Telefone;Valor;Canal;Notas\r\n";
+                    leads.forEach((l) => {
+                      csvContent += `"${l.id}";"${l.name}";"${l.email}";"${l.phone}";"${l.value}";"${l.origin}";"${l.notes?.replace(/"/g, '""') || ""}"\r\n`;
+                    });
+                    const encodedUri = encodeURI(csvContent);
+                    const link = document.createElement("a");
+                    link.setAttribute("href", encodedUri);
+                    link.setAttribute("download", "Exportacao_cicloCRED.csv");
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    addNotification(
+                      "📊 EXPORTAÇÃO",
+                      "Os dados foram convertidos e o download concluído.",
+                      "success",
+                    );
+                    setIsExportModalOpen(false);
+                  }}
+                  className="w-full py-2.5 bg-indigo-500 hover:bg-indigo-600 border-2 border-zinc-950 rounded-xl font-black text-xs uppercase text-zinc-950 transition shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                >
+                  Exportar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* C. Dynamic Conversational CRM Notifications Drawer overlay */}
+
+      {isNotificationsOpen && (
+        <div className="fixed inset-0 z-50 overflow-hidden">
+          <div
+            onClick={() => setIsNotificationsOpen(false)}
+            className="absolute inset-0 bg-black/70 backdrop-blur-xs"
+          />
+          <div className="absolute inset-y-0 right-0 max-w-full pl-10 flex">
+            <div className="w-screen max-w-md bg-zinc-950 text-zinc-100 border-l-4 border-zinc-900 shadow-[0_0_40px_rgba(0,0,0,0.6)] flex flex-col h-full font-sans">
+              {/* Header title block */}
+              <div className="p-6 border-b-2 border-zinc-900 bg-gradient-to-r from-indigo-950 to-zinc-950">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <Cpu className="w-5 h-5 text-indigo-400" />
+                    <div>
+                      <h3 className="text-sm font-black uppercase font-mono tracking-wider text-white">
+                        Canal CRM Autônomo
+                      </h3>
+                      <p className="text-[10px] text-indigo-300 font-semibold font-mono">
+                        Conversão Ativa em Tempo Real
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setIsNotificationsOpen(false)}
+                    className="p-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-white transition"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 mt-4 text-[9px] font-mono font-bold text-zinc-400">
+                  <div className="bg-zinc-900/60 p-2 rounded-lg border border-zinc-900">
+                    <span className="block text-[8px] uppercase text-zinc-500">
+                      Histórico de Alertas
+                    </span>
+                    <span className="text-white text-xs font-black">
+                      {notifications.length} registros
+                    </span>
+                  </div>
+                  <div className="bg-zinc-950 p-2 rounded-lg border border-indigo-950 flex items-center gap-1.5 justify-between">
+                    <div>
+                      <span className="block text-[8px] uppercase text-indigo-400">
+                        NÍVEL ATUAL
+                      </span>
+                      <span className="text-indigo-300 text-xs font-black">
+                        Galaxy {userLevel}
+                      </span>
+                    </div>
+                    <span className="rounded-full bg-indigo-900/40 p-1 text-[10px] text-white">
+                      🚀
+                    </span>
                   </div>
                 </div>
-                <div>
-                  <span className="text-[10px] font-mono font-black bg-rose-100 text-rose-800 px-3 py-1 rounded-full uppercase border border-rose-200">
-                    ⚠️ ALARME DO CRM ATIVO ÀS {activeAlarm.time}
-                  </span>
-                  <h3 className="text-xl font-black uppercase italic tracking-tight text-zinc-900 mt-3 font-sans">
-                    {activeAlarm.title}
-                  </h3>
-                  <p className="text-xs font-bold text-zinc-500 mt-1 font-mono">
-                    Cliente / Lead: {activeAlarm.leadName}
-                  </p>
+              </div>
+
+              {/* Notification Feed */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-zinc-950/90 h-[calc(100vh-230px)]">
+                {notifications.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center space-y-3.5">
+                    <Bell className="w-8 h-8 text-zinc-600 " />
+                    <div>
+                      <h4 className="text-xs font-black uppercase font-mono text-zinc-400">
+                        Tudo Silencioso no Espaço
+                      </h4>
+                      <p className="text-[10px] text-zinc-500 max-w-xs mt-1">
+                        Nenhum evento detectado. Use o botão abaixo para simular
+                        alertas imediatamente!
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  notifications.map((notify) => (
+                    <div
+                      key={notify.id}
+                      className={`p-3.5 rounded-xl border-2 transition-all duration-350 ${
+                        notify.read
+                          ? "bg-zinc-905 bg-opacity-30 border-zinc-900 text-zinc-400"
+                          : "bg-zinc-900 border-indigo-900 text-white shadow-[0_2px_8px_rgba(99,102,241,0.15)]"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-2">
+                          {notify.type === "ai" && (
+                            <Sparkles className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                          )}
+                          {notify.type === "alarm" && (
+                            <BellRing className="w-4 h-4 text-rose-500 shrink-0 " />
+                          )}
+                          {notify.type === "success" && (
+                            <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          )}
+                          {notify.type === "warning" && (
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                          )}
+                          {notify.type === "info" && (
+                            <Cpu className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                          )}
+
+                          <span className="text-xs font-black uppercase font-mono tracking-tight text-white">
+                            {notify.title}
+                          </span>
+                        </div>
+                        <span className="text-[9px] font-mono text-zinc-500 tracking-wider shrink-0 ml-1">
+                          {notify.timestamp}
+                        </span>
+                      </div>
+                      <p className="text-[11px] font-semibold text-zinc-300 mt-2 font-sans leading-relaxed">
+                        {notify.message}
+                      </p>
+
+                      <div className="flex justify-between items-center mt-2.5 pt-2 border-t border-zinc-800/80">
+                        {!notify.read && (
+                          <button
+                            onClick={() => {
+                              setNotifications((prev) =>
+                                prev.map((n) =>
+                                  n.id === notify.id ? { ...n, read: true } : n,
+                                ),
+                              );
+                              triggerSensoryFeedback("click", accSettings);
+                            }}
+                            className="text-[9px] font-mono font-black uppercase text-indigo-400 hover:text-indigo-300 transition"
+                          >
+                            Marcar como lido
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            setNotifications((prev) =>
+                              prev.filter((n) => n.id !== notify.id),
+                            );
+                            triggerSensoryFeedback("warning", accSettings);
+                          }}
+                          className="text-[9px] font-mono text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition ml-auto"
+                          title="Deletar notificação"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Remover</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Footer and test trigger */}
+              <div className="p-4 border-t-2 border-zinc-900 bg-zinc-950 space-y-2 mt-auto">
+                <button
+                  onClick={() => {
+                    triggerSensoryFeedback("click", accSettings);
+                    simulateCRMAction();
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-lg text-xs uppercase border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition-all"
+                >
+                  <Sparkles className="w-4 h-4 text-indigo-200" />
+                  <span>DIAGNOSTICAR OPORTUNIDADES REAL 🔍</span>
+                </button>
+
+                <div className="grid grid-cols-2 gap-2 text-center text-[10px] font-mono font-black">
+                  <button
+                    onClick={() => {
+                      setNotifications((prev) =>
+                        prev.map((n) => ({ ...n, read: true })),
+                      );
+                      triggerSensoryFeedback("success", accSettings);
+                    }}
+                    className="py-2.5 bg-zinc-905 bg-opacity-40 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 rounded-lg uppercase transition"
+                  >
+                    Ler Todas
+                  </button>
+                  <button
+                    onClick={() => {
+                      setNotifications([]);
+                      triggerSensoryFeedback("warning", accSettings);
+                    }}
+                    className="py-2.5 bg-zinc-905 bg-opacity-40 hover:bg-zinc-800 border border-zinc-800 text-rose-400 rounded-lg uppercase transition"
+                  >
+                    Limpar Tudo
+                  </button>
                 </div>
               </div>
-
-              <div className="bg-zinc-50 border-2 border-zinc-950 p-4 rounded-2xl text-xs text-zinc-700 font-bold leading-relaxed font-sans shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                {activeAlarm.description}
-              </div>
-
-              <div className="space-y-2 text-center pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveAlarm(null);
-                    triggerSensoryFeedback('success', accSettings);
-                  }}
-                  className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 hover:scale-[1.01] text-white font-black rounded-2xl text-xs uppercase tracking-wider border-2 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition active:translate-y-1 py-3"
-                >
-                  Concluir / Desativar Alarme 🔕
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveAlarm(null);
-                    setActiveTab('appointments');
-                    triggerSensoryFeedback('click', accSettings);
-                  }}
-                  className="text-[10px] font-mono font-black text-indigo-600 hover:text-indigo-800 transition uppercase"
-                >
-                  Ver compromisso na aba de agendamentos
-                </button>
-              </div>
-            </motion.div>
+            </div>
           </div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
+
+      {/* D. Real-Time Scheduled Task Alarm Modal */}
+
+      {activeAlarm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-red-950/80 backdrop-blur-xs" />
+          <div className="relative w-full max-w-md bg-white border-8 border-red-600 rounded-3xl p-6 text-zinc-900 shadow-[0_0_50px_rgba(239,68,68,0.5)] flex flex-col space-y-4">
+            <div className="flex flex-col items-center justify-center text-center space-y-3.5">
+              <div className="relative flex items-center justify-center">
+                <div className="absolute inset-x-0 w-16 h-16 rounded-full bg-red-500/20  pointer-events-none" />
+                <div className="rounded-full bg-zinc-950 border-4 border-zinc-950 p-4 relative z-10">
+                  <BellRing className="w-8 h-8 text-rose-500 " />
+                </div>
+              </div>
+              <div>
+                <span className="text-[10px] font-mono font-black bg-rose-100 text-rose-800 px-3 py-1 rounded-full uppercase border border-rose-200">
+                  ⚠️ ALARME DO CRM ATIVO ÀS {activeAlarm.time}
+                </span>
+                <h3 className="text-xl font-black uppercase italic tracking-tight text-zinc-900 mt-3 font-sans">
+                  {activeAlarm.title}
+                </h3>
+                <p className="text-xs font-bold text-zinc-500 mt-1 font-mono">
+                  Cliente / Lead: {activeAlarm.leadName}
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-zinc-50 border-2 border-zinc-950 p-4 rounded-2xl text-xs text-zinc-700 font-bold leading-relaxed font-sans shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+              {activeAlarm.description}
+            </div>
+
+            <div className="space-y-2 text-center pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveAlarm(null);
+                  triggerSensoryFeedback("success", accSettings);
+                }}
+                className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 hover:scale-[1.01] text-white font-black rounded-2xl text-xs uppercase tracking-wider border-2 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition active:translate-y-1 py-3"
+              >
+                Concluir / Desativar Alarme 🔕
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveAlarm(null);
+                  setActiveTab("appointments");
+                  triggerSensoryFeedback("click", accSettings);
+                }}
+                className="text-[10px] font-mono font-black text-indigo-600 hover:text-indigo-800 transition uppercase"
+              >
+                Ver compromisso na aba de agendamentos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* User Preferences and Photo Modal Removed */}
 
-      {/* E. Deactivated Legacy Profile Modal */}
-      <AnimatePresence>
-        {false && showProfilePrefsModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-zinc-950/80 backdrop-blur-xs"
-              onClick={() => setShowProfilePrefsModal(false)}
-            />
-            <motion.div
-              initial={{ scale: 0.95, y: 15 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 15 }}
-              className={`relative w-full max-w-3xl rounded-3xl p-6 md:p-8 text-white border-4 border-zinc-950 shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] max-h-[90vh] overflow-y-auto ${
-                theme === 'galatico'
-                  ? 'bg-gradient-to-b from-indigo-950 to-zinc-950 border-indigo-500/50'
-                  : 'bg-zinc-900'
-              }`}
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between pb-4 border-b-2 border-zinc-800 mb-6">
-                <div>
-                  <h3 className="text-xl font-black uppercase italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">
-                    Menu do Corretor & Preferências
-                  </h3>
-                  <p className="text-xs text-zinc-400 font-medium mt-0.5">Gerencie seu perfil de vendas, acessibilidade e compartilhe seu portfólio digital nas redes.</p>
+      {/* E. User Profile & Preferences Modal */}
+
+      {isUserCentralModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-zinc-950/80 backdrop-blur-xs"
+            onClick={() => setIsUserCentralModalOpen(false)}
+          />
+          <div
+            className={`relative w-full max-w-3xl rounded-3xl p-6 md:p-8 text-white border-4 border-zinc-950 shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] max-h-[90vh] overflow-y-auto ${
+              theme === "galatico"
+                ? "bg-gradient-to-b from-indigo-950 to-zinc-950 border-indigo-500/50"
+                : "bg-zinc-900"
+            }`}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between pb-4 border-b-2 border-zinc-800 mb-6">
+              <div>
+                <h3 className="text-xl font-black uppercase italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">
+                  Menu do Corretor & Preferências
+                </h3>
+                <p className="text-xs text-zinc-400 font-medium mt-0.5">
+                  Gerencie seu perfil de vendas, acessibilidade e compartilhe
+                  seu portfólio digital nas redes.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  triggerSensoryFeedback("click", accSettings);
+                  setIsUserCentralModalOpen(false);
+                }}
+                className="p-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border-2 border-zinc-950 text-zinc-400 hover:text-white transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+              {/* Column 1: Profile & Photo */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-black uppercase font-mono tracking-wider text-indigo-400">
+                  Identificação & Foto
+                </h4>
+
+                {/* Avatar Upload UI */}
+                <div className="flex items-center gap-4 bg-zinc-950 p-4 rounded-2xl border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+                  <div className="relative w-20 h-20 rounded-xl overflow-hidden border-2 border-zinc-800 bg-zinc-900 shrink-0 flex items-center justify-center">
+                    {localStorage.getItem("ciclocred_user_photo") &&
+                    localStorage.getItem("ciclocred_user_photo") !== "" ? (
+                      <img
+                        src={
+                          localStorage.getItem("ciclocred_user_photo") ||
+                          undefined
+                        }
+                        alt="Perfil"
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-indigo-500 font-black text-2xl text-zinc-950 flex items-center justify-center uppercase">
+                        {userName.substring(0, 2).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <span className="block text-[10px] uppercase text-zinc-400 font-black font-mono">
+                      Alterar Imagem de Perfil
+                    </span>
+                    <label className="inline-block px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-[11px] font-black uppercase font-mono text-zinc-300 rounded-lg cursor-pointer border border-zinc-700 transition">
+                      Fazer Upload Foto
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              const base64String = reader.result as string;
+                              localStorage.setItem(
+                                "ciclocred_user_photo",
+                                base64String,
+                              );
+                              triggerSensoryFeedback("success", accSettings);
+                              addNotification(
+                                "📸 FOTO ATUALIZADA",
+                                "Sua nova foto de perfil foi salva localmente no CRM.",
+                                "success",
+                              );
+                              // Force state refresh
+                              setUserName((prev) => prev + " ");
+                              setTimeout(
+                                () => setUserName((prev) => prev.trim()),
+                                50,
+                              );
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
+                    <button
+                      onClick={() => {
+                        localStorage.removeItem("ciclocred_user_photo");
+                        triggerSensoryFeedback("warning", accSettings);
+                        setUserName((prev) => prev + " ");
+                        setTimeout(
+                          () => setUserName((prev) => prev.trim()),
+                          50,
+                        );
+                      }}
+                      className="block text-[10px] font-mono text-rose-405 hover:text-rose-300 font-bold transition"
+                    >
+                      Remover Foto
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={() => {
-                    triggerSensoryFeedback('click', accSettings);
-                    setShowProfilePrefsModal(false);
-                  }}
-                  className="p-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border-2 border-zinc-950 text-zinc-400 hover:text-white transition"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+
+                {/* Form fields */}
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[10px] uppercase font-mono font-black text-zinc-405 mb-1">
+                      Nome Completo
+                    </label>
+                    <input
+                      type="text"
+                      value={userName}
+                      onChange={(e) => {
+                        setUserName(e.target.value);
+                        localStorage.setItem(
+                          "ciclocred_user_name",
+                          e.target.value,
+                        );
+                      }}
+                      className="w-full text-xs font-bold px-3 py-2 bg-zinc-950 border-2 border-zinc-950 rounded-xl text-white outline-none focus:border-indigo-500 transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase font-mono font-black text-zinc-400 mb-1">
+                      E-mail de Contato
+                    </label>
+                    <input
+                      type="email"
+                      value={userEmail}
+                      onChange={(e) => {
+                        setUserEmail(e.target.value);
+                        localStorage.setItem(
+                          "ciclocred_user_email",
+                          e.target.value,
+                        );
+                      }}
+                      className="w-full text-xs font-bold px-3 py-2 bg-zinc-950 border-2 border-zinc-950 rounded-xl text-white outline-none focus:border-indigo-500 transition"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] uppercase font-mono font-black text-zinc-400 mb-1">
+                        Inscrição CRECI
+                      </label>
+                      <input
+                        type="text"
+                        value={creciNumber}
+                        onChange={(e) => {
+                          setCreciNumber(e.target.value);
+                          localStorage.setItem(
+                            "ciclocred_creci_number",
+                            e.target.value,
+                          );
+                        }}
+                        placeholder="CRECI 12345-F"
+                        className="w-full text-xs font-bold px-3 py-2 bg-zinc-950 border-2 border-zinc-950 rounded-xl text-white outline-none focus:border-indigo-500 transition"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] uppercase font-mono font-black text-zinc-400 mb-1">
+                        Rank de Vendas
+                      </label>
+                      <div className="px-3 py-2 bg-zinc-950 rounded-xl border-2 border-zinc-950 text-xs text-indigo-300 font-black uppercase font-mono flex items-center gap-1">
+                        🏆 Platinum Vendedor
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
-                {/* Column 1: Profile & Photo */}
-                <div className="space-y-4">
-                  <h4 className="text-sm font-black uppercase font-mono tracking-wider text-indigo-400">Identificação & Foto</h4>
-                  
-                  {/* Avatar Upload UI */}
-                  <div className="flex items-center gap-4 bg-zinc-950 p-4 rounded-2xl border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
-                    <div className="relative w-20 h-20 rounded-xl overflow-hidden border-2 border-zinc-800 bg-zinc-900 shrink-0 flex items-center justify-center">
-                      {localStorage.getItem('ciclocred_user_photo') && localStorage.getItem('ciclocred_user_photo') !== '' ? (
-                        <img                     
-                          src={localStorage.getItem('ciclocred_user_photo') || undefined}
-                          alt="Perfil"
-                          className="w-full h-full object-cover"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-indigo-500 font-black text-2xl text-zinc-950 flex items-center justify-center uppercase">
-                          {userName.substring(0,2).toUpperCase()}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1 space-y-2">
-                      <span className="block text-[10px] uppercase text-zinc-400 font-black font-mono">Alterar Imagem de Perfil</span>
-                      <label className="inline-block px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-[11px] font-black uppercase font-mono text-zinc-300 rounded-lg cursor-pointer border border-zinc-700 transition">
-                        Fazer Upload Foto
-                        <input 
-                          type="file" 
-                          accept="image/*" 
-                          className="hidden" 
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              const reader = new FileReader();
-                              reader.onloadend = () => {
-                                const base64String = reader.result as string;
-                                localStorage.setItem('ciclocred_user_photo', base64String);
-                                triggerSensoryFeedback('success', accSettings);
-                                addNotification('📸 FOTO ATUALIZADA', 'Sua nova foto de perfil foi salva localmente no CRM.', 'success');
-                                // Force state refresh
-                                setUserName(prev => prev + " ");
-                                setTimeout(() => setUserName(prev => prev.trim()), 50);
-                              };
-                              reader.readAsDataURL(file);
-                            }
-                          }}
-                        />
-                      </label>
-                      <button 
+              {/* Column 2: Accessibility & Settings Preferences */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-black uppercase font-mono tracking-wider text-indigo-400">
+                  Preferências Sensoriais
+                </h4>
+
+                <div className="space-y-4 bg-zinc-950 p-4 rounded-2xl border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+                  {/* Accessibility switches */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="block text-xs font-bold text-white">
+                          Efeitos Sonoros
+                        </span>
+                        <span className="text-[10px] text-zinc-500">
+                          Acione toques auditivos e alertas de CRM
+                        </span>
+                      </div>
+                      <button
+                        type="button"
                         onClick={() => {
-                          localStorage.removeItem('ciclocred_user_photo');
-                          triggerSensoryFeedback('warning', accSettings);
-                          setUserName(prev => prev + " ");
-                          setTimeout(() => setUserName(prev => prev.trim()), 50);
+                          const updated = {
+                            ...accSettings,
+                            soundsEnabled: !accSettings.soundsEnabled,
+                          };
+                          setAccSettings(updated);
+                          localStorage.setItem(
+                            "ciclocred_sensory_config",
+                            JSON.stringify(updated),
+                          );
+                          triggerSensoryFeedback("click", updated);
                         }}
-                        className="block text-[10px] font-mono text-rose-405 hover:text-rose-300 font-bold transition"
+                        className={`w-12 h-6 rounded-full p-1 transition-colors duration-300 ${
+                          accSettings.soundsEnabled
+                            ? "bg-indigo-600"
+                            : "bg-zinc-800"
+                        }`}
                       >
-                        Remover Foto
+                        <div
+                          className={`w-4 h-4 bg-white rounded-full transition-transform duration-300 ${
+                            accSettings.soundsEnabled
+                              ? "translate-x-6"
+                              : "translate-x-0"
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="block text-xs font-bold text-white">
+                          Sensório de Vibração Tátil
+                        </span>
+                        <span className="text-[10px] text-zinc-500">
+                          Sincronize pulsações táteis na digitação
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = {
+                            ...accSettings,
+                            hapticsEnabled: !accSettings.hapticsEnabled,
+                          };
+                          setAccSettings(updated);
+                          localStorage.setItem(
+                            "ciclocred_sensory_config",
+                            JSON.stringify(updated),
+                          );
+                          triggerSensoryFeedback("chime", updated);
+                        }}
+                        className={`w-12 h-6 rounded-full p-1 transition-colors duration-300 ${
+                          accSettings.hapticsEnabled
+                            ? "bg-indigo-600"
+                            : "bg-zinc-800"
+                        }`}
+                      >
+                        <div
+                          className={`w-4 h-4 bg-white rounded-full transition-transform duration-300 ${
+                            accSettings.hapticsEnabled
+                              ? "translate-x-6"
+                              : "translate-x-0"
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="block text-xs font-bold text-white">
+                          Sintetizador por Voz AI
+                        </span>
+                        <span className="text-[10px] text-zinc-500">
+                          Leitor dinâmico assistido por voz artificial
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = {
+                            ...accSettings,
+                            speakAloudEnabled: !accSettings.speakAloudEnabled,
+                          };
+                          setAccSettings(updated);
+                          localStorage.setItem(
+                            "ciclocred_sensory_config",
+                            JSON.stringify(updated),
+                          );
+                          triggerSensoryFeedback("success", updated);
+                        }}
+                        className={`w-12 h-6 rounded-full p-1 transition-colors duration-300 ${
+                          accSettings.speakAloudEnabled
+                            ? "bg-indigo-600"
+                            : "bg-zinc-805"
+                        }`}
+                      >
+                        <div
+                          className={`w-4 h-4 bg-white rounded-full transition-transform duration-300 ${
+                            accSettings.speakAloudEnabled
+                              ? "translate-x-6"
+                              : "translate-x-0"
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between border-t border-zinc-850 pt-2">
+                      <div>
+                        <span className="block text-xs font-bold text-white">
+                          Fonte de Alta Legibilidade (Acessibilidade)
+                        </span>
+                        <span className="text-[10px] text-zinc-500">
+                          Forçar letra sans-serif limpa para uma leitura de
+                          verdade sem distrações
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = {
+                            ...accSettings,
+                            highLegibilityFont: !accSettings.highLegibilityFont,
+                          };
+                          setAccSettings(updated);
+                          localStorage.setItem(
+                            "ciclocred_sensory_config",
+                            JSON.stringify(updated),
+                          );
+                          triggerSensoryFeedback("click", updated);
+                        }}
+                        className={`w-12 h-6 rounded-full p-1 transition-colors duration-300 ${
+                          accSettings.highLegibilityFont
+                            ? "bg-indigo-600"
+                            : "bg-zinc-800"
+                        }`}
+                      >
+                        <div
+                          className={`w-4 h-4 bg-white rounded-full transition-transform duration-300 ${
+                            accSettings.highLegibilityFont
+                              ? "translate-x-6"
+                              : "translate-x-0"
+                          }`}
+                        />
                       </button>
                     </div>
                   </div>
 
-                  {/* Form fields */}
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-[10px] uppercase font-mono font-black text-zinc-405 mb-1">Nome Completo</label>
-                      <input 
-                        type="text"
-                        value={userName}
-                        onChange={(e) => {
-                          setUserName(e.target.value);
-                          localStorage.setItem('ciclocred_user_name', e.target.value);
-                        }}
-                        className="w-full text-xs font-bold px-3 py-2 bg-zinc-950 border-2 border-zinc-950 rounded-xl text-white outline-none focus:border-indigo-500 transition"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] uppercase font-mono font-black text-zinc-400 mb-1">E-mail de Contato</label>
-                      <input 
-                        type="email"
-                        value={userEmail}
-                        onChange={(e) => {
-                          setUserEmail(e.target.value);
-                          localStorage.setItem('ciclocred_user_email', e.target.value);
-                        }}
-                        className="w-full text-xs font-bold px-3 py-2 bg-zinc-950 border-2 border-zinc-950 rounded-xl text-white outline-none focus:border-indigo-500 transition"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-[10px] uppercase font-mono font-black text-zinc-400 mb-1">Inscrição CRECI</label>
-                        <input 
-                          type="text"
-                          value={creciNumber}
-                          onChange={(e) => {
-                            setCreciNumber(e.target.value);
-                            localStorage.setItem('ciclocred_creci_number', e.target.value);
+                  <div className="border-t border-zinc-800 pt-3">
+                    <span className="block text-[10px] uppercase font-mono font-black text-indigo-400 mb-2">
+                      Tamanho das Fontes
+                    </span>
+                    <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-mono font-black">
+                      {["normal", "large", "extra-large"].map((sz) => (
+                        <button
+                          key={sz}
+                          onClick={() => {
+                            const updated = {
+                              ...accSettings,
+                              fontSizeClass: sz as any,
+                            };
+                            setAccSettings(updated);
+                            localStorage.setItem(
+                              "ciclocred_sensory_config",
+                              JSON.stringify(updated),
+                            );
+                            triggerSensoryFeedback("click", updated);
                           }}
-                          placeholder="CRECI 12345-F"
-                          className="w-full text-xs font-bold px-3 py-2 bg-zinc-950 border-2 border-zinc-950 rounded-xl text-white outline-none focus:border-indigo-500 transition"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] uppercase font-mono font-black text-zinc-400 mb-1">Rank de Vendas</label>
-                        <div className="px-3 py-2 bg-zinc-950 rounded-xl border-2 border-zinc-950 text-xs text-indigo-300 font-black uppercase font-mono flex items-center gap-1">
-                          🏆 Platinum Vendedor
-                        </div>
-                      </div>
+                          className={`py-1.5 uppercase border rounded-lg text-[9px] font-mono font-black transition ${
+                            accSettings.fontSizeClass === sz
+                              ? "bg-indigo-600 text-white border-zinc-950 font-black"
+                              : "bg-zinc-900 text-zinc-450 border-zinc-800"
+                          }`}
+                        >
+                          {sz === "normal"
+                            ? "Padrão"
+                            : sz === "large"
+                              ? "Grande"
+                              : "Gigante"}
+                        </button>
+                      ))}
                     </div>
                   </div>
-                </div>
 
-                {/* Column 2: Accessibility & Settings Preferences */}
-                <div className="space-y-4">
-                  <h4 className="text-sm font-black uppercase font-mono tracking-wider text-indigo-400">Preferências Sensoriais</h4>
-
-                  <div className="space-y-4 bg-zinc-950 p-4 rounded-2xl border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
-                    {/* Accessibility switches */}
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="block text-xs font-bold text-white">Efeitos Sonoros</span>
-                          <span className="text-[10px] text-zinc-500">Acione toques auditivos e alertas de CRM</span>
-                        </div>
+                  <div className="border-t border-zinc-800 pt-3">
+                    <span className="block text-[10px] uppercase font-mono font-black text-indigo-400 mb-2">
+                      Tema Visual Geral
+                    </span>
+                    <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-mono font-black">
+                      {["claro", "escuro", "galatico"].map((tm) => (
                         <button
-                          type="button"
+                          key={tm}
                           onClick={() => {
-                            const updated = { ...accSettings, soundsEnabled: !accSettings.soundsEnabled };
-                            setAccSettings(updated);
-                            localStorage.setItem('ciclocred_sensory_config', JSON.stringify(updated));
-                            triggerSensoryFeedback('click', updated);
+                            setTheme(tm as any);
+                            localStorage.setItem("ciclocred_theme", tm);
+                            triggerSensoryFeedback("click", accSettings);
                           }}
-                          className={`w-12 h-6 rounded-full p-1 transition-colors duration-300 ${
-                            accSettings.soundsEnabled ? 'bg-indigo-600' : 'bg-zinc-800'
+                          className={`py-1.5 uppercase border rounded-lg text-[9px] font-mono font-black transition ${
+                            theme === tm
+                              ? "bg-indigo-600 text-white border-zinc-950 font-black"
+                              : "bg-zinc-900 text-zinc-400 border-zinc-800"
                           }`}
                         >
-                          <div className={`w-4 h-4 bg-white rounded-full transition-transform duration-300 ${
-                            accSettings.soundsEnabled ? 'translate-x-6' : 'translate-x-0'
-                          }`} />
+                          {tm === "claro"
+                            ? "Claro"
+                            : tm === "escuro"
+                              ? "Escuro"
+                              : "Galáctico"}
                         </button>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="block text-xs font-bold text-white">Sensório de Vibração Tátil</span>
-                          <span className="text-[10px] text-zinc-500">Sincronize pulsações táteis na digitação</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const updated = { ...accSettings, hapticsEnabled: !accSettings.hapticsEnabled };
-                            setAccSettings(updated);
-                            localStorage.setItem('ciclocred_sensory_config', JSON.stringify(updated));
-                            triggerSensoryFeedback('chime', updated);
-                          }}
-                          className={`w-12 h-6 rounded-full p-1 transition-colors duration-300 ${
-                            accSettings.hapticsEnabled ? 'bg-indigo-600' : 'bg-zinc-800'
-                          }`}
-                        >
-                          <div className={`w-4 h-4 bg-white rounded-full transition-transform duration-300 ${
-                            accSettings.hapticsEnabled ? 'translate-x-6' : 'translate-x-0'
-                          }`} />
-                        </button>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="block text-xs font-bold text-white">Sintetizador por Voz AI</span>
-                          <span className="text-[10px] text-zinc-500">Leitor dinâmico assistido por voz artificial</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const updated = { ...accSettings, speakAloudEnabled: !accSettings.speakAloudEnabled };
-                            setAccSettings(updated);
-                            localStorage.setItem('ciclocred_sensory_config', JSON.stringify(updated));
-                            triggerSensoryFeedback('success', updated);
-                          }}
-                          className={`w-12 h-6 rounded-full p-1 transition-colors duration-300 ${
-                            accSettings.speakAloudEnabled ? 'bg-indigo-600' : 'bg-zinc-805'
-                          }`}
-                        >
-                          <div className={`w-4 h-4 bg-white rounded-full transition-transform duration-300 ${
-                            accSettings.speakAloudEnabled ? 'translate-x-6' : 'translate-x-0'
-                          }`} />
-                        </button>
-                      </div>
+                      ))}
                     </div>
+                  </div>
 
-                    <div className="border-t border-zinc-800 pt-3">
-                      <span className="block text-[10px] uppercase font-mono font-black text-indigo-400 mb-2">Tamanho das Fontes</span>
-                      <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-mono font-black">
-                        {['normal', 'large', 'extra-large'].map((sz) => (
-                          <button
-                            key={sz}
-                            onClick={() => {
-                              const updated = { ...accSettings, fontSizeClass: sz as any };
-                              setAccSettings(updated);
-                              localStorage.setItem('ciclocred_sensory_config', JSON.stringify(updated));
-                              triggerSensoryFeedback('click', updated);
-                            }}
-                            className={`py-1.5 uppercase border rounded-lg text-[9px] font-mono font-black transition ${
-                              accSettings.fontSizeClass === sz
-                                ? 'bg-indigo-600 text-white border-zinc-950 font-black'
-                                : 'bg-zinc-900 text-zinc-450 border-zinc-800'
-                            }`}
-                          >
-                            {sz === 'normal' ? 'Padrão' : sz === 'large' ? 'Grande' : 'Gigante'}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="border-t border-zinc-800 pt-3">
-                      <span className="block text-[10px] uppercase font-mono font-black text-indigo-400 mb-2">Tema Visual Geral</span>
-                      <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-mono font-black">
-                        {['claro', 'escuro', 'galatico'].map((tm) => (
-                          <button
-                            key={tm}
-                            onClick={() => {
-                              setTheme(tm as any);
-                              localStorage.setItem('ciclocred_theme', tm);
-                              triggerSensoryFeedback('click', accSettings);
-                            }}
-                            className={`py-1.5 uppercase border rounded-lg text-[9px] font-mono font-black transition ${
-                              theme === tm
-                                ? 'bg-indigo-600 text-white border-zinc-950 font-black'
-                                : 'bg-zinc-900 text-zinc-400 border-zinc-800'
-                            }`}
-                          >
-                            {tm === 'claro' ? 'Claro' : tm === 'escuro' ? 'Escuro' : 'Galáctico'}
-                          </button>
-                        ))}
-                      </div>
+                  <div className="border-t border-zinc-800 pt-3">
+                    <span className="block text-[10px] uppercase font-mono font-black text-indigo-400 mb-2">
+                      Paleta de Cores
+                    </span>
+                    <div className="grid grid-cols-4 gap-2 text-center text-[10px] font-mono font-black">
+                      {["vender", "bege", "azul", "lilas"].map((pal) => (
+                        <button
+                          key={pal}
+                          onClick={() => {
+                            setPalette(pal as any);
+                            localStorage.setItem("ciclocred_palette", pal);
+                            triggerSensoryFeedback("click", accSettings);
+                          }}
+                          className={`py-1.5 uppercase border rounded-lg text-[9px] font-mono font-black transition cursor-pointer ${
+                            palette === pal
+                              ? "bg-indigo-600 text-white border-zinc-950"
+                              : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white"
+                          }`}
+                        >
+                          {pal === "vender"
+                            ? "Vender"
+                            : pal === "bege"
+                              ? "Bege"
+                              : pal === "azul"
+                                ? "Azul"
+                                : "Lilás"}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </div>
               </div>
+            </div>
 
-              {/* Share Local & Social area */}
-              <div className="mt-6 pt-4 border-t-2 border-zinc-800 space-y-3">
-                <h4 className="text-sm font-black uppercase font-mono tracking-wider text-indigo-400 font-bold">Compartilhar Cartão Web do Corretor</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <button
-                    onClick={() => {
-                      const shareText = `Olá, aqui é o Corretor ${userName} (${creciNumber || 'CRECI'}). Acesse meu estoque exclusivo de imóveis residenciais atualizados em tempo real: ${window.location.protocol}//${window.location.host}?ref=${creciNumber}`;
-                      if (navigator.share) {
-                        navigator.share({
+            {/* Share Local & Social area */}
+            <div className="mt-6 pt-4 border-t-2 border-zinc-800 space-y-3">
+              <h4 className="text-sm font-black uppercase font-mono tracking-wider text-indigo-400 font-bold">
+                Compartilhar Cartão Web do Corretor
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <button
+                  onClick={() => {
+                    const shareText = `Olá, aqui é o Corretor ${userName} (${creciNumber || "CRECI"}). Acesse meu estoque exclusivo de imóveis residenciais atualizados em tempo real: ${window.location.protocol}//${window.location.host}?ref=${creciNumber}`;
+                    if (navigator.share) {
+                      navigator
+                        .share({
                           title: `Portfólio Imobiliário - Corretor ${userName}`,
                           text: shareText,
                           url: window.location.href,
-                        }).then(() => {
+                        })
+                        .then(() => {
                           awardXP(100);
-                          addNotification('🚀 INFORMAÇÕES COMPARTILHADAS', 'Você compartilhou suas informações de contato imobiliário.', 'success');
-                        }).catch(err => {
+                          addNotification(
+                            "🚀 INFORMAÇÕES COMPARTILHADAS",
+                            "Você compartilhou suas informações de contato imobiliário.",
+                            "success",
+                          );
+                        })
+                        .catch((err) => {
                           console.log(err);
                         });
-                      } else {
-                        navigator.clipboard.writeText(shareText);
-                        triggerSensoryFeedback('success', accSettings);
-                        alert('Link do Cartão Digital copiado com sucesso para a área de transferência!');
-                        awardXP(50);
-                      }
-                    }}
-                    className="flex items-center justify-center gap-2 py-3 bg-zinc-955 hover:bg-zinc-800 text-white font-mono font-black text-xs uppercase rounded-xl border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition"
-                  >
-                    <Share2 className="w-4 h-4 text-cyan-400" />
-                    <span>Compartilhar Local</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      const msg = encodeURIComponent(`Olá, sou Corretor Credenciado ${userName} (${creciNumber}). Segue o link com as novidades do portfólio de imóveis em aberto: ${window.location.href}`);
-                      window.open(`https://api.whatsapp.com/send?text=${msg}`);
+                    } else {
+                      navigator.clipboard.writeText(shareText);
+                      triggerSensoryFeedback("success", accSettings);
+                      alert(
+                        "Link do Cartão Digital copiado com sucesso para a área de transferência!",
+                      );
                       awardXP(50);
-                    }}
-                    className="flex items-center justify-center gap-2 py-3 bg-emerald-700 hover:bg-emerald-600 text-white font-mono font-black text-xs uppercase rounded-xl border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition"
-                  >
-                    <Share2 className="w-4 h-4 text-emerald-200 animate-pulse" />
-                    <span>Postar WhatsApp</span>
-                  </button>
+                    }
+                  }}
+                  className="flex items-center justify-center gap-2 py-3 bg-zinc-955 hover:bg-zinc-800 text-white font-mono font-black text-xs uppercase rounded-xl border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition"
+                >
+                  <Share2 className="w-4 h-4 text-cyan-400" />
+                  <span>Compartilhar Local</span>
+                </button>
 
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(`Confira as oportunidades que separei para você! Fale direto com ${userName} no número do CRECI: ${creciNumber}. Link: ${window.location.href}`);
-                      triggerSensoryFeedback('success', accSettings);
-                      alert('Copiado texto do Instagram profissional! Cole na sua Bio ou Stories para engajamento rápido.');
-                      window.open('https://www.instagram.com/');
-                    }}
-                    className="flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 text-white font-mono font-black text-xs uppercase rounded-xl border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition"
-                  >
-                    <Share2 className="w-4 h-4 text-pink-200" />
-                    <span>Instagram Bio</span>
-                  </button>
-                </div>
+                <button
+                  onClick={() => {
+                    const msg = encodeURIComponent(
+                      `Olá, sou Corretor Credenciado ${userName} (${creciNumber}). Segue o link com as novidades do portfólio de imóveis em aberto: ${window.location.href}`,
+                    );
+                    window.location.href = `whatsapp://send?text=${msg}`;
+                    awardXP(50);
+                  }}
+                  className="flex items-center justify-center gap-2 py-3 bg-emerald-700 hover:bg-emerald-600 text-white font-mono font-black text-xs uppercase rounded-xl border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition"
+                >
+                  <Share2 className="w-4 h-4 text-emerald-200 " />
+                  <span>Postar WhatsApp</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(
+                      `Confira as oportunidades que separei para você! Fale direto com ${userName} no número do CRECI: ${creciNumber}. Link: ${window.location.href}`,
+                    );
+                    triggerSensoryFeedback("success", accSettings);
+                    alert(
+                      "Copiado texto do Instagram profissional! Cole na sua Bio ou Stories para engajamento rápido.",
+                    );
+                    window.open("https://www.instagram.com/");
+                  }}
+                  className="flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 text-white font-mono font-black text-xs uppercase rounded-xl border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition"
+                >
+                  <Share2 className="w-4 h-4 text-pink-200" />
+                  <span>Instagram Bio</span>
+                </button>
               </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+            </div>
 
-      {/* BOTÃO FLUTUANTE TRÊS PONTINHOS - PERSISTENTE E PREMIUM */}
-      <div className="fixed bottom-6 right-6 z-50">
+            {/* Master System Reset area for wiping the whole base securely */}
+            <div className="mt-6 pt-4 border-t-2 border-rose-950 bg-rose-950/10 p-4 rounded-2xl border border-rose-500/20 space-y-3 text-left">
+              <h4 className="text-xs font-black uppercase font-mono tracking-wider text-rose-500 font-bold flex items-center gap-1.5">
+                ⚠️ MODERAÇÃO DO CRM: MASTER SYSTEM RESET
+              </h4>
+              <p className="text-[10px] text-zinc-400 font-medium leading-relaxed">
+                Esta ação serve para limpar toda a memória do sistema (leads,
+                notificações, histórico, agendamentos e estoque de imóveis
+                salvos no Firebase e localStorage) para iniciar novas tarefas
+                sem corromper nenhuma linha de código.
+              </p>
+              <button
+                onClick={handleMasterSystemReset}
+                className="w-full py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-mono font-black text-xs uppercase rounded-xl border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] active:translate-y-[1px] active:shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] transition-all cursor-pointer"
+              >
+                🔥 Executar Master Reset Completo de Registro e Logs
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <RuleEnginePanel
+        isOpen={isRuleEngineOpen}
+        onClose={() => setIsRuleEngineOpen(false)}
+        lead={selectedLeadForAutomation}
+      />
+
+      {/* Absolute Translucent Edge Navigation Buttons - Próximo ao Cabeçalho */}
+      <div className="fixed left-4 top-[48px] z-[99] pointer-events-none">
         <button
           onClick={() => {
-            setIsPremiumActionsOpen(!isPremiumActionsOpen);
-            triggerSensoryFeedback('click', accSettings);
+            triggerSensoryFeedback("click", accSettings);
+            const evt = new CustomEvent("ciclocred_global_prev_visibility", {
+              detail: { handled: false },
+            });
+            window.dispatchEvent(evt);
           }}
-          className="h-14 w-14 rounded-full bg-zinc-950 hover:bg-zinc-900 text-white flex items-center justify-center border-4 border-white shadow-[0px_4px_16px_0px_rgba(0,0,0,0.3)] animate-pulse hover:animate-none cursor-pointer transition transform active:scale-95"
-          title="Central de Ações cicloCRED"
+          className="pointer-events-auto w-12 h-12 rounded-full bg-zinc-900/10 hover:bg-zinc-900/30 text-zinc-500 hover:text-indigo-400 dark:bg-white/5 dark:hover:bg-white/10 dark:text-zinc-400 dark:hover:text-indigo-400 border border-zinc-500/10 backdrop-blur-xs flex items-center justify-center transition-all cursor-pointer shadow-xs hover:scale-105 active:scale-95"
+          title="Visibilidade Anterior (Seta Esquerda)"
         >
-          {isPremiumActionsOpen ? (
-            <X className="w-6 h-6 text-pink-400 shrink-0" />
-          ) : (
-            <MoreHorizontal className="w-7 h-7 text-indigo-400 shrink-0" />
-          )}
+          <span className="text-xl font-bold font-sans">‹</span>
         </button>
       </div>
 
-      {/* CENTRAL DE AÇÕES PREMIUM OVERLAY */}
-      <AnimatePresence>
-        {isPremiumActionsOpen && (
-          <div className="fixed inset-0 z-45 flex items-end sm:items-center justify-center bg-zinc-950/80 p-4 backdrop-blur-md">
-            <motion.div
-              initial={{ y: 50, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 50, opacity: 0 }}
-              className="bg-white border-4 border-zinc-950 rounded-3xl w-full max-w-lg shadow-[8px_8px_0px_0px_rgba(24,24,27,1)] overflow-hidden text-zinc-900 text-left"
-            >
-              <div className="p-4.5 bg-zinc-900 border-b-4 border-zinc-950 text-white flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">⚙️</span>
-                  <h3 className="font-sans font-black text-sm uppercase italic tracking-tight">
-                    Central de Ações Premium
-                  </h3>
-                </div>
-                <button
-                  onClick={() => setIsPremiumActionsOpen(false)}
-                  className="text-zinc-400 hover:text-white text-xs font-bold uppercase font-mono px-2 py-1 rounded hover:bg-zinc-800 cursor-pointer"
-                >
-                  Fechar
-                </button>
-              </div>
+      <div className="fixed right-4 top-[48px] z-[99] pointer-events-none">
+        <button
+          onClick={() => {
+            triggerSensoryFeedback("click", accSettings);
+            const evt = new CustomEvent("ciclocred_global_next_visibility", {
+              detail: { handled: false },
+            });
+            window.dispatchEvent(evt);
+          }}
+          className="pointer-events-auto w-12 h-12 rounded-full bg-zinc-900/10 hover:bg-zinc-900/30 text-zinc-500 hover:text-indigo-400 dark:bg-white/5 dark:hover:bg-white/10 dark:text-zinc-400 dark:hover:text-indigo-400 border border-zinc-500/10 backdrop-blur-xs flex items-center justify-center transition-all cursor-pointer shadow-xs hover:scale-105 active:scale-95"
+          title="Próxima Visibilidade (Seta Direita)"
+        >
+          <span className="text-xl font-bold font-sans">›</span>
+        </button>
+      </div>
 
-              <div className="p-6 space-y-4">
-                <p className="text-xs text-zinc-500 font-sans font-semibold">
-                  Acesso rápido e unificado de importação, relatórios, rotinas de backup e links operacionais simplificados.
-                </p>
+      {/* Botões Laterais - Abaixo da Linha da Saudação e Horário */}
+      <div className="fixed left-4 top-[120px] z-[99] pointer-events-none">
+        <button
+          onClick={() => {
+            triggerSensoryFeedback("click", accSettings);
+            window.dispatchEvent(new CustomEvent("ciclocred_cycle_tab_prev"));
+          }}
+          className="pointer-events-auto w-12 h-12 rounded-full bg-indigo-950/15 hover:bg-indigo-900/30 text-indigo-400 dark:bg-white/5 dark:hover:bg-white/10 dark:text-indigo-400 border border-indigo-500/20 backdrop-blur-xs flex items-center justify-center transition-all cursor-pointer shadow-xs hover:scale-105 active:scale-95"
+          title="Página Anterior"
+        >
+          <span className="text-xl font-black font-sans">«</span>
+        </button>
+      </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                  
-                  {/* IMPORT LEADS */}
-                  <button
-                    onClick={() => {
-                      setIsPremiumActionsOpen(false);
-                      setActiveTab('leads');
-                      setIsPlanilhasModalOpen(true);
-                      awardXP(10);
-                    }}
-                    className="flex items-center gap-2.5 p-3.5 bg-indigo-50 hover:bg-indigo-100 border-2 border-zinc-950 rounded-xl transition text-left cursor-pointer"
-                  >
-                    <span className="text-lg">📥</span>
-                    <div>
-                      <strong className="block text-xs font-black uppercase text-indigo-950 leading-tight">Importar Leads</strong>
-                      <span className="text-[10.5px] text-zinc-500 font-medium">Planilhas Excel/CSV</span>
-                    </div>
-                  </button>
+      <div className="fixed right-4 top-[120px] z-[99] pointer-events-none">
+        <button
+          onClick={() => {
+            triggerSensoryFeedback("click", accSettings);
+            window.dispatchEvent(new CustomEvent("ciclocred_cycle_tab_next"));
+          }}
+          className="pointer-events-auto w-12 h-12 rounded-full bg-indigo-950/15 hover:bg-indigo-900/30 text-indigo-400 dark:bg-white/5 dark:hover:bg-white/10 dark:text-indigo-400 border border-indigo-500/20 backdrop-blur-xs flex items-center justify-center transition-all cursor-pointer shadow-xs hover:scale-105 active:scale-95"
+          title="Próxima Página"
+        >
+          <span className="text-xl font-black font-sans">»</span>
+        </button>
+      </div>
 
-                  {/* EXPORT LEADS */}
-                  <button
-                    onClick={() => {
-                      setIsPremiumActionsOpen(false);
-                      // Execute exporting
-                      let csvContent = "data:text/csv;charset=utf-8,ID;Nome;Email;Telefone;Orcamento;Canal;Notas;CriadoEm\r\n";
-                      leads.forEach(l => {
-                        csvContent += `"${l.id}";"${l.name}";"${l.email}";"${l.phone}";"${l.value}";"${l.origin}";"${l.notes.replace(/"/g, '""')}";"${l.createdAt}"\r\n`;
-                      });
-                      const encodedUri = encodeURI(csvContent);
-                      const link = document.createElement("a");
-                      link.setAttribute("href", encodedUri);
-                      link.setAttribute("download", 'Planilha_Leads_cicloCRED.csv');
-                      document.body.appendChild(link);
-                      link.click();
-                      document.body.removeChild(link);
-                      awardXP(15);
-                      addNotification('📊 EXPORTAÇÃO INICIADA', 'Os contatos cadastrados no CRM foram consolidados com sucesso em formato .csv', 'success');
-                    }}
-                    className="flex items-center gap-2.5 p-3.5 bg-emerald-50 hover:bg-emerald-100 border-2 border-zinc-950 rounded-xl transition text-left cursor-pointer"
-                  >
-                    <span className="text-lg">📤</span>
-                    <div>
-                      <strong className="block text-xs font-black uppercase text-emerald-950 leading-tight">Exportar Leads</strong>
-                      <span className="text-[10.5px] text-zinc-500 font-medium">Download Planilha</span>
-                    </div>
-                  </button>
-
-                  {/* EXPORT PROPERTIES */}
-                  <button
-                    onClick={() => {
-                      setIsPremiumActionsOpen(false);
-                      // Execute exporting properties
-                      let csvContent = "data:text/csv;charset=utf-8,Codigo;Titulo;Tipo;Preco;Quartos;Bairro;Area_m2;Status\r\n";
-                      properties.forEach(p => {
-                        csvContent += `"${p.code}";"${p.title}";"${p.type}";"${p.price}";"${p.bedrooms}";"${p.neighborhood}";"${p.sizeSqm}";"${p.status}"\r\n`;
-                      });
-                      const encodedUri = encodeURI(csvContent);
-                      const link = document.createElement("a");
-                      link.setAttribute("href", encodedUri);
-                      link.setAttribute("download", 'Planilha_Estoque_IMO_cicloCRED.csv');
-                      document.body.appendChild(link);
-                      link.click();
-                      document.body.removeChild(link);
-                      awardXP(15);
-                      addNotification('🏠 ACERVO EXPORTADO', 'A planilha consolidada com todo o catálogo de estoque foi exportada com sucesso.', 'success');
-                    }}
-                    className="flex items-center gap-2.5 p-3.5 bg-zinc-50 hover:bg-zinc-100 border-2 border-zinc-950 rounded-xl transition text-left cursor-pointer"
-                  >
-                    <span className="text-lg">📊</span>
-                    <div>
-                      <strong className="block text-xs font-black uppercase text-zinc-950 leading-tight">Exportar Estoque</strong>
-                      <span className="text-[10.5px] text-zinc-500 font-medium">Download de Imóveis</span>
-                    </div>
-                  </button>
-
-                  {/* BULK DISPAROS */}
-                  <button
-                    onClick={() => {
-                      setIsPremiumActionsOpen(false);
-                      setActiveTab('marketing');
-                      awardXP(5);
-                    }}
-                    className="flex items-center gap-2.5 p-3.5 bg-purple-50 hover:bg-purple-100 border-2 border-zinc-950 rounded-xl transition text-left cursor-pointer"
-                  >
-                    <span className="text-lg">📣</span>
-                    <div>
-                      <strong className="block text-xs font-black uppercase text-purple-950 leading-tight">Campanhas</strong>
-                      <span className="text-[10.5px] text-zinc-500 font-medium">Central de Disparos</span>
-                    </div>
-                  </button>
-
-                  {/* APPOINTMENTS */}
-                  <button
-                    onClick={() => {
-                      setIsPremiumActionsOpen(false);
-                      setActiveTab('appointments');
-                      awardXP(5);
-                    }}
-                    className="flex items-center gap-2.5 p-3.5 bg-amber-50 hover:bg-amber-100 border-2 border-zinc-950 rounded-xl transition text-left cursor-pointer"
-                  >
-                    <span className="text-lg">📅</span>
-                    <div>
-                      <strong className="block text-xs font-black uppercase text-amber-950 leading-tight">Compromissos</strong>
-                      <span className="text-[10.5px] text-zinc-500 font-medium">Agenda do Corretor</span>
-                    </div>
-                  </button>
-
-                  {/* BACKUP & RESTORE */}
-                  <button
-                    onClick={() => {
-                      setIsPremiumActionsOpen(false);
-                      setActiveTab('settings');
-                      setSettingsModalTab('database');
-                      awardXP(5);
-                    }}
-                    className="flex items-center gap-2.5 p-3.5 bg-pink-50 hover:bg-pink-100 border-2 border-zinc-950 rounded-xl transition text-left cursor-pointer"
-                  >
-                    <span className="text-lg">💾</span>
-                    <div>
-                      <strong className="block text-xs font-black uppercase text-pink-950 leading-tight">Migração local</strong>
-                      <span className="text-[10.5px] text-zinc-555 font-medium">Importador de Banco</span>
-                    </div>
-                  </button>
-
-                </div>
-
-                {/* COPY PORTAL LINK */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsPremiumActionsOpen(false);
-                    navigator.clipboard.writeText(window.location.origin);
-                    triggerSensoryFeedback('success', accSettings);
-                    addNotification('🔗 LINK COPIADO', 'O endereço de acesso ao seu portal de vendas cicloCRED foi copiado!', 'success');
-                    awardXP(10);
-                  }}
-                  className="w-full py-3 bg-zinc-900 hover:bg-zinc-950 text-white rounded-2xl border-4 border-zinc-950 font-mono font-black text-xs uppercase shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition active:translate-y-0.5 cursor-pointer mt-2"
-                >
-                  🔗 Copiar Link de Acesso do CRM
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <AIAssistantChat
+        isOpen={isAIAssistantOpen}
+        onClose={() => setIsAIAssistantOpen(false)}
+        lead={selectedLeadForAI}
+      />
     </div>
   );
 }

@@ -1,0 +1,6 @@
+140:    return () => window.removeEventListener('kanban-columns-updated', handleUpdate);
+326:  return (
+344:              return (
+585:          return (
+710:                    return (
+844:                                return (

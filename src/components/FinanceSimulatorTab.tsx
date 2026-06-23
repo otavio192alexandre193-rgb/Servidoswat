@@ -21,7 +21,8 @@ import {
   Sparkles,
   Building,
   Home,
-  AlertTriangle
+  AlertTriangle,
+  X
 } from 'lucide-react';
 import { Lead } from '../types';
 import { triggerSensoryFeedback } from '../utils/sensory';
@@ -89,6 +90,44 @@ export default function FinanceSimulatorTab({
 
   // Common/Interactive Selected Lead State
   const [selectedLeadId, setSelectedLeadId] = useState<string>('');
+
+  // Same search and filter block states as Leads Tab for high-fidelity interactive customer linking
+  const [searchTerm, setSearchTerm] = useState('');
+  const [initialLetterFilter, setInitialLetterFilter] = useState('todos');
+
+  const getStatusLabelSim = (status: string) => {
+    const map: Record<string, string> = {
+      'novo': 'Novo',
+      'atendimento': 'Atendimento',
+      'simulacao': 'Simulação',
+      'proposta': 'Proposta',
+      'aprovado': 'Aprovado Cr.',
+      'contrato': 'Contrato',
+      'perdi': 'Perdido',
+    };
+    return map[status] || (status.charAt(0).toUpperCase() + status.slice(1));
+  };
+
+  const filteredLeadsForLink = React.useMemo(() => {
+    return leads.filter(lead => {
+      const searchTerms = searchTerm.toLowerCase().split(' ').filter(term => term.trim() !== '');
+      const leadString = JSON.stringify(lead).toLowerCase();
+      
+      const matchesSearch = searchTerms.every(term => leadString.includes(term));
+      const matchesInitial = 
+        initialLetterFilter === 'todos' ||
+        lead.name.trim().charAt(0).toUpperCase() === initialLetterFilter.toUpperCase();
+
+      // Only show leads that are not permanently deleted (if deleted flag is present, although app handles that globally)
+      if ((lead as any).deleted) return false;
+
+      return matchesSearch && matchesInitial;
+    });
+  }, [leads, searchTerm, initialLetterFilter]);
+
+  const leadsRecentes = filteredLeadsForLink.filter(l => l.status === 'novo');
+  const leadsAtivos = filteredLeadsForLink.filter(l => l.status !== 'novo' && l.status !== 'arquivado' && l.status !== 'perdi' && l.status !== 'perdido' && l.status !== 'reprovado_credito');
+  const leadsArquivados = filteredLeadsForLink.filter(l => l.status === 'arquivado' || l.status === 'perdi' || l.status === 'perdido' || l.status === 'reprovado_credito');
 
   // ==========================================
   // CALCULATOR 1: FINANCIAMENTO HABITACIONAL (REGRAS & SUBSÍDIOS)
@@ -159,6 +198,10 @@ export default function FinanceSimulatorTab({
           setSimulatedPropertyPrice(parentLead.value);
           setSalesPropertyPrice(parentLead.value); // also feed calculator 2
         }
+        if (parentLead.familyIncome && parentLead.familyIncome > 0) {
+          setCltIncome(parentLead.familyIncome);
+          setAutonomoIncome(parentLead.familyIncome);
+        }
         setClientCustomName(parentLead.name);
         if (addNotification) {
           addNotification(
@@ -167,6 +210,10 @@ export default function FinanceSimulatorTab({
             'info'
           );
         }
+      } else {
+        // Clear if the lead was deleted from the system
+        setSelectedLeadId('');
+        setClientCustomName('Cliente Avulso');
       }
     }
   }, [selectedLeadId, leads]);
@@ -425,7 +472,7 @@ export default function FinanceSimulatorTab({
     const valMensalObra = tempoObra > 0 ? (difRestante / tempoObra) : 0;
     
     const csvContent = [
-      ["--- SIMULACAO DE FINANCIAMENTO HABITACIONAL CAIXA / cicloCRED ---"],
+      ["--- SIMULACAO DE FINANCIAMENTO HABITACIONAL CAIXA ---"],
       ["Variavel", "Valor Estimado", "Descritivo Tecnico"],
       ["Cliente / Proponente", clientName, "Nome completo na proposta"],
       ["Regime de Comprovacao de Renda", professionType === 'CLT' ? '💼 CLT (Holerite)' : '🚀 Autônomo (Extrato)', "Modo de analise de credito"],
@@ -540,7 +587,7 @@ export default function FinanceSimulatorTab({
 
     const leadName = clientCustomName || 'Cliente Avulso';
     const textStr = `
-=== SIMULAÇÃO DE FINANCIAMENTO HABITACIONAL CAIXA / cicloCRED ===
+=== SIMULAÇÃO DE FINANCIAMENTO HABITACIONAL CAIXA ===
 Cliente: ${leadName}
 Perfil Técnico: Renda R$ ${grossIncome.toLocaleString('pt-BR')} | Idade: ${applicantAge} anos
 Faixa de Enquadramento: ${mcmvBracketName}
@@ -562,7 +609,7 @@ Tabela de Amortização: ${amortizationSystem}
 🧱 Saldo Restante para Período de Obras: R$ ${difRestante.toLocaleString('pt-BR')}
 📈 Mensais Período Obras: ${tempoObra} parcelas mensais de R$ ${Math.round(valMensalObra).toLocaleString('pt-BR')} /mês
 ----------------------------------------------------------------------------------
-Simulado em ${new Date().toLocaleDateString('pt-BR')} via Central Credi cicloCRED CRM Inteligente.
+Simulado em ${new Date().toLocaleDateString('pt-BR')} via Central Credi CRM Inteligente.
 `;
 
     navigator.clipboard.writeText(textStr);
@@ -577,7 +624,7 @@ Simulado em ${new Date().toLocaleDateString('pt-BR')} via Central Credi cicloCRE
 
     const leadName = clientCustomName || 'Cliente Avulso';
     const textStr = `
-=== SIMULAÇÃO DE VENDA & FLUXO DE OBRAS - cicloCRED ===
+=== SIMULAÇÃO DE VENDA & FLUXO DE OBRAS ===
 Cliente: ${leadName}
 Valor da Unidade: R$ ${salesPropertyPrice.toLocaleString('pt-BR')}
 Disponibilidade / Fluxo Obras: ${salesConstructionMonths} meses
@@ -590,7 +637,7 @@ Disponibilidade / Fluxo Obras: ${salesConstructionMonths} meses
 5. Financiamento Pós-Obra Bancário: R$ ${salesFinanciamentoVal.toLocaleString('pt-BR')} (${salesFinanciamentoPct}%)
 ----------------------------------------------------------------------------------
 Tabela Consolidada Planilha: 100% | R$ ${salesPropertyPrice.toLocaleString('pt-BR')}
-Simulado via cicloCRED CRM Inteligente em ${new Date().toLocaleDateString('pt-BR')}.
+Simulado via CRM Inteligente em ${new Date().toLocaleDateString('pt-BR')}.
 `;
 
     navigator.clipboard.writeText(textStr);
@@ -606,8 +653,8 @@ Simulado via cicloCRED CRM Inteligente em ${new Date().toLocaleDateString('pt-BR
       <div className="print:hidden space-y-6 animate-fadeIn">
       
       {/* Master Interactive Selector Header */}
-      <div className="bg-white border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] text-zinc-900">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="bg-white border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] text-zinc-900 space-y-5">
+        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1.5">
               <span className="p-1 px-2.5 bg-indigo-100 border border-indigo-400 text-indigo-800 text-[9px] font-black uppercase tracking-wider font-mono rounded-lg">
@@ -624,24 +671,174 @@ Simulado via cicloCRED CRM Inteligente em ${new Date().toLocaleDateString('pt-BR
             </p>
           </div>
 
-          {/* Quick Lead Global Selector */}
-          <div className="min-w-[200px] w-full md:w-auto">
-            <span className="block text-[8.5px] font-mono font-black text-zinc-400 uppercase mb-1">Vincular Cliente Global</span>
+          <div className="flex items-center gap-2 shrink-0 w-full xl:w-auto">
+            {selectedLeadId && (
+              <div className="bg-emerald-50 border-2 border-emerald-500 p-2 text-left rounded-xl flex items-center gap-2 w-full xl:w-auto">
+                <span className="text-xl shrink-0">👤</span>
+                <div className="min-w-0 pr-2">
+                  <p className="text-[10px] font-extrabold text-emerald-950 leading-tight uppercase font-mono">Lead Conectado</p>
+                  <p className="text-[11px] font-black text-emerald-800 leading-tight truncate">
+                    {leads.find(l => l.id === selectedLeadId)?.name || clientCustomName}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedLeadId('');
+                    setClientCustomName('Cliente Avulso');
+                  }}
+                  className="p-1 hover:bg-emerald-100 text-emerald-800 rounded-lg text-xs font-black shrink-0 cursor-pointer"
+                  title="Desvincular Cliente"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* COMPACT DESTAQUE PARA BARRA DE PESQUISA & FILTROS TRANSPARENTE E COLUNAS DE STATUS */}
+      <div className="bg-transparent space-y-4">
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
+          {/* SEARCH INPUT BAR */}
+          <div className="flex-grow max-w-xl relative flex items-center">
+            <div className="relative w-full">
+              <input
+                type="text"
+                placeholder="PESQUISAR CLIENTE: TEXTO UNIVERSAL (EX: ZONA SUL RENDA 4000)"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-white/70 border border-zinc-300 rounded-xl pl-4 pr-10 py-2 text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 font-extrabold placeholder-zinc-500 tracking-wider uppercase font-mono shadow-sm backdrop-blur-sm transition-all"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 bg-zinc-200 hover:bg-zinc-300 text-zinc-600 rounded-full transition-colors cursor-pointer"
+                  title="Zerar Resultados"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* ONLY LETRA SELECT DROPDOWN */}
+          <div className="flex flex-wrap items-center gap-2">
             <select
-              value={selectedLeadId}
+              value={initialLetterFilter}
               onChange={(e) => {
+                setInitialLetterFilter(e.target.value);
                 triggerSensoryFeedback('click', accSettings);
-                setSelectedLeadId(e.target.value);
               }}
-              className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-2 text-xs font-bold"
+              className="bg-white/70 border border-zinc-300 rounded-xl px-3 py-2 text-[10px] font-black text-zinc-900 focus:outline-none focus:border-indigo-600 uppercase font-mono cursor-pointer shadow-sm hover:bg-white backdrop-blur-sm transition-all"
             >
-              <option value="">-- [Selecionar Lead Integrado] --</option>
-              {leads.map(l => (
-                <option key={l.id} value={l.id}>{l.name} ({l.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })})</option>
+              <option value="todos">Letra: Todas</option>
+              {Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)).map(letter => (
+                <option key={letter} value={letter}>{letter}</option>
               ))}
             </select>
           </div>
         </div>
+
+        {/* RESULTS GRID ZONE / THREE COLUMNS */}
+        {filteredLeadsForLink.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-[9px] font-mono font-black text-zinc-500 uppercase px-1">
+              <span>Resultados de busca detectados ({filteredLeadsForLink.length}):</span>
+              {(searchTerm || initialLetterFilter !== 'todos') && (
+                <button
+                  onClick={() => {
+                    setSearchTerm('');
+                    setInitialLetterFilter('todos');
+                  }}
+                  className="text-indigo-650 hover:underline cursor-pointer"
+                >
+                  ✕ Limpar Filtros
+                </button>
+              )}
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* RECENTES */}
+              <div className="flex flex-col gap-2 max-h-[180px] overflow-y-auto pr-1">
+                <span className="text-[10px] font-black text-zinc-500 border-b border-zinc-300/50 pb-1 mb-1 font-mono uppercase tracking-widest pl-1 sticky top-0 bg-zinc-50/80 backdrop-blur-md z-10">Recentes / Novos</span>
+                {filteredLeadsForLink.filter(l => l.status === 'novo').length === 0 && (
+                  <span className="text-[9px] text-zinc-400 font-bold p-1 italic select-none">Lista Zerada do Sistema</span>
+                )}
+                {filteredLeadsForLink.filter(l => l.status === 'novo').map(lead => (
+                  <button
+                      key={lead.id}
+                      type="button"
+                      onClick={() => {
+                        triggerSensoryFeedback('click', accSettings);
+                        setSelectedLeadId(lead.id);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg border text-[10.5px] font-black font-mono transition-none cursor-pointer flex items-center justify-between h-auto select-none backdrop-blur-sm ${
+                      selectedLeadId === lead.id
+                          ? 'bg-emerald-600 text-white border-emerald-700 shadow-md'
+                          : 'bg-white/60 border-zinc-200 text-zinc-700 hover:text-zinc-950 hover:bg-white'
+                      }`}
+                  >
+                      <span className="truncate">{lead.name}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* ATIVOS */}
+              <div className="flex flex-col gap-2 max-h-[180px] overflow-y-auto pr-1">
+                <span className="text-[10px] font-black text-indigo-500 border-b border-indigo-200/50 pb-1 mb-1 font-mono uppercase tracking-widest pl-1 sticky top-0 bg-zinc-50/80 backdrop-blur-md z-10">Ativos / Em Progresso</span>
+                {filteredLeadsForLink.filter(l => l.status !== 'novo' && l.status !== 'arquivado' && l.status !== 'perdi' && l.status !== 'reprovado_credito').length === 0 && (
+                  <span className="text-[9px] text-zinc-400 font-bold p-1 italic select-none">Lista Zerada do Sistema</span>
+                )}
+                {filteredLeadsForLink.filter(l => l.status !== 'novo' && l.status !== 'arquivado' && l.status !== 'perdi' && l.status !== 'reprovado_credito').map(lead => (
+                  <button
+                      key={lead.id}
+                      type="button"
+                      onClick={() => {
+                        triggerSensoryFeedback('click', accSettings);
+                        setSelectedLeadId(lead.id);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg border text-[10.5px] font-black font-mono transition-none cursor-pointer flex items-center justify-between h-auto select-none backdrop-blur-sm ${
+                      selectedLeadId === lead.id
+                          ? 'bg-emerald-600 text-white border-emerald-700 shadow-md'
+                          : 'bg-white/60 border-zinc-200 text-zinc-700 hover:text-zinc-950 hover:bg-white'
+                      }`}
+                  >
+                      <span className="truncate pr-2">{lead.name}</span>
+                      <span className="text-[7.5px] opacity-75 font-normal uppercase italic bg-zinc-200/50 text-zinc-600 px-1 rounded shrink-0">{getStatusLabelSim(lead.status)}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* ARQUIVADOS */}
+              <div className="flex flex-col gap-2 max-h-[180px] overflow-y-auto pr-1">
+                <span className="text-[10px] font-black text-rose-500 border-b border-rose-200/50 pb-1 mb-1 font-mono uppercase tracking-widest pl-1 sticky top-0 bg-zinc-50/80 backdrop-blur-md z-10">Arquivados / Perdidos</span>
+                {filteredLeadsForLink.filter(l => l.status === 'arquivado' || l.status === 'perdi' || l.status === 'reprovado_credito').length === 0 && (
+                  <span className="text-[9px] text-zinc-400 font-bold p-1 italic select-none">Lista Zerada do Sistema</span>
+                )}
+                {filteredLeadsForLink.filter(l => l.status === 'arquivado' || l.status === 'perdi' || l.status === 'reprovado_credito').map(lead => (
+                  <button
+                      key={lead.id}
+                      type="button"
+                      onClick={() => {
+                        triggerSensoryFeedback('click', accSettings);
+                        setSelectedLeadId(lead.id);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg border text-[10.5px] font-black font-mono transition-none cursor-pointer flex items-center justify-between h-auto select-none backdrop-blur-sm ${
+                      selectedLeadId === lead.id
+                          ? 'bg-emerald-600 text-white border-emerald-700 shadow-md'
+                          : 'bg-white/60 border-zinc-200 text-zinc-700 hover:text-zinc-950 hover:bg-white'
+                      }`}
+                  >
+                      <span className="truncate pr-2">{lead.name}</span>
+                      <span className="text-[7.5px] opacity-75 font-normal uppercase italic bg-zinc-200/50 text-zinc-600 px-1 rounded shrink-0">{getStatusLabelSim(lead.status)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* CALCULATOR 1 SCREEN: FINANCIAMENTO HABITACIONAL */}
@@ -1130,7 +1327,7 @@ Simulado via cicloCRED CRM Inteligente em ${new Date().toLocaleDateString('pt-BR
                   </h3>
                 </div>
                 <div className="text-right text-[10px] font-mono font-bold text-zinc-500">
-                  cicloCRED Caixa v2026
+                  Simulador Caixa v2026
                 </div>
               </div>
 
@@ -1255,7 +1452,7 @@ Simulado via cicloCRED CRM Inteligente em ${new Date().toLocaleDateString('pt-BR
                       <span className="text-indigo-600">📂</span> Documentação Física Oficial
                     </h4>
                     <p className="text-[10px] text-zinc-550 mb-3 font-medium">
-                      Marque os documentos confirmados e verificados para compor o dossiê digital cicloCRED e dar entrada na aprovação Caixa:
+                      Marque os documentos confirmados e verificados para compor o dossiê digital de financiamento e dar entrada na aprovação Caixa:
                     </p>
 
                     <div className="space-y-2.5">
@@ -1394,7 +1591,7 @@ Simulado via cicloCRED CRM Inteligente em ${new Date().toLocaleDateString('pt-BR
 
               <div className="border-b border-zinc-800 pb-2 relative z-10 flex justify-between items-center">
                 <div>
-                  <span className="text-[8.5px] font-mono font-black text-emerald-400 uppercase tracking-widest block leading-none">PLANO CORRETOR CICLOCRED</span>
+                  <span className="text-[8.5px] font-mono font-black text-emerald-400 uppercase tracking-widest block leading-none">PLANO CORRETOR COMPLETO</span>
                   <h4 className="text-xs font-black uppercase text-white tracking-tight flex items-center gap-1.5 mt-1">
                     🏡 Entrada Facilitada Construtora (Período Obras)
                   </h4>
@@ -1526,7 +1723,7 @@ Simulado via cicloCRED CRM Inteligente em ${new Date().toLocaleDateString('pt-BR
               <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
               <div className="text-xs text-zinc-650 space-y-1">
                 <span className="font-extrabold uppercase text-zinc-950 font-sans block">Sua simulação está qualificada em altíssimo nível!</span>
-                <p>O simulador cicloCRED estima os indexadores habitacionais baseando-se nas regras de concessão da Caixa Econômica Federal 2026. A comprovação de renda e simulação podem sofrer alterações após exame final de documentos cadastrados do cliente.</p>
+                <p>O simulador habitacional estima os indexadores baseando-se nas regras de concessão da Caixa Econômica Federal 2026. A comprovação de renda e simulação podem sofrer alterações após exame final de documentos cadastrados do cliente.</p>
               </div>
             </div>
 
@@ -1796,7 +1993,7 @@ Simulado via cicloCRED CRM Inteligente em ${new Date().toLocaleDateString('pt-BR
             )}
 
             {/* Detailed month-by-month payment schedule layout matching simulator 1 */}
-            <div className="border border-zinc-250 rounded-2xl overflow-hidden bg-zinc-50 max-h-[300px] overflow-y-auto">
+            <div className="border border-zinc-250 rounded-2xl overflow-visible bg-zinc-50 overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse font-sans">
                 <thead className="bg-zinc-950 text-white font-mono text-[9px] uppercase font-black tracking-wider sticky top-0 z-10">
                   <tr>
@@ -1877,7 +2074,7 @@ Simulado via cicloCRED CRM Inteligente em ${new Date().toLocaleDateString('pt-BR
               <div className="flex items-center gap-2">
                 <span className="text-xl">📄</span>
                 <div>
-                  <h4 className="text-[10px] font-mono font-bold uppercase text-indigo-400">Dossiê de Simulação cicloCRED</h4>
+                  <h4 className="text-[10px] font-mono font-bold uppercase text-indigo-400">Dossiê de Simulação de Crédito</h4>
                   <strong className="text-sm font-black uppercase tracking-tight block">Ficha de Proposta & Enquadramento Habitacional</strong>
                 </div>
               </div>

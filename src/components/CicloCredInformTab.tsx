@@ -78,7 +78,7 @@ export default function CicloCredInformTab({
       category: "Médio e Alto Padrão",
       readTime: "5 min de leitura",
       summary: "Seu orçamento supera a margem do MCMV? Conheça as vantagens do Sistema Brasileiro de Poupança.",
-      desc: "O SBPE (Sistema Brasileiro de Poupança e Empréstimo) é a principal engrenagem para adquirir imóveis acima do limite do programa social Minha Casa Minha Vida. Financiando até 80% do valor de avaliação pela Caixa, Bradesco, Itaú ou Santander, as taxas atuais variam de 8.5% a 10.2% a.a. através do Sistema de Amortização Constante (SAC). A vantagem é a flexibilidade onde a comprovação de renda aceita adquirentes com portfólios autônomos e empresariais, consolidando o bônus de taxas reduzidas da cicloCRED.",
+      desc: "O SBPE (Sistema Brasileiro de Poupança e Empréstimo) é a principal engrenagem para adquirir imóveis acima do limite do programa social Minha Casa Minha Vida. Financiando até 80% do valor de avaliação pela Caixa, Bradesco, Itaú ou Santander, as taxas atuais variam de 8.5% a 10.2% a.a. através do Sistema de Amortização Constante (SAC). A vantagem é a flexibilidade onde a comprovação de renda aceita adquirentes com portfólios autônomos e empresariais, consolidando o bônus de taxas reduzidas.",
       tag: "Linhas SBPE"
     },
     {
@@ -87,7 +87,7 @@ export default function CicloCredInformTab({
       category: "Lançamentos",
       readTime: "3 min de leitura",
       summary: "Veja nossa lista de empreendimentos parceiros com escritura e registro totalmente subsidiados pela construtora.",
-      desc: "A Construtora Cury é líder em moradias de alto padrão de acabamento com entrada extremamente parcelada. Em parceria com o correspondente cicloCRED, os novos lançamentos concedem isenção integral da taxa de ITBI (Imposto sobre Transmissão de Bens Imóveis) e Registro de Imóveis no Cartório. Esse subsídio corporativo economiza em média R$ 12.000,00 na assinatura da sua pasta de crédito, permitindo diluir o fluxo de entrada direto no período de 36 meses de obra.",
+      desc: "A Construtora Cury é líder em moradias de alto padrão de acabamento com entrada extremamente parcelada. Em parceria com o seu correspondente bancário, os novos lançamentos concedem isenção integral da taxa de ITBI (Imposto sobre Transmissão de Bens Imóveis) e Registro de Imóveis no Cartório. Esse subsídio corporativo economiza em média R$ 12.000,00 na assinatura da sua pasta de crédito, permitindo diluir o fluxo de entrada direto no período de 36 meses de obra.",
       tag: "Estoque SP"
     }
   ];
@@ -107,7 +107,7 @@ export default function CicloCredInformTab({
       phone: inboundPhone,
       value: selectedPropertyForInbound?.price || 320000,
       status: 'novo' as const,
-      origin: 'cicloCRED Inform (Portal de Captação)',
+      origin: 'Portal de Captação',
       notes: `Interesse expressado no imóvel comercial: ${selectedPropertyForInbound?.title || 'Lançamento Geral'} | Renda Declarada: R$ ${inboundIncome.toLocaleString()}`
     };
 
@@ -116,7 +116,7 @@ export default function CicloCredInformTab({
     if (addNotification) {
       addNotification(
         '🎯 LEAD CAPTURADO ONLINE!',
-        `Novo lead "${inboundName}" se cadastrou pelo portal cicloCRED Inform para o imóvel "${selectedPropertyForInbound?.title || 'Lançamento'}".`,
+        `Novo lead "${inboundName}" se cadastrou pelo Portal de Captação para o imóvel "${selectedPropertyForInbound?.title || 'Lançamento'}".`,
         'success'
       );
     }
@@ -145,8 +145,8 @@ export default function CicloCredInformTab({
       phone: generalPhone,
       value: 290000,
       status: 'novo' as const,
-      origin: 'cicloCRED Inform (Inscrição Boletim)',
-      notes: `Cadastro espontâneo via Boletim Informativo cicloCRED de São Paulo. Renda Informada: R$ ${generalIncome.toLocaleString()}`
+      origin: 'Inscrição Boletim',
+      notes: `Cadastro espontâneo via Boletim Informativo de São Paulo. Renda Informada: R$ ${generalIncome.toLocaleString()}`
     };
 
     onAddInboundLead(leadPayload);
@@ -154,7 +154,7 @@ export default function CicloCredInformTab({
     if (addNotification) {
       addNotification(
         '📨 INSCRIÇÃO CADASTRADA!',
-        `Lead "${generalName}" inserido na lista do CRM através da inscrição no boletim cicloCRED Inform.`,
+        `Lead "${generalName}" inserido na lista do CRM através da inscrição no boletim do Portal de Captação.`,
         'success'
       );
     }
@@ -180,14 +180,14 @@ export default function CicloCredInformTab({
             </span>
             <h1 className="text-xl md:text-2xl font-black uppercase italic tracking-tight text-white mt-1.5 flex items-center gap-2">
               <Globe className="w-6 h-6 text-indigo-400 animate-spin [animation-duration:12s]" />
-              Portal Público: cicloCRED Inform
+              Portal Público de Captação
             </h1>
             <p className="text-xs text-zinc-300 font-sans mt-0.5 max-w-2xl leading-normal">
               Esta é a simulação integrada do seu site externo e blog imobiliário de São Paulo. Qualquer lead que simule ou preencha formulários aqui será <strong>automaticamente inserido</strong> na sua lista do CRM.
             </p>
           </div>
           <div className="px-3.5 py-1.5 bg-indigo-900/70 border border-indigo-500 rounded-xl font-mono text-[10px] text-zinc-200">
-            📡 Endereço Ativo: <strong className="text-emerald-300">ciclocred-inform.com.br</strong>
+            📡 Endereço Ativo: <strong className="text-emerald-300">portal-leads.com.br</strong>
           </div>
         </div>
       </div>
@@ -203,7 +203,7 @@ export default function CicloCredInformTab({
               <span className="w-2.5 h-2.5 rounded-full bg-yellow-500 inline-block"></span>
               <span className="w-2.5 h-2.5 rounded-full bg-green-500 inline-block"></span>
             </div>
-            <span className="text-zinc-400 ml-4">https://www.ciclocred-inform.com.br/sao-paulo-cury-mcmv</span>
+            <span className="text-zinc-400 ml-4">https://www.portal-leads.com.br/sao-paulo-cury-mcmv</span>
           </div>
           <span className="text-[9px] font-black uppercase font-mono tracking-widest text-indigo-400">▲ PORTAL PÚBLICO INTEGRANTE</span>
         </div>
@@ -216,7 +216,7 @@ export default function CicloCredInformTab({
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-black text-xs font-mono">CC</div>
               <div>
-                <strong className="block text-sm font-black uppercase text-zinc-950">cicloCRED Inform</strong>
+                <strong className="block text-sm font-black uppercase text-zinc-950">Portal de Captação</strong>
                 <span className="text-[10px] text-zinc-500 font-bold uppercase font-mono">Notícias, Lançamentos Cury & Crédito Caixa</span>
               </div>
             </div>
@@ -239,7 +239,7 @@ export default function CicloCredInformTab({
                 Conquiste Seu Apartamento Cury na Grande SP com <span className="text-indigo-600 underline decoration-indigo-300 decoration-wavy">Documentação Grátis</span>!
               </h2>
               <p className="text-xs text-zinc-650 leading-relaxed font-sans">
-                A simulação de crédito habitacional Caixa cicloCRED agora inclui isenção total de taxas de transferência ITBI e custas de Cartório de Imóveis para quem se cadastrar neste portal informativo. Veja lançamentos participantes!
+                A simulação de crédito habitacional Caixa agora inclui isenção total de taxas de transferência ITBI e custas de Cartório de Imóveis para quem se cadastrar neste portal informativo. Veja lançamentos participantes!
               </p>
               
               <div className="flex gap-3">
@@ -269,7 +269,7 @@ export default function CicloCredInformTab({
                   <CheckCircle className="w-8 h-8 text-emerald-600 mx-auto" />
                   <h4 className="text-xs font-black uppercase text-emerald-950">Ficha Enviada com Sucesso!</h4>
                   <p className="text-[10px] text-emerald-800 font-sans leading-relaxed">
-                    Sua solicitação de simulação foi conectada com a esteira do CRM cicloCRED. Um corretor especialista entrará em contato em breve no seu WhatsApp!
+                    Sua solicitação de simulação foi conectada com a esteira do CRM. Um corretor especialista entrará em contato em breve no seu WhatsApp!
                   </p>
                 </div>
               ) : (
@@ -381,7 +381,7 @@ export default function CicloCredInformTab({
             <div className="border-l-4 border-emerald-600 pl-4">
               <span className="text-[10px] font-mono font-black uppercase text-emerald-650 font-black">Empreendimentos Ativos na Grande SP</span>
               <h3 className="text-lg font-black uppercase tracking-tight text-zinc-950">
-                Lançamentos Disponíveis Cury & cicloCRED
+                Lançamentos Disponíveis Cury
               </h3>
             </div>
 
@@ -462,8 +462,8 @@ export default function CicloCredInformTab({
 
           {/* Footer branding of site */}
           <div className="border-t pt-6 flex flex-col sm:flex-row justify-between items-center text-[10px] text-zinc-400 font-mono gap-4">
-            <span>© 2026 cicloCRED Inform. Lojas e correspondência bancária credenciada Caixa Econômica.</span>
-            <span>Estúdio de Captação e Leads Integrado via API cicloCRED CRM</span>
+            <span>© 2026 Portal de Captação. Lojas e correspondência bancária credenciada Caixa Econômica.</span>
+            <span>Estúdio de Captação e Leads Integrado via API</span>
           </div>
 
         </div>
@@ -503,7 +503,7 @@ export default function CicloCredInformTab({
                   <CheckCircle className="w-6 h-6 text-emerald-600 mx-auto" />
                   <h4 className="text-xs font-black uppercase text-emerald-950">Proposta de Simulação Enviada!</h4>
                   <p className="text-[10px] text-emerald-800 leading-relaxed font-sans">
-                    Os dados foram transmitidos diretamente para o painel de leads do seu correspondente cicloCRED.
+                    Os dados foram transmitidos diretamente para o painel de leads do seu correspondente bancário no CRM.
                   </p>
                 </div>
               ) : (

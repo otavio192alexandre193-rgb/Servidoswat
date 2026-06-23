@@ -1,0 +1,73 @@
+  const [time, setTime] = useState(new Date());
+    const t = setInterval(() => setTime(new Date()), 30000);
+    console.log("[App.tsx] System datetime:", new Date().toISOString());
+            ? new Date(l.lastInteractionAt).getTime()
+              ? new Date(l.createdAt).getTime()
+              lastInteractionAt: new Date().toISOString(),
+    const todayStr = new Date().toISOString().slice(0, 10);
+            const todayStr = new Date().toISOString().slice(0, 10);
+      const seen = new Set<string>();
+            window.dispatchEvent(new CustomEvent("ciclocred_cycle_tab_next"));
+            window.dispatchEvent(new CustomEvent("ciclocred_cycle_tab_prev"));
+    const colIds = new Set(getKanbanColumns().map((c) => c.id));
+        timestamp: new Date().toISOString(),
+      const blob = new Blob([JSON.stringify(dataToExport, null, 2)], {
+      link.download = `ciclocred-backup-${new Date().toISOString().split("T")[0]}.json`;
+      timestamp: new Date().toLocaleTimeString("pt-BR", {
+        new Notification(title, {
+            date: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+                    const recognition = new SpeechRecognition();
+                        throw new Error("Erro na comunicação");
+      const now = new Date();
+            const lastInteractionTime = new Date(lastInteractionStr).getTime();
+                lastInteractionAt: new Date().toISOString(),
+            const controller = new AbortController();
+                    new CustomEvent("firestore-quota-exceeded"),
+              throw new Error(
+                throw new Error(
+              throw new Error(
+              const seen = new Set<string>();
+              window.dispatchEvent(new CustomEvent("firestore-quota-exceeded"));
+          const timeA = new Date(a.createdAt || 0).getTime();
+          const timeB = new Date(b.createdAt || 0).getTime();
+        const currentIds = new Set(leads.map((l) => l.id));
+        const currentIds = new Set(templates.map((t) => t.id));
+        const currentIds = new Set(emailLogs.map((l) => l.id));
+        const currentIds = new Set(appointments.map((a) => a.id));
+        const currentIds = new Set(inventory.map((i) => i.id));
+        const currentIds = new Set(properties.map((p) => p.id));
+        const currentIds = new Set(gamificationGoals.map((g) => g.id));
+        const currentIds = new Set(gamificationProjects.map((p) => p.id));
+            lastInteractionAt: new Date().toISOString(),
+            lastInteractionAt: new Date().toISOString(),
+      awardXP(50); // 50 XP for cataloging new prospective client
+      const existingIds = new Set(prev.map((p) => p.id));
+    const existingIds = new Set(currentLeadsList.map((l) => l.id));
+    // 3. Immediately sync new leads to Firestore in batch to prevent network delays or race conditions from dropping them!
+          const nextSet = new Set([
+        const picker = new (window as any).google.picker.PickerBuilder()
+        throw new Error("Não foi possível ler as colunas da primeira página.");
+          createdAt: new Date().toISOString(),
+                  const h = new Date().getHours();
+                  {new Date()
+                  {new Date().toLocaleTimeString("pt-BR", {
+                      const createdTime = new Date(
+                      const createdTime = new Date(
+                                const createdTime = new Date(
+                                const createdTime = new Date(
+                                  ? new Date(l.lastInteractionAt).getTime()
+                                const createdTime = new Date(
+                                  ? new Date(l.lastInteractionAt).getTime()
+                                                      🕒 <span className="opacity-70">Logado:</span> <span className="text-indigo-100">{l.createdAt ? new Date(l.createdAt).toLocaleDateString("pt-BR") + " " + new Date(l.createdAt).toLocaleTimeString("pt-BR", {hour: '2-digit', minute:'2-digit'}) : "N/I"}</span>
+                                                      🕒 <span className="opacity-70">Logado:</span> <span className="text-emerald-100">{l.createdAt ? new Date(l.createdAt).toLocaleDateString("pt-BR") + " " + new Date(l.createdAt).toLocaleTimeString("pt-BR", {hour: '2-digit', minute:'2-digit'}) : "N/I"}</span>
+                                                      🕒 <span className="opacity-70">Logado:</span> <span className="text-rose-100">{l.createdAt ? new Date(l.createdAt).toLocaleDateString("pt-BR") + " " + new Date(l.createdAt).toLocaleTimeString("pt-BR", {hour: '2-digit', minute:'2-digit'}) : "N/I"}</span>
+                              const reader = new FileReader();
+                                        createdAt: new Date().toISOString(),
+                                        createdAt: new Date().toISOString(),
+                                      createdAt: new Date().toISOString(),
+                                      createdAt: new Date().toISOString(),
+                            const reader = new FileReader();
+            const evt = new CustomEvent("ciclocred_global_prev_visibility", {
+            const evt = new CustomEvent("ciclocred_global_next_visibility", {
+            window.dispatchEvent(new CustomEvent("ciclocred_cycle_tab_prev"));
+            window.dispatchEvent(new CustomEvent("ciclocred_cycle_tab_next"));

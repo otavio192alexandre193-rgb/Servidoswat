@@ -646,21 +646,71 @@ export default function GoogleWorkspace({
 
       // Automatically parse assuming column index mappings or header titles match:
       // A: Nome, B: Email, C: Telefone, D: Renda Familiar, E: Valor Pipeline, F: Status, G: Notas
-      const headers = rows[0].map((h: string) => h.toLowerCase().trim());
+      const headers = rows[0].map((h: string) => String(h).toLowerCase().trim());
       const rowsPreview: Omit<Lead, 'id'>[] = [];
+
+      let nameIdx = 0;
+      let emailIdx = 1;
+      let phoneIdx = 2;
+      let incomeIdx = 3;
+      let valueIdx = 4;
+      let notesIdx = 6;
+
+      headers.forEach((h: string, idx: number) => {
+        if (h.includes('nome') || h.includes('name') || h.includes('cliente') || h.includes('lead') || h.includes('proponente') || h.includes('contato')) {
+          nameIdx = idx;
+        } else if (h.includes('email') || h.includes('e-mail') || h.includes('mail')) {
+          emailIdx = idx;
+        } else if (h.includes('telefone') || h.includes('phone') || h.includes('tel') || h.includes('celular') || h.includes('whatsapp') || h.includes('cel')) {
+          phoneIdx = idx;
+        } else if (h.includes('renda') || h.includes('income') || h.includes('famili') || h.includes('faturamento') || h.includes('salario') || h.includes('salário')) {
+          incomeIdx = idx;
+        } else if (h.includes('valor') || h.includes('value') || h.includes('proposta') || h.includes('pipeline') || h.includes('budget') || h.includes('crédito') || h.includes('credito') || h.includes('imovel') || h.includes('imóvel')) {
+          valueIdx = idx;
+        } else if (h.includes('nota') || h.includes('comentario') || h.includes('comentário') || h.includes('notes') || h.includes('obs') || h.includes('observa')) {
+          notesIdx = idx;
+        }
+      });
 
       for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
-        if (!row[0]) continue; // skip empty lines
+        if (!row || row.length === 0) continue;
+
+        const rawName = row[nameIdx] ? String(row[nameIdx]).trim() : '';
+        const email = emailIdx !== -1 && emailIdx < row.length && row[emailIdx] ? String(row[emailIdx]).trim() : '';
+        const phone = phoneIdx !== -1 && phoneIdx < row.length && row[phoneIdx] ? String(row[phoneIdx]).trim() : '';
+
+        if (!rawName && !email && !phone) continue; // skip completely empty lines
+
+        let familyIncome: number | undefined = undefined;
+        if (incomeIdx !== -1 && incomeIdx < row.length && row[incomeIdx]) {
+          const clean = String(row[incomeIdx]).replace(/[^\d.-]/g, '');
+          if (clean) {
+            const val = parseFloat(clean);
+            if (!isNaN(val)) familyIncome = val;
+          }
+        }
+
+        let value = 0;
+        if (valueIdx !== -1 && valueIdx < row.length && row[valueIdx]) {
+          const clean = String(row[valueIdx]).replace(/[^\d.-]/g, '');
+          if (clean) {
+            const val = parseFloat(clean);
+            if (!isNaN(val)) value = val;
+          }
+        }
+
+        const notes = notesIdx !== -1 && notesIdx < row.length && row[notesIdx] ? String(row[notesIdx]).trim() : '';
 
         rowsPreview.push({
-          name: row[0] || 'Cliente Importado',
-          email: row[1] || 'sem@email.com',
-          phone: row[2] || '(11) 99999-9999',
-          familyIncome: row[3] ? parseFloat(row[3].replace(/[^\d.-]/g, '')) : 4500,
-          value: row[4] ? parseFloat(row[4].replace(/[^\d.-]/g, '')) : 120000,
+          name: rawName,
+          email: email,
+          phone: phone,
+          familyIncome,
+          value,
           status: 'novo',
-          notes: row[6] || row[5] || 'Originado via importação de planilha Google Sheets.',
+          stage: 'abordagem',
+          notes: notes,
           origin: 'Google Sheets',
           createdAt: new Date().toISOString().substring(0, 10)
         });
@@ -886,11 +936,12 @@ export default function GoogleWorkspace({
     const newLead: Lead = {
       id: `google-contact-${Date.now()}`,
       name: contact.name,
-      email: contact.email || 'sem@email.com',
-      phone: contact.phone || '(11) 99999-9999',
-      familyIncome: 4500,
-      value: 120000,
+      email: contact.email || '',
+      phone: contact.phone || '',
+      familyIncome: undefined,
+      value: 0,
       status: 'novo',
+      stage: 'abordagem',
       notes: `Importado diretamente do Google Contacts pessoal do usuário.`,
       origin: 'Google Contacts',
       createdAt: new Date().toISOString().substring(0, 10)
@@ -1337,11 +1388,12 @@ export default function GoogleWorkspace({
         newLeadsToAdd.push({
           id: `google-contact-${Date.now()}-${importedCount}`,
           name: contact.name,
-          email: contact.email || 'sem@email.com',
-          phone: contact.phone || '(11) 99999-9999',
-          familyIncome: 4500,
-          value: 120000,
+          email: contact.email || '',
+          phone: contact.phone || '',
+          familyIncome: undefined,
+          value: 0,
           status: 'novo',
+          stage: 'abordagem',
           notes: `Importado em bloco do Google Contacts pessoal do usuário de forma segura.`,
           origin: 'Google Contacts',
           createdAt: new Date().toISOString().substring(0, 10)
@@ -1578,7 +1630,7 @@ export default function GoogleWorkspace({
             <div className="bg-zinc-950 border-2 border-zinc-850 p-6 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <div className={`w-3.5 h-3.5 rounded-full ${token ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-600'}`} />
+                  <div className={`w-3.5 h-3.5 rounded-full ${token ? 'bg-emerald-500 ' : 'bg-zinc-600'}`} />
                   <span className="text-xs font-black uppercase tracking-wider font-mono text-zinc-300">
                     Estabilidade de Sincronia
                   </span>
@@ -1804,7 +1856,7 @@ export default function GoogleWorkspace({
 
             {isLoadingEvents ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3 text-zinc-400">
-                <RefreshCw className="w-8 h-8 animate-spin text-emerald-400" />
+                <RefreshCw className="w-8 h-8  text-emerald-400" />
                 <p className="text-xs font-mono font-bold uppercase tracking-widest">Carregando eventos remotos...</p>
               </div>
             ) : events.length === 0 ? (
@@ -1889,7 +1941,7 @@ export default function GoogleWorkspace({
 
             {isLoadingEmails ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3 text-zinc-400">
-                <RefreshCw className="w-8 h-8 animate-spin text-rose-400" />
+                <RefreshCw className="w-8 h-8  text-rose-400" />
                 <p className="text-xs font-mono font-bold uppercase tracking-widest">Acessando servidores do Gmail...</p>
               </div>
             ) : emails.length === 0 ? (
@@ -1964,7 +2016,7 @@ export default function GoogleWorkspace({
 
             {isLoadingFiles ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3 text-zinc-400">
-                <RefreshCw className="w-8 h-8 animate-spin text-cyan-400" />
+                <RefreshCw className="w-8 h-8  text-cyan-400" />
                 <p className="text-xs font-mono font-bold uppercase tracking-widest">Escaneando volume em nuvem...</p>
               </div>
             ) : filteredFiles.length === 0 ? (
@@ -2069,7 +2121,7 @@ export default function GoogleWorkspace({
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="space-y-1">
                   <h4 className="text-sm font-black uppercase text-indigo-400 font-mono flex items-center gap-2">
-                    <Video className="w-5 h-5 text-indigo-400 animate-pulse" />
+                    <Video className="w-5 h-5 text-indigo-400 " />
                     <span>Videoconferência Instantânea Google Meet</span>
                   </h4>
                   <p className="text-[11px] text-zinc-300 font-bold uppercase font-mono">
@@ -2167,13 +2219,13 @@ export default function GoogleWorkspace({
                       disabled={googleContacts.length === 0}
                       className="flex items-center justify-center gap-2 px-5 py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-45 disabled:cursor-not-allowed text-white font-black text-xs uppercase font-mono rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition-all cursor-pointer shrink-0"
                     >
-                      <UserPlus className="w-4 h-4 text-zinc-100 animate-pulse" />
+                      <UserPlus className="w-4 h-4 text-zinc-100 " />
                       <span>Importar Todo o Google ({googleContacts.length} Contatos sem duplicar)</span>
                     </button>
                   </div>
 
                   {isLoadingContacts ? (
-                    <div className="text-center py-12 text-zinc-500 font-mono text-xs uppercase animate-pulse">
+                    <div className="text-center py-12 text-zinc-500 font-mono text-xs uppercase ">
                       Carregando contatos existentes na sua conta Google...
                     </div>
                   ) : googleContacts.length === 0 ? (
@@ -2224,7 +2276,7 @@ export default function GoogleWorkspace({
                 <div className="space-y-4">
                   <div className="bg-zinc-950 border border-zinc-850 p-4 rounded-xl text-xs leading-relaxed text-zinc-300">
                     <p className="font-bold text-amber-400 uppercase font-mono mb-1 flex items-center gap-1">
-                      <Sparkles className="w-3.5 h-3.5 animate-pulse" />
+                      <Sparkles className="w-3.5 h-3.5 " />
                       <span>Sincronização com Celular & WhatsApp</span>
                     </p>
                     Para que seus leads aparecem instantaneamente no seu celular com os nomes corretos e se associem perfeitamente no seu aplicativo de WhatsApp integrado, salve-os nos Contatos do Google com o botão abaixo:
@@ -2387,7 +2439,7 @@ export default function GoogleWorkspace({
                     className="w-4 h-4 accent-indigo-650 cursor-pointer rounded"
                   />
                   <label htmlFor="createMeetCheckbox" className="text-[9.5px] uppercase font-black text-zinc-300 cursor-pointer flex items-center gap-1.5 select-none">
-                    <Video className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
+                    <Video className="w-3.5 h-3.5 text-indigo-400 " />
                     <span>Gerar sala de videoconferência no Google Meet</span>
                   </label>
                 </div>

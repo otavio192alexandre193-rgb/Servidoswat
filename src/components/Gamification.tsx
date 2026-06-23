@@ -58,8 +58,8 @@ export default function GamificationView({
   setProjects,
   onResetGamification,
   onRequestConfirm,
-  userName = 'Operador CicloCred',
-  userEmail = 'operador@ciclocred.com',
+  userName = 'Operador cicloCRED',
+  userEmail = 'operador@sistema.com.br',
   dealsClosedCount = 0,
   actionsCount = 0
 }: GamificationProps) {
@@ -424,7 +424,7 @@ export default function GamificationView({
               Patente Espacial: {computeGalaxyRank(userLevel)}
             </span>
             <div className="flex items-center gap-3 mt-1">
-              <Trophy className="w-8 h-8 text-amber-400 animate-pulse shrink-0" />
+              <Trophy className="w-8 h-8 text-amber-400  shrink-0" />
               <div>
                 <h2 className="text-xl font-black uppercase italic tracking-tight text-white font-mono">Quartel de Gamificação & Metas</h2>
                 <p className="text-xs text-zinc-400 font-sans">Cada ação realizada no CRM fornece experiência (XP). Suba de nível e lidere as automações do cicloCRED!</p>
@@ -465,7 +465,7 @@ export default function GamificationView({
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1.5 max-w-2xl">
             <h3 className="text-sm font-black font-mono uppercase tracking-widest text-indigo-400 flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-purple-400 animate-pulse shrink-0" />
+              <Sparkles className="w-4 h-4 text-purple-400  shrink-0" />
               Nível Galaxy: Operações 100% Reais
             </h3>
             <p className="text-xs text-zinc-300 leading-relaxed font-sans">
@@ -504,7 +504,7 @@ export default function GamificationView({
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5 font-mono text-[9px] font-black uppercase">
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className=" absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
               </span>
               <span className="text-emerald-600">Nuvem Ativa</span>
@@ -530,7 +530,7 @@ export default function GamificationView({
           {onlineRankings.length === 0 ? (
             /* Sync Loading or Offline display state fallback */
             <div className="col-span-full py-8 text-center text-zinc-400 font-bold border-2 border-dashed border-zinc-250 rounded-2xl flex flex-col items-center justify-center space-y-2">
-              <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+              <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full " />
               <span className="text-xs uppercase tracking-wider">Lendo Conexões de Corretores...</span>
             </div>
           ) : (
@@ -619,7 +619,7 @@ export default function GamificationView({
 
             {/* Collapse add form */}
             {isAddGoalOpen && (
-              <form onSubmit={handleCreateGoal} className="p-4 bg-zinc-50 border-2 border-zinc-950 rounded-2xl space-y-3 animate-scaleIn text-xs">
+              <form onSubmit={handleCreateGoal} className="p-4 bg-zinc-50 border-2 border-zinc-950 rounded-2xl space-y-3  text-xs">
                 <span className="text-[9px] font-mono font-black text-indigo-700 uppercase">Preencha os Parâmetros da Meta</span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
@@ -699,7 +699,7 @@ export default function GamificationView({
                 >
                   {editingGoalId === goal.id ? (
                     /* EDITING FORM FOR THE GOAL */
-                    <div className="space-y-3.5 text-xs animate-scaleIn">
+                    <div className="space-y-3.5 text-xs ">
                       <span className="text-[10px] font-mono font-black text-indigo-700 uppercase flex items-center gap-1">
                         ✏️ EDITANDO PARÂMETROS DA META
                       </span>
@@ -889,7 +889,7 @@ export default function GamificationView({
 
             {/* Project Creator Collapse */}
             {isAddProjOpen && (
-              <form onSubmit={handleCreateProject} className="p-4 bg-zinc-50 border-2 border-zinc-950 rounded-2xl space-y-3 animate-scaleIn text-xs">
+              <form onSubmit={handleCreateProject} className="p-4 bg-zinc-50 border-2 border-zinc-950 rounded-2xl space-y-3  text-xs">
                 <span className="text-[10px] font-mono font-black text-indigo-700 uppercase">Preencha os Campos do Projeto</span>
                 <div className="space-y-3">
                   <div>
@@ -956,7 +956,7 @@ export default function GamificationView({
                 >
                   {editingProjId === proj.id ? (
                     /* PROJECT EDITING FORM */
-                    <div className="space-y-3.5 text-xs animate-scaleIn w-full">
+                    <div className="space-y-3.5 text-xs  w-full">
                       <span className="text-[9px] font-mono font-black text-indigo-700 uppercase">
                         ✏️ EDITANDO PROJETO
                       </span>
@@ -1117,7 +1117,7 @@ export default function GamificationView({
           {/* ASSISTANT RECOMMENDATIONS */}
           <div className="bg-white border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] space-y-4">
             <div className="border-b pb-3 flex items-center gap-2 text-zinc-950">
-              <Lightbulb className="w-5 h-5 text-amber-500 animate-pulse" />
+              <Lightbulb className="w-5 h-5 text-amber-500 " />
               <h3 className="text-xs font-black uppercase tracking-wider font-mono">Deduções de Metas</h3>
             </div>
 

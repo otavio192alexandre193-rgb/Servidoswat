@@ -72,7 +72,7 @@ export default function UserCentralModal({
     { title: 'Primeiro Lead', desc: 'Cadastrou ou importou o primeiro contato', unlocked: true, icon: '🔥' },
     { title: 'Simulador Ativo', desc: 'Gerou e copiou uma planilha de obras completa', unlocked: true, icon: '📊' },
     { title: 'Fechamento Cury', desc: 'Fez um fit perfeito entre lead e residencial', unlocked: false, icon: '🔑' },
-    { title: 'Inbound Champion', desc: 'Capturou lead pelo site cicloCRED Inform', unlocked: userXP > 500, icon: '🌐' }
+    { title: 'Inbound Champion', desc: 'Capturou lead pelo Portal de Captação', unlocked: userXP > 500, icon: '🌐' }
   ];
 
   const handleFontSizeChange = (size: 'normal' | 'large' | 'extra-large') => {
@@ -94,7 +94,7 @@ export default function UserCentralModal({
               <h2 className="text-base md:text-lg font-black uppercase italic tracking-tight font-sans">
                 Central do Usuário: Perfil, Metas & Preferências
               </h2>
-              <span className="text-[10px] text-zinc-400 font-mono font-bold uppercase tracking-wide block">Painel Gerencial CicloCred CRM</span>
+              <span className="text-[10px] text-zinc-400 font-mono font-bold uppercase tracking-wide block">Painel Gerencial cicloCRED CRM</span>
             </div>
           </div>
           <button 

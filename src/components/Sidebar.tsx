@@ -52,8 +52,8 @@ export default function Sidebar({
   activeTab, 
   setActiveTab, 
   leadsCount,
-  userName = 'Operador CicloCred',
-  userEmail = 'operador@ciclocred.com',
+  userName = 'Operador cicloCRED',
+  userEmail = 'operador@sistema.com.br',
   onLogout,
   accSettings = INITIAL_ACCESSIBILITY_SETTINGS,
   forceLocalStorageMode = false,
@@ -70,12 +70,12 @@ export default function Sidebar({
 
   const menuItems = [
     { id: 'leads', name: 'Leads', icon: Users, badge: leadsCount },
-    { id: 'inventory', name: 'Estoque de Imóveis', icon: Package },
+    { id: 'inventory', name: 'Estoque e Lançamentos', icon: Package },
     { id: 'gemini-server', name: 'Assistente AI', icon: Sparkles },
     { id: 'google-workspace', name: 'Google Workspace', icon: Cloud },
     { id: 'kids', name: 'Alavancagem & Finanças', icon: TrendingUp },
     { id: 'user-central', name: 'Painel do Usuário (Metas & Adm)', icon: Trophy },
-    { id: 'reports', name: 'Relatórios Integrados', icon: TrendingUp },
+    { id: 'settings', name: 'Gestão & Configurações', icon: Settings },
   ];
 
   // Helper inside sidebar to render proper greetings
@@ -93,7 +93,15 @@ export default function Sidebar({
       {/* Brand Header & Dynamic Greetings Panel */}
       <div className="p-5 border-b-4 border-zinc-950 space-y-4">
         {/* Clean Logo without SWAT keyword as requested */}
-        <div className="flex items-center gap-2">
+        <div 
+          id="brand-header-clickable-logo"
+          onClick={() => {
+            setActiveTab('leads');
+            triggerSensoryFeedback('click', accSettings);
+          }}
+          className="flex items-center gap-2 cursor-pointer hover:opacity-80 active:scale-95 transition-all select-none"
+          title="Ir para a página inicial (Leads)"
+        >
           <Briefcase className="w-5.5 h-5.5 text-indigo-400" />
           <span className="font-sans font-black tracking-tighter text-xl uppercase italic text-white leading-none">
             cicloCRED <span className="text-indigo-400">CRM</span>

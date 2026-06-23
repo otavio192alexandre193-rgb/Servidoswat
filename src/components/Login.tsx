@@ -9,7 +9,8 @@ import {
   Flame, 
   ChevronRight, 
   Volume2, 
-  ShieldCheck 
+  ShieldCheck,
+  Briefcase 
 } from 'lucide-react';
 import { AccessibilitySettings, triggerSensoryFeedback } from '../utils/sensory';
 import { 
@@ -18,7 +19,7 @@ import {
   signInWithPopup, 
   GoogleAuthProvider 
 } from 'firebase/auth';
-import { auth } from '../firebase';
+import { auth, googleSignIn } from '../firebase';
 
 interface LoginProps {
   onLoginSuccess: (name: string, email: string) => void;
@@ -67,7 +68,7 @@ export default function LoginView({ onLoginSuccess, theme, setTheme }: LoginProp
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       const calculatedName = user.email ? user.email.split('@')[0].toUpperCase() : 'OPERADOR';
-      const userName = user.displayName || (calculatedName === 'OPERADOR' ? 'Operador CicloCred' : calculatedName);
+      const userName = user.displayName || (calculatedName === 'OPERADOR' ? 'Operador cicloCRED' : calculatedName);
       
       triggerSensoryFeedback('success', mockAccSettings);
       onLoginSuccess(userName, user.email || email);
@@ -78,7 +79,7 @@ export default function LoginView({ onLoginSuccess, theme, setTheme }: LoginProp
           const signUpCredential = await createUserWithEmailAndPassword(auth, email, password);
           const newUser = signUpCredential.user;
           const calculatedName = newUser.email ? newUser.email.split('@')[0].toUpperCase() : 'OPERADOR';
-          const userName = calculatedName === 'OPERADOR' ? 'Operador CicloCred' : calculatedName;
+          const userName = calculatedName === 'OPERADOR' ? 'Operador cicloCRED' : calculatedName;
           
           triggerSensoryFeedback('success', mockAccSettings);
           onLoginSuccess(userName, newUser.email || email);
@@ -103,16 +104,17 @@ export default function LoginView({ onLoginSuccess, theme, setTheme }: LoginProp
     triggerSensoryFeedback('click', mockAccSettings);
 
     try {
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
+      const result = await googleSignIn();
+      if (!result) throw new Error("A autenticação com o Google Workspace falhou.");
+      
       const user = result.user;
       
       triggerSensoryFeedback('success', mockAccSettings);
-      onLoginSuccess(user.displayName || 'Operador Google', user.email || 'operador@ciclocred.com');
+      onLoginSuccess(user.displayName || 'Operador Workspace', user.email || 'operador@ciclocred.com');
     } catch (err: any) {
       console.error(err);
       if (err.code !== 'auth/popup-closed-by-user') {
-        setErrorMsg(`Erro do Google login: ${err.message || 'Conexão interrompida.'}`);
+        setErrorMsg(`Falha na Integração de Workspace: ${err.message || 'Conexão interrompida.'}`);
       }
       triggerSensoryFeedback('warning', mockAccSettings);
     } finally {

@@ -114,8 +114,8 @@ Seja conciso, direto, utilize formatação Markdown enriquecida com negritos e l
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex justify-end bg-black/60 backdrop-blur-sm transition-opacity">
-      <div className="w-full max-w-sm bg-zinc-900 border-l-4 border-zinc-950 shadow-2xl h-full flex flex-col font-mono animate-in slide-in-from-right duration-300">
+    <div className="fixed inset-0 z-[60] flex justify-end bg-black/60  transition-opacity">
+      <div className="w-full max-w-sm bg-zinc-900 border-l-4 border-zinc-950 shadow-lg h-full flex flex-col font-mono   ">
         
         {/* Header */}
         <div className="p-4 border-b-2 border-zinc-950 flex items-center justify-between bg-purple-900/30">
@@ -171,7 +171,7 @@ Seja conciso, direto, utilize formatação Markdown enriquecida com negritos e l
           {isTyping && (
             <div className="flex justify-start">
               <div className="bg-zinc-850 border-2 border-zinc-950 max-w-[80%] rounded-xl p-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center gap-2 text-purple-300 text-[10px] font-bold">
-                <Loader2 className="w-4 h-4 animate-spin text-purple-500" />
+                <Loader2 className="w-4 h-4  text-purple-500" />
                 O Gemini está analisando os dados...
               </div>
             </div>

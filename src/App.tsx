@@ -84,6 +84,7 @@ import LeadDetailsModal from "./components/LeadDetailsModal";
 import MultiLevelMarketingTab from "./components/MultiLevelMarketingTab";
 import FinanceSimulatorTab from "./components/FinanceSimulatorTab";
 import CicloCredInformTab from "./components/CicloCredInformTab";
+import FollowUpsTable from "./components/FollowUpsTable";
 
 import PublicPortal from "./components/PublicPortal";
 import RuleEnginePanel from "./components/RuleEnginePanel";
@@ -105,6 +106,7 @@ import GoogleWorkspace, {
   autoSyncWorkspaceDatabase,
 } from "./components/GoogleWorkspace";
 import GeminiServerTab from "./components/GeminiServerTab";
+import { WorkspaceTab } from "./components/WorkspaceTab";
 import AnimatedCounter from "./components/AnimatedCounter";
 import {
   AccessibilitySettings,
@@ -274,7 +276,7 @@ function FloatingButton({
   return (
     <div className="group relative flex items-center gap-2 select-none">
       {/* Horizontal Label shown on hover */}
-      <span className="opacity-0 -translate-x-3 pointer-events-none group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200 block text-xs font-black font-mono uppercase bg-zinc-950 border-2 border-zinc-950 text-white px-3 py-1.5 rounded-lg shadow-[2px_2px_0px_0px_rgba(255,255,255,0.15)] whitespace-nowrap z-[100] absolute right-12">
+      <span className="opacity-0 -translate-x-3 pointer-events-none group-hover:opacity-100 group-hover:translate-x-0 transition-colors block text-xs font-black font-mono uppercase bg-zinc-950 border-2 border-zinc-950 text-white px-3 py-1.5 rounded-lg shadow-[2px_2px_0px_0px_rgba(255,255,255,0.15)] whitespace-nowrap z-[100] absolute right-12">
         {label}
       </span>
       <button
@@ -283,7 +285,7 @@ function FloatingButton({
           triggerSensoryFeedback("click", accSettings);
           onClick();
         }}
-        className={`w-11 h-11 rounded-full flex items-center justify-center border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-2px] hover:shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] active:translate-y-[1px] active:shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] transition-all cursor-pointer ${
+        className={`w-11 h-11 rounded-full flex items-center justify-center border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-2px] hover:shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] active:translate-y-[1px] active:shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] transition-colors cursor-pointer ${
           colorClass
             ? colorClass
             : active
@@ -327,7 +329,7 @@ function FloatingDashboardWidgets({ userName }: { userName: string }) {
     <>
       {/* Saudação (Esquerda) */}
       <div className="absolute left-[30px] md:left-[38px] top-[64px] md:top-[68px] z-[43] pointer-events-none flex items-center">
-        <div className="bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 px-3 py-1.5 rounded-br-xl text-zinc-300 font-medium text-[9px] md:text-[10px] uppercase font-mono tracking-wider shadow-[2px_2px_0px_0px_rgba(0,0,0,0.5)]">
+        <div className="bg-zinc-900/60  border border-zinc-800/80 px-3 py-1.5 rounded-br-xl text-zinc-300 font-medium text-[9px] md:text-[10px] uppercase font-mono tracking-wider shadow-[2px_2px_0px_0px_rgba(0,0,0,0.5)]">
           👋 {greeting},{" "}
           <span className="font-black text-indigo-400">
             {userName ? userName.split(" ")[0] : "Usuário"}
@@ -336,7 +338,7 @@ function FloatingDashboardWidgets({ userName }: { userName: string }) {
       </div>
       {/* Relógio e Clima (Direita) */}
       <div className="absolute right-[30px] md:right-[38px] top-[64px] md:top-[68px] z-[43] pointer-events-none flex items-center">
-        <div className="bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 px-3 py-1.5 rounded-bl-xl text-zinc-300 font-medium text-[9px] md:text-[10px] shadow-[2px_2px_0px_0px_rgba(0,0,0,0.5)] flex items-center gap-2.5 uppercase font-mono tracking-wider">
+        <div className="bg-zinc-900/60  border border-zinc-800/80 px-3 py-1.5 rounded-bl-xl text-zinc-300 font-medium text-[9px] md:text-[10px] shadow-[2px_2px_0px_0px_rgba(0,0,0,0.5)] flex items-center gap-2.5 uppercase font-mono tracking-wider">
           <span>{dateStr}</span>
           <span className="opacity-30">|</span>
           <span className="text-emerald-400 font-bold">⏰ {timeStr}</span>
@@ -397,6 +399,7 @@ export default function App() {
 
   // Global Hyperfocus state
   const [globalHyperfocus, setGlobalHyperfocus] = useState(false);
+  const [layoutZoom, setLayoutZoom] = useState(100);
   const [selectedSmartDay, setSelectedSmartDay] = useState("2026-06-13");
   const [smartTaskTitle, setSmartTaskTitle] = useState("");
   const [smartLeadName, setSmartLeadName] = useState("");
@@ -837,16 +840,18 @@ export default function App() {
   });
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
   const [leadsViewMode, setLeadsViewMode] = useState<
-    "pesquisa_geral" | "recentes" | "ativos" | "archived" | "todos"
+    "todos" | "recentes" | "ativos" | "archived" | "disparos" | "kanban" | "mapa" | "roteiros" | "estoque" | "followups"
   >(() => {
     const saved = localStorage.getItem("ciclocred_filter_leads_view_mode");
-    if (saved === "novos") return "recentes";
+    if (saved === "novos" || saved === "recentes") return "recentes";
+    if (saved === "pesquisa_geral") return "todos";
     return (saved as any) || "todos";
   });
 
   const [leadsSearchMode, setLeadsSearchMode] = useState<number>(() => {
     const saved = localStorage.getItem("ciclocred_leads_search_mode");
-    return saved !== null ? Number(saved) : 0;
+    const parsed = Number(saved);
+    return saved !== null && !isNaN(parsed) ? parsed : 0;
   });
   const lastLeadsModeClickRef = useRef<number>(0);
 
@@ -1117,9 +1122,7 @@ export default function App() {
   const TABS_ORDER = [
     "dashboard",
     "leads",
-    "automation-flows",
     "simulador",
-    "inventory",
     "settings",
     "gemini-server",
     "painel-geral",
@@ -1129,10 +1132,8 @@ export default function App() {
     dashboard: "WhatsApp Dashboard",
     leads: "Leads",
     simulador: "Simulador",
-    inventory: "Estoque e Lançamentos",
     settings: "Configurações",
     "gemini-server": "Assistente AI",
-    "automation-flows": "Biblioteca de Scripts",
   };
 
   const handleCycleTab = (e: React.MouseEvent) => {
@@ -1166,8 +1167,13 @@ export default function App() {
       if (currentTab === "leads") {
         setLeadsViewMode((prev) => {
           if (prev === "todos") return "recentes";
-          if (prev === "recentes" || (prev as any) === "novos") return "ativos";
-          if (prev === "ativos") return "archived";
+          if (prev === "recentes") return "ativos";
+          if (prev === "ativos") return "kanban";
+          if (prev === "kanban") return "mapa";
+          if (prev === "mapa") return "disparos";
+          if (prev === "disparos") return "roteiros";
+          if (prev === "roteiros") return "estoque";
+          if (prev === "estoque") return "archived";
           if (prev === "archived") return "todos";
           return "todos";
         });
@@ -1185,9 +1191,14 @@ export default function App() {
       if (currentTab === "leads") {
         setLeadsViewMode((prev) => {
           if (prev === "todos") return "archived";
-          if (prev === "archived") return "ativos";
+          if (prev === "archived") return "estoque";
+          if (prev === "estoque") return "roteiros";
+          if (prev === "roteiros") return "disparos";
+          if (prev === "disparos") return "mapa";
+          if (prev === "mapa") return "kanban";
+          if (prev === "kanban") return "ativos";
           if (prev === "ativos") return "recentes";
-          if (prev === "recentes" || (prev as any) === "novos") return "todos";
+          if (prev === "recentes") return "todos";
           return "todos";
         });
       } else if (currentTab === "dashboard") {
@@ -1296,10 +1307,19 @@ export default function App() {
 
   const cycleLeadsViewMode = React.useCallback(() => {
     setLeadsViewMode((prev) => {
-      if (prev === "todos") return "recentes";
-      if (prev === "recentes" || (prev as any) === "novos") return "ativos";
-      if (prev === "ativos") return "archived";
-      return "todos";
+      let nextMode: "todos" | "recentes" | "ativos" | "archived" | "disparos" | "kanban" | "mapa" | "roteiros" | "estoque" = "todos";
+      if (prev === "todos") nextMode = "recentes";
+      else if (prev === "recentes") nextMode = "ativos";
+      else if (prev === "ativos") nextMode = "kanban";
+      else if (prev === "kanban") nextMode = "mapa";
+      else if (prev === "mapa") nextMode = "disparos";
+      else if (prev === "disparos") nextMode = "roteiros";
+      else if (prev === "roteiros") nextMode = "estoque";
+      else if (prev === "estoque") nextMode = "archived";
+      else nextMode = "todos";
+
+      localStorage.setItem("ciclocred_filter_leads_view_mode", nextMode);
+      return nextMode;
     });
   }, []);
 
@@ -1647,7 +1667,12 @@ export default function App() {
   const [accSettings, setAccSettings] = useState<AccessibilitySettings>(() => {
     const saved = localStorage.getItem("ciclocred_sensory_config");
     try {
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === "object") {
+          return { ...INITIAL_ACCESSIBILITY_SETTINGS, ...parsed };
+        }
+      }
     } catch (_) {}
     return INITIAL_ACCESSIBILITY_SETTINGS;
   });
@@ -1687,18 +1712,22 @@ export default function App() {
   });
 
   const [autonomyIntervalSec, setAutonomyIntervalSec] = useState<number>(() => {
-    return Number(localStorage.getItem("ciclocred_autonomy_interval")) || 45;
+    const saved = localStorage.getItem("ciclocred_autonomy_interval");
+    const parsed = Number(saved);
+    return saved && !isNaN(parsed) ? parsed : 45;
   });
 
   // CONNECTED GAMIFICATION STATES (Evolves from zero/zerado!)
   const [userXP, setUserXP] = useState<number>(() => {
     const saved = localStorage.getItem("ciclocred_user_xp");
-    return saved ? Number(saved) : 0; // Starts fresh at 0 XP
+    const parsed = Number(saved);
+    return saved && !isNaN(parsed) ? parsed : 0; // Starts fresh at 0 XP
   });
 
   const [userLevel, setUserLevel] = useState<number>(() => {
     const saved = localStorage.getItem("ciclocred_user_level");
-    return saved ? Number(saved) : 1; // Starts fresh at Nível 1
+    const parsed = Number(saved);
+    return saved && !isNaN(parsed) ? parsed : 1; // Starts fresh at Nível 1
   });
 
   // Profile preferences & digital sharing states
@@ -2263,6 +2292,7 @@ export default function App() {
     selectedLeadIds?: string[];
     blockActions?: {
       openCampaignModal?: () => void;
+      openBulkScheduleModal?: () => void;
       onDelete?: (ids: string[]) => void;
       onExport?: (ids: string[]) => void;
     };
@@ -2276,9 +2306,18 @@ export default function App() {
 
     const handleMassMessage = () => {
       triggerSensoryFeedback("click", accSettings);
+      if (activeTab === "leads") {
+        setLeadsViewMode("disparos");
+        localStorage.setItem("ciclocred_filter_leads_view_mode", "disparos");
+        addNotification(
+          "Tabela de Disparos",
+          "A tabela de disparos em lote agora está ativa na tabela dinâmica abaixo.",
+          "info"
+        );
+      }
       if (selectedLeadIds.length > 0 && blockActions?.openCampaignModal) {
         blockActions.openCampaignModal();
-      } else {
+      } else if (activeTab !== "leads") {
         addNotification(
           "Ação em Massa",
           "Selecione pelo menos um Lead para realizar envios de mensagem em lote.",
@@ -2290,24 +2329,28 @@ export default function App() {
     const handleMassTask = () => {
       triggerSensoryFeedback("click", accSettings);
       if (selectedLeadIds.length > 0) {
-        selectedLeadIds.forEach((id) => {
-          const tempAppt = {
-            id: `appt-ext-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-            title: "Acompanhamento em Massa",
-            date: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
-            time: "10:00",
-            type: "call",
-            leadId: id,
-            completed: false,
-            notes: "Adicionado via ação em massa (🚨).",
-          };
-          setAppointments((prev: any) => [...prev, tempAppt]);
-        });
-        addNotification(
-          "Lote Agendado",
-          `Criadas atividades futuras para ${selectedLeadIds.length} leads selecionados.`,
-          "success",
-        );
+        if (blockActions?.openBulkScheduleModal) {
+          blockActions.openBulkScheduleModal();
+        } else {
+          selectedLeadIds.forEach((id) => {
+            const tempAppt = {
+              id: `appt-ext-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+              title: "Acompanhamento em Massa",
+              date: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+              time: "10:00",
+              type: "call",
+              leadId: id,
+              completed: false,
+              notes: "Adicionado via ação em massa (🚨).",
+            };
+            setAppointments((prev: any) => [...prev, tempAppt]);
+          });
+          addNotification(
+            "Lote Agendado",
+            `Criadas atividades futuras para ${selectedLeadIds.length} leads selecionados.`,
+            "success",
+          );
+        }
       } else {
         addNotification(
           "Ação em Massa",
@@ -2350,28 +2393,16 @@ export default function App() {
       activeTab === "marketing" || activeTab === "settings";
 
     const containerClasses = isMarketingTab
-      ? "bg-transparent pb-3 shrink-0 flex flex-col gap-2 select-none relative z-30 w-full antialiased mb-2"
+      ? "bg-transparent pb-2 shrink-0 flex flex-col gap-2 select-none relative z-30 w-full antialiased mb-1"
       : isDashboardTab
-        ? "bg-zinc-900/40 backdrop-blur-md px-4 py-3 shrink-0 flex flex-col gap-2 select-none relative z-30 w-full antialiased text-white border-2 border-zinc-800/60 rounded-3xl"
-        : "bg-zinc-900 px-4 py-2.5 shrink-0 flex flex-col gap-2 select-none relative z-30 w-full antialiased text-white border-b-4 border-zinc-950 border-t-0";
+        ? "bg-zinc-950 px-3 py-2 shrink-0 flex flex-col gap-2 select-none relative z-30 w-full antialiased text-white border border-zinc-800 rounded-xl"
+        : "bg-zinc-900 px-3 py-2 shrink-0 flex flex-col gap-2 select-none relative z-30 w-full antialiased text-white border-b-2 border-zinc-950";
 
-    const leftButtonsClass = isMarketingTab
-      ? "w-10 h-10 rounded-xl border-2 border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-white text-base font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center relative cursor-pointer active:translate-y-[1px] hover:translate-y-[-1px] transition-all shrink-0"
-      : isDashboardTab
-        ? "w-10 h-10 rounded-xl border-2 border-zinc-800 bg-zinc-950/60 hover:bg-zinc-900 text-white text-base font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center relative cursor-pointer active:translate-y-[1px] hover:translate-y-[-1px] transition-all shrink-0"
-        : "w-10 h-10 rounded-xl border-2 border-zinc-950 bg-zinc-800 hover:bg-zinc-700 text-white text-base font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center relative cursor-pointer active:translate-y-[1px] hover:translate-y-[-1px] transition-all shrink-0";
+    const leftButtonsClass = "w-8 h-8 rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-black flex items-center justify-center relative cursor-pointer transition-colors shrink-0";
 
-    const rightButtonsClass = isMarketingTab
-      ? "w-10 h-10 rounded-xl border-2 border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-white text-base font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center relative cursor-pointer active:translate-y-[1px] hover:translate-y-[-1px] transition-all shrink-0"
-      : isDashboardTab
-        ? "w-10 h-10 rounded-xl border-2 border-zinc-800 bg-zinc-950/60 hover:bg-zinc-900 text-white text-base font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center relative cursor-pointer active:translate-y-[1px] hover:translate-y-[-1px] transition-all shrink-0"
-        : "w-10 h-10 rounded-xl border-2 border-zinc-950 bg-zinc-800 hover:bg-zinc-700 text-white text-base font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center relative cursor-pointer active:translate-y-[1px] hover:translate-y-[-1px] transition-all shrink-0";
+    const rightButtonsClass = "w-8 h-8 rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-black flex items-center justify-center relative cursor-pointer transition-colors shrink-0";
 
-    const inputClass = isMarketingTab
-      ? "w-full bg-zinc-900 border-2 border-zinc-800 text-zinc-100 text-xs md:text-sm font-black font-sans pl-12 pr-4 py-3 rounded-xl uppercase tracking-wider placeholder-zinc-500 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all bg-opacity-90"
-      : isDashboardTab
-        ? "w-full bg-white/5 hover:bg-white/10 focus:bg-white/15 border-2 border-zinc-750 text-white text-[10px] md:text-xs font-black font-mono pl-12 pr-4 py-2.5 rounded-xl uppercase tracking-wider placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
-        : "w-full bg-zinc-100 border-2 border-zinc-950 text-zinc-900 text-[10px] md:text-xs font-black font-mono pl-12 pr-4 py-2.5 rounded-xl uppercase tracking-wider placeholder-zinc-500 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all";
+    const inputClass = "w-full bg-zinc-950 border border-zinc-800 text-zinc-300 text-[10px] md:text-xs font-mono font-medium pl-10 pr-3 py-2 rounded-lg placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors";
 
     const activeFilterBtnClass = "bg-indigo-600 text-white";
 
@@ -2380,14 +2411,6 @@ export default function App() {
         <div className="flex flex-col md:flex-row items-center justify-between w-full gap-3">
           {/* LADO ESQUERDO: Botões solicitados */}
           <div className="flex items-center gap-2 shrink-0 w-full md:w-auto justify-start">
-            <button
-              type="button"
-              onClick={cycleVisibility}
-              title="👁️ Alterar Visibilidade/Alerta"
-              className={leftButtonsClass}
-            >
-              👁️
-            </button>
             <button
               type="button"
               onClick={handleMassMessage}
@@ -2429,148 +2452,21 @@ export default function App() {
             </button>
           </div>
 
-          {/* CENTRO: Barra de Pesquisa */}
-          <div className="flex-1 relative flex items-center gap-1 w-full">
-            <div className="relative flex-1 flex items-center">
-              <button
-                type="button"
-                onClick={() => {
-                  triggerSensoryFeedback("click", accSettings);
-                  const SpeechRecognition =
-                    (window as any).SpeechRecognition ||
-                    (window as any).webkitSpeechRecognition;
-                  if (SpeechRecognition) {
-                    const recognition = new SpeechRecognition();
-                    recognition.lang = "pt-BR";
-                    recognition.start();
-                    recognition.onstart = () => {
-                      addNotification(
-                        "Ouvindo...",
-                        "Pode falar seu comando.",
-                        "info",
-                      );
-                    };
-                    recognition.onresult = (event: any) => {
-                      const text = event.results[0][0].transcript;
-                      setSearchTerm(text);
-                      addNotification(
-                        "Comando recebido",
-                        `"${text}"`,
-                        "success",
-                      );
-                    };
-                    recognition.onerror = () => {
-                      addNotification(
-                        "Erro",
-                        "Não foi possível reconhecer a voz.",
-                        "warning",
-                      );
-                    };
-                  } else {
-                    alert(
-                      "A API de reconhecimento de voz não é suportada por este navegador.",
-                    );
-                  }
-                }}
-                title="🎤 Pesquisa por Voz"
-                className="absolute left-3 p-1.5 rounded-lg hover:bg-zinc-800 text-indigo-400 transition-colors z-10"
-              >
-                🎤
-              </button>
-              <input
-                type="text"
-                placeholder="Pesquisar / Filtrar globalmente leads e funil..."
-                value={searchTerm}
-                className={inputClass}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val.trim() === "/automacao") {
-                    setActiveTab("automation-flows");
-                    setSearchTerm("");
-                    return;
-                  }
-                  if (val.trim() === "/assistente") {
-                    setActiveTab("gemini-server");
-                    setSearchTerm("");
-                    return;
-                  }
-                  setSearchTerm(val);
-                }}
-                onKeyDown={async (e) => {
-                  if (e.key === "Enter" && searchTerm.trim() !== "") {
-                    const originalQuery = searchTerm;
-                    setIsCeoLoading(true);
-                    setCeoResponse({
-                      query: originalQuery,
-                      message:
-                        "Analisando dados do CRM... Conectando com a Diretoria Executiva cicloCRED.",
-                    });
-                    try {
-                      const res = await fetch("/api/ai/ceo-query", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          query: originalQuery,
-                          leadsContext: leads,
-                          activeTab: activeTab,
-                        }),
-                      });
-                      if (res.ok) {
-                        const data = await res.json();
-                        const filters = data.filters || {};
-
-                        if (filters.regionFilter)
-                          setRegionFilter(filters.regionFilter);
-                        if (filters.statusFilter)
-                          setStatusFilter(filters.statusFilter);
-                        if (filters.stageFilter)
-                          setStageFilter(filters.stageFilter);
-                        if (filters.familyIncomeFilter)
-                          setFamilyIncomeFilter(filters.familyIncomeFilter);
-                        if (filters.programaDesejadoFilter)
-                          setProgramaDesejadoFilter(
-                            filters.programaDesejadoFilter,
-                          );
-                        if (filters.objectionsFilter)
-                          setObjectionsFilter(filters.objectionsFilter);
-                        if (filters.profileFilter)
-                          setProfileFilter(filters.profileFilter);
-
-                        setCeoResponse({
-                          query: originalQuery,
-                          message:
-                            data.message || "Relatório executivo concluído.",
-                        });
-                        setSearchTerm("");
-                        addNotification(
-                          "Relatório do CEO",
-                          "Gemini CEO analisou a situação, leads e estruturou as diretrizes.",
-                          "success",
-                        );
-                      } else {
-                        throw new Error("Erro na comunicação");
-                      }
-                    } catch (error) {
-                      console.error("CEO Query Erro:", error);
-                      setCeoResponse({
-                        query: originalQuery,
-                        message:
-                          "⚠️ Erro ao se comunicar com a Diretoria Executiva (Gemini). Verifique a chave de API em Settings.",
-                      });
-                    } finally {
-                      setIsCeoLoading(false);
-                    }
-                  }
-                }}
-              />
-              {/* Gemini Badge */}
-              <span className="absolute inset-y-0 right-2 flex items-center gap-1 pointer-events-none">
-                <Sparkles className="w-3.5 h-3.5 text-purple-500 animate-pulse" />
-                <span className="text-[7.5px] font-black uppercase text-purple-600 bg-purple-100 px-1 py-0.5 rounded border border-purple-300 hidden md:block">
-                  Inteligência Gemini
-                </span>
-              </span>
-            </div>
+          {/* CENTRO: Barra de Pesquisa restaurada conforme solicitado */}
+          <div className="flex-1 w-full max-w-md relative">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
+              <Search className="h-4 w-4 text-zinc-400" />
+            </span>
+            <input
+              type="text"
+              placeholder="Pesquisar por nome, telefone ou status..."
+              value={searchTerm}
+              onChange={(e) => {
+                triggerSensoryFeedback("click", accSettings);
+                setSearchTerm(e.target.value);
+              }}
+              className={inputClass}
+            />
           </div>
 
           {/* LADO DIREITO: Botões solicitados 📥📤🔻 */}
@@ -2618,7 +2514,6 @@ export default function App() {
               value={statusFilter}
               onChange={(e) => {
                 setStatusFilter(e.target.value);
-                setSearchFiltersVisibility(1);
               }}
               className="flex-1 min-w-0 bg-zinc-800 text-zinc-300 border border-zinc-950 text-[7px] font-black uppercase font-mono px-1 flex-shrink-0 py-1.5 rounded-md outline-none cursor-pointer truncate shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
             >
@@ -2631,7 +2526,6 @@ export default function App() {
               value={qualificacaoFilter}
               onChange={(e) => {
                 setQualificacaoFilter(e.target.value);
-                setSearchFiltersVisibility(1);
               }}
               className="flex-1 min-w-0 bg-zinc-800 text-zinc-300 border border-zinc-950 text-[7px] font-black uppercase font-mono px-1 flex-shrink-0 py-1.5 rounded-md outline-none cursor-pointer truncate shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
             >
@@ -2646,7 +2540,6 @@ export default function App() {
               value={stageFilter}
               onChange={(e) => {
                 setStageFilter(e.target.value);
-                setSearchFiltersVisibility(1);
               }}
               className="flex-1 min-w-0 bg-zinc-800 text-zinc-300 border border-zinc-950 text-[7px] font-black uppercase font-mono px-1 flex-shrink-0 py-1.5 rounded-md outline-none cursor-pointer truncate shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
             >
@@ -2661,7 +2554,6 @@ export default function App() {
               value={profileFilter}
               onChange={(e) => {
                 setProfileFilter(e.target.value);
-                setSearchFiltersVisibility(1);
               }}
               className="flex-1 min-w-0 bg-zinc-800 text-zinc-300 border border-zinc-950 text-[7px] font-black uppercase font-mono px-1 flex-shrink-0 py-1.5 rounded-md outline-none cursor-pointer truncate shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
             >
@@ -2676,7 +2568,6 @@ export default function App() {
               value={objectionsFilter}
               onChange={(e) => {
                 setObjectionsFilter(e.target.value);
-                setSearchFiltersVisibility(1);
               }}
               className="flex-1 min-w-0 bg-zinc-800 text-zinc-300 border border-zinc-950 text-[7px] font-black uppercase font-mono px-1 flex-shrink-0 py-1.5 rounded-md outline-none cursor-pointer truncate shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
             >
@@ -2691,7 +2582,6 @@ export default function App() {
               value={originFilter}
               onChange={(e) => {
                 setOriginFilter(e.target.value);
-                setSearchFiltersVisibility(1);
               }}
               className="flex-1 min-w-0 bg-zinc-800 text-zinc-300 border border-zinc-950 text-[7px] font-black uppercase font-mono px-1 flex-shrink-0 py-1.5 rounded-md outline-none cursor-pointer truncate shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
             >
@@ -2710,7 +2600,6 @@ export default function App() {
               value={initialLetterFilter}
               onChange={(e) => {
                 setInitialLetterFilter(e.target.value);
-                setSearchFiltersVisibility(1);
               }}
               className="flex-1 min-w-0 bg-zinc-800 text-zinc-300 border border-zinc-950 text-[7px] font-black uppercase font-mono px-1 flex-shrink-0 py-1.5 rounded-md outline-none cursor-pointer truncate shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
             >
@@ -2725,7 +2614,6 @@ export default function App() {
               value={regionFilter}
               onChange={(e) => {
                 setRegionFilter(e.target.value);
-                setSearchFiltersVisibility(1);
               }}
               className="flex-1 min-w-0 bg-zinc-800 text-zinc-300 border border-zinc-950 text-[7px] font-black uppercase font-mono px-1 flex-shrink-0 py-1.5 rounded-md outline-none cursor-pointer truncate shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
             >
@@ -2742,7 +2630,6 @@ export default function App() {
               value={programaDesejadoFilter}
               onChange={(e) => {
                 setProgramaDesejadoFilter(e.target.value);
-                setSearchFiltersVisibility(1);
               }}
               className="flex-1 min-w-0 bg-zinc-800 text-zinc-300 border border-zinc-950 text-[7px] font-black uppercase font-mono px-1 flex-shrink-0 py-1.5 rounded-md outline-none cursor-pointer truncate shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
             >
@@ -2755,7 +2642,6 @@ export default function App() {
               value={restricaoBacenFilter}
               onChange={(e) => {
                 setRestricaoBacenFilter(e.target.value);
-                setSearchFiltersVisibility(1);
               }}
               className="flex-1 min-w-0 bg-zinc-800 text-zinc-300 border border-zinc-950 text-[7px] font-black uppercase font-mono px-1 flex-shrink-0 py-1.5 rounded-md outline-none cursor-pointer truncate shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
             >
@@ -2768,7 +2654,6 @@ export default function App() {
               value={genderFilter}
               onChange={(e) => {
                 setGenderFilter(e.target.value);
-                setSearchFiltersVisibility(1);
               }}
               className="flex-1 min-w-0 bg-zinc-800 text-zinc-300 border border-zinc-950 text-[7px] font-black uppercase font-mono px-1 flex-shrink-0 py-1.5 rounded-md outline-none cursor-pointer truncate shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
             >
@@ -2781,7 +2666,6 @@ export default function App() {
               value={familyIncomeFilter}
               onChange={(e) => {
                 setFamilyIncomeFilter(e.target.value);
-                setSearchFiltersVisibility(1);
               }}
               className="flex-1 min-w-0 bg-zinc-800 text-zinc-300 border border-zinc-950 text-[7px] font-black uppercase font-mono px-1 flex-shrink-0 py-1.5 rounded-md outline-none cursor-pointer truncate shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
             >
@@ -2795,7 +2679,6 @@ export default function App() {
               value={incomeTypeFilter}
               onChange={(e) => {
                 setIncomeTypeFilter(e.target.value);
-                setSearchFiltersVisibility(1);
               }}
               className="flex-1 min-w-0 bg-zinc-800 text-zinc-300 border border-zinc-950 text-[7px] font-black uppercase font-mono px-1 flex-shrink-0 py-1.5 rounded-md outline-none cursor-pointer truncate shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
             >
@@ -3071,110 +2954,9 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [leads, appointments, emailLogs]);
 
-  // One-time startup sweep to zero the lead list and fulfill user intent safely (offline/local mode)
-  useEffect(() => {
-    const hasWiped =
-      localStorage.getItem("ciclocred_leads_wiped_zero_v3") === "true";
-    if (!hasWiped) {
-      localStorage.removeItem("ciclocred_crm_leads");
-      setLeads([]);
-      lastLeadsIdsRef.current = [];
-      if (!auth.currentUser) {
-        localStorage.setItem("ciclocred_leads_wiped_zero_v3", "true");
-      }
-    }
-  }, []);
+  // Deleted one-time startup sweep that wiped leads to prevent unexpected data loss
 
-  // ONE-TIME BOOTSTRAP TO GALAXY CHASSIS - 100% REAL AND ZEROED gamification
-  useEffect(() => {
-    const hasGalaxyReset =
-      localStorage.getItem("ciclocred_galaxy_force_reset_v4") === "true";
-    if (!hasGalaxyReset) {
-      setUserXP(0);
-      setUserLevel(1);
-
-      const resetGoals = [
-        {
-          id: "goal-1",
-          title: "Carregar 5 Novos Leads na Carteira",
-          targetCount: 5,
-          currentCount: 0,
-          xpReward: 350,
-          frequency: "diaria",
-          category: "prospecção",
-          completed: false,
-        },
-        {
-          id: "goal-2",
-          title: "Agendar 3 Visitas Imobiliárias",
-          targetCount: 3,
-          currentCount: 0,
-          xpReward: 500,
-          frequency: "semanal",
-          category: "visita",
-          completed: false,
-        },
-        {
-          id: "goal-3",
-          title: "Disparar 10 Modelos de Email Automatizados",
-          targetCount: 10,
-          currentCount: 0,
-          xpReward: 250,
-          frequency: "diaria",
-          category: "email",
-          completed: false,
-        },
-        {
-          id: "goal-4",
-          title: "Fechar Proposta Comercial de Crédito",
-          targetCount: 1,
-          currentCount: 0,
-          xpReward: 1200,
-          frequency: "mensal",
-          category: "venda",
-          completed: false,
-        },
-      ];
-      const resetProjects = [
-        {
-          id: "proj-1",
-          name: "Expansão de Lotes Urbanos Virgem",
-          description:
-            "Metodologia ativa recomendando ofertas exclusivas de terrenos planos da cicloCRED.",
-          status: "ativo",
-          progress: 0,
-          xpReward: 1500,
-          assignedToGoalId: "goal-2",
-        },
-        {
-          id: "proj-2",
-          name: "Automação Massiva de Whatsapp",
-          description:
-            "Enviar scripts de copywriting para leads frios contidos nas planilhas integradas.",
-          status: "em_planejamento",
-          progress: 0,
-          xpReward: 900,
-          assignedToGoalId: "goal-3",
-        },
-      ];
-
-      setGamificationGoals(resetGoals);
-      setGamificationProjects(resetProjects);
-
-      localStorage.setItem("ciclocred_user_xp", "0");
-      localStorage.setItem("ciclocred_user_level", "1");
-      localStorage.setItem(
-        "ciclocred_gamification_goals",
-        JSON.stringify(resetGoals),
-      );
-      localStorage.setItem(
-        "ciclocred_gamification_projects",
-        JSON.stringify(resetProjects),
-      );
-      localStorage.setItem("ciclocred_autonomy_enabled", "false");
-      localStorage.setItem("ciclocred_galaxy_force_reset_v4", "true");
-    }
-  }, []);
+  // Removed ONE-TIME BOOTSTRAP TO GALAXY CHASSIS gamification wipe to preserve user gamification states
 
   // 1. Authentication Status Sync & Firestore Hydration logic
   useEffect(() => {
@@ -3250,35 +3032,7 @@ export default function App() {
 
         try {
           // Check for one-time wipe to clear the 147 dummy/fictitious leads
-          const hasWiped =
-            localStorage.getItem("ciclocred_leads_wiped_zero_v3") === "true";
-          if (!hasWiped) {
-            if (
-              (window as any).isFirestoreQuotaExceeded ||
-              localStorage.getItem("firestore_quota_exceeded_status") === "true"
-            ) {
-              throw new Error(
-                "resource-exhausted: Quota exceeded during wipe processing",
-              );
-            }
-            const leadsSnapshot = await getDocs(collection(db, "leads"));
-            for (const docSnap of leadsSnapshot.docs) {
-              if (
-                (window as any).isFirestoreQuotaExceeded ||
-                localStorage.getItem("firestore_quota_exceeded_status") ===
-                  "true"
-              ) {
-                throw new Error(
-                  "resource-exhausted: Quota exceeded during deletion activity",
-                );
-              }
-              await deleteDoc(doc(db, "leads", docSnap.id));
-            }
-            localStorage.setItem("ciclocred_crm_leads", JSON.stringify([]));
-            localStorage.setItem("ciclocred_leads_wiped_zero_v3", "true");
-            setLeads([]);
-            lastLeadsIdsRef.current = [];
-          }
+          // Removed one-time startup sweep on firestore connection
 
           const loadOrSeedCollection = async <T extends { id: string }>(
             colName: string,
@@ -3296,9 +3050,22 @@ export default function App() {
             }
             const querySnapshot = await getDocs(collection(db, colName));
             if (querySnapshot.empty) {
-              // No automatic seeding of mock records as requested. Keep collections empty until manually added or imported.
-              setter([]);
-              idRef.current = [];
+              if (initialSeed && initialSeed.length > 0 && auth.currentUser) {
+                // Upload local state to the cloud if the cloud is empty
+                for (const item of initialSeed) {
+                  try {
+                    await setDoc(doc(db, colName, item.id), item);
+                  } catch (e) {
+                    console.error(`Failed to push local ${colName} to cloud:`, e);
+                  }
+                }
+                setter(initialSeed);
+                idRef.current = initialSeed.map((i) => i.id);
+              } else {
+                // No automatic seeding of mock records as requested. Keep collections empty until manually added or imported.
+                setter([]);
+                idRef.current = [];
+              }
               return;
             } else {
               if (auth.currentUser) {
@@ -4418,6 +4185,16 @@ export default function App() {
     );
   };
 
+  const handleAddMultipleToDisparos = (leadIds: string[]) => {
+    setMarketingTargetLeadIds(prev => Array.from(new Set([...prev, ...leadIds])));
+    triggerSensoryFeedback("chime", accSettings);
+    addNotification(
+      "Fila de Disparos",
+      `${leadIds.length} leads foram adicionados à fila de disparos no mapa.`,
+      "success"
+    );
+  };
+
   const handleWipeLeads = async () => {
     setLeads([]);
     localStorage.setItem("ciclocred_crm_leads", JSON.stringify([]));
@@ -5056,7 +4833,7 @@ export default function App() {
 
   return (
     <div
-      className={`min-h-screen transition-colors duration-300 ${theme === "escuro" || theme === "galatico" ? "dark bg-zinc-950 text-zinc-100" : "bg-zinc-50 text-zinc-900"} ${theme === "galatico" ? "bg-black" : ""} ${accSettings.highContrast ? "contrast-125" : ""}`}
+      className={`min-h-screen transition-colors  ${theme === "escuro" || theme === "galatico" ? "dark bg-zinc-950 text-zinc-100" : "bg-zinc-50 text-zinc-900"} ${theme === "galatico" ? "bg-black" : ""} ${accSettings.highContrast ? "contrast-125" : ""}`}
       style={{
         fontSize: `${accSettings.fontScale}%`,
         fontFamily: accSettings.dyslexicFont
@@ -5092,7 +4869,7 @@ export default function App() {
 
         {/* Unified Neo-Brutalist Layout according to diagram */}
         <div
-          className={`bg-black text-white flex items-center justify-between w-full select-none shrink-0 pl-4 md:pl-8 pr-12 md:pr-16 py-3 gap-3.5 relative z-40 transition-all duration-300 ease-in-out ${
+          className={`bg-black text-white flex items-center justify-between w-full select-none shrink-0 pl-4 md:pl-8 pr-12 md:pr-16 py-3 gap-3.5 relative z-40 transition-colors ease-in-out ${
             isHeaderExpanded
               ? "translate-y-0 opacity-100 border-b-4 border-zinc-950 h-auto py-3"
               : "-translate-y-full opacity-0 pointer-events-none h-0 overflow-hidden py-0 border-b-0"
@@ -5109,7 +4886,7 @@ export default function App() {
               className="flex items-center gap-2.5 focus:outline-none transition group text-left shrink-0 cursor-pointer mr-2"
               title="cicloCRED CRM - Painel Geral"
             >
-              <Briefcase className="w-5.5 h-5.5 text-indigo-400 group-hover:scale-110 transition duration-200" />
+              <Briefcase className="w-5.5 h-5.5 text-indigo-400 group-hover:scale-110 transition " />
               <span className="font-sans font-black tracking-tight text-lg md:text-xl uppercase italic text-white leading-none whitespace-nowrap">
                 CICLOCRED <span className="text-indigo-400 font-sans">CRM</span>
               </span>
@@ -5118,7 +4895,7 @@ export default function App() {
             {/* Header Left: Tab Navigation 🔄 */}
             <button
               onClick={handleCycleTab}
-              className={`flex items-center justify-center w-9 h-9 shrink-0 rounded-xl border-2 transition-all cursor-pointer bg-indigo-600 hover:bg-indigo-500 border-indigo-400 text-white shadow-inner hover:scale-105 active:scale-95`}
+              className={`flex items-center justify-center w-9 h-9 shrink-0 rounded-xl border-2 transition-colors cursor-pointer bg-indigo-600 hover:bg-indigo-500 border-indigo-400 text-white shadow-inner hover:scale-105 active:scale-95`}
               title={`${TAB_NAMES[activeTab] || "Página"} - 🔄 Navegação (Clique: Próxima)`}
             >
               <span className="text-sm font-bold">🔄</span>
@@ -5126,7 +4903,7 @@ export default function App() {
 
             {/* Page Name Pill / Indicator */}
             {showPageNamePill && (
-              <div className="flex items-center bg-zinc-900 border-2 border-zinc-700 text-indigo-400 rounded-lg shadow-[2px_2px_0px_0px_rgba(255,255,255,0.15)] px-3 h-9 mr-auto animate-fadeIn shrink-0">
+              <div className="flex items-center bg-zinc-900 border-2 border-zinc-700 text-indigo-400 rounded-lg shadow-[2px_2px_0px_0px_rgba(255,255,255,0.15)] px-3 h-9 mr-auto  shrink-0">
                 <span className="font-mono font-black text-[10px] md:text-xs uppercase whitespace-nowrap">
                   {TAB_NAMES[activeTab] || "Página"}
                 </span>
@@ -5250,14 +5027,14 @@ export default function App() {
               }`}
             >
               {/* Vertical toolbar panel */}
-              <div className="flex flex-col flex-nowrap items-center justify-start gap-1 pb-1 pt-1 px-1 bg-zinc-950/90 border-2 border-zinc-700/80 rounded-2xl shadow-[4px_4px_0px_0px_rgba(24,24,27,0.5)] backdrop-blur-md w-11">
+              <div className="flex flex-col flex-nowrap items-center justify-start gap-1 pb-1 pt-1 px-1 bg-zinc-950/90 border-2 border-zinc-700/80 rounded-2xl shadow-[4px_4px_0px_0px_rgba(24,24,27,0.5)]  w-11">
                 {/* 1. Dashboard WhatsApp */}
                 <button
                   onClick={() => {
                     triggerSensoryFeedback("click", accSettings);
                     handleTabClick("dashboard");
                   }}
-                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border-2 transition-all cursor-pointer ${
+                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border-2 transition-colors cursor-pointer ${
                     activeTab === "dashboard"
                       ? "bg-emerald-600 border-white text-white shadow-inner scale-95"
                       : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-emerald-400"
@@ -5276,7 +5053,7 @@ export default function App() {
                 {/* 2. Leads */}
                 <button
                   onClick={() => handleTabClick("leads")}
-                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-all cursor-pointer ${
+                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-colors cursor-pointer ${
                     activeTab === "leads"
                       ? "bg-indigo-600 border-indigo-400 text-white shadow-inner scale-95"
                       : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-indigo-300"
@@ -5286,12 +5063,23 @@ export default function App() {
                   👥
                 </button>
 
-                
+                {/* 3. Workspace */}
+                <button
+                  onClick={() => handleTabClick("workspace")}
+                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-colors cursor-pointer ${
+                    activeTab === "workspace"
+                      ? "bg-blue-600 border-blue-400 text-white shadow-inner scale-95"
+                      : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-blue-300"
+                  }`}
+                  title="Workspace"
+                >
+                  🌐
+                </button>
 
                 {/* 5. Scripts e Roteiros */}
                 <button
                   onClick={() => handleTabClick("automation-flows")}
-                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-all cursor-pointer ${
+                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-colors cursor-pointer ${
                     activeTab === "automation-flows" ||
                     activeTab === "scripts-roteiros" ||
                     activeTab === "disparos" ||
@@ -5309,7 +5097,7 @@ export default function App() {
                 {/* 7. Simulador */}
                 <button
                   onClick={() => handleTabClick("simulador")}
-                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-all cursor-pointer ${
+                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-colors cursor-pointer ${
                     activeTab === "simulador"
                       ? "bg-sky-600 border-sky-400 text-white shadow-inner scale-95"
                       : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-sky-300"
@@ -5322,7 +5110,7 @@ export default function App() {
                 {/* 8. Estoque */}
                 <button
                   onClick={() => handleTabClick("inventory")}
-                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-all cursor-pointer ${
+                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-colors cursor-pointer ${
                     activeTab === "inventory"
                       ? "bg-orange-600 border-orange-400 text-white shadow-inner scale-95"
                       : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-orange-300"
@@ -5338,7 +5126,7 @@ export default function App() {
                     handleTabClick("settings");
                     setSettingsModalTab("profile");
                   }}
-                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-all cursor-pointer ${
+                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-colors cursor-pointer ${
                     activeTab === "settings" && settingsModalTab === "profile"
                       ? "bg-indigo-700 border-indigo-400 text-white shadow-inner scale-95"
                       : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-slate-300"
@@ -5354,7 +5142,7 @@ export default function App() {
                     handleTabClick("settings");
                     setSettingsModalTab("database");
                   }}
-                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-all cursor-pointer ${
+                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-colors cursor-pointer ${
                     activeTab === "settings" && settingsModalTab === "database"
                       ? "bg-rose-700 border-rose-450 text-white shadow-inner scale-95"
                       : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-rose-300"
@@ -5370,7 +5158,7 @@ export default function App() {
                     triggerSensoryFeedback("click", accSettings);
                     setActiveTab("gemini-server");
                   }}
-                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-all cursor-pointer ${
+                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-colors cursor-pointer ${
                     activeTab === "gemini-server"
                       ? "bg-purple-600 border-purple-400 text-white shadow-inner scale-95"
                       : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-purple-300"
@@ -5383,7 +5171,7 @@ export default function App() {
                 {/* 12. Painel Geral */}
                 <button
                   onClick={() => handleTabClick("painel-geral")}
-                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-all cursor-pointer ${
+                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-colors cursor-pointer ${
                     activeTab === "painel-geral"
                       ? "bg-indigo-600 border-indigo-400 text-white shadow-inner scale-95"
                       : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-indigo-300"
@@ -5409,7 +5197,7 @@ export default function App() {
                 <>
                   {/* WhatsApp float button stacked precisely above the 👁️ button on the far right */}
                   <div
-                    className={`fixed bottom-[74px] right-6 ${floatingRightPosition} z-50 pointer-events-auto select-none transition-all duration-300 ease-in-out`}
+                    className={`fixed bottom-[74px] right-6 ${floatingRightPosition} z-50 pointer-events-auto select-none transition-colors ease-in-out`}
                   >
                     <button
                       type="button"
@@ -5424,7 +5212,7 @@ export default function App() {
                           window.location.href = "whatsapp://send";
                         }
                       }}
-                      className="h-11 w-11 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-2px] hover:shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] active:translate-y-[1px] active:shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] cursor-pointer transition-all"
+                      className="h-11 w-11 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-2px] hover:shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] active:translate-y-[1px] active:shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] cursor-pointer transition-colors"
                       title="Abrir WhatsApp"
                     >
                       <svg
@@ -5438,26 +5226,30 @@ export default function App() {
                   </div>
 
                   <div
-                    className={`fixed bottom-6 right-6 ${floatingRightPosition} z-50 flex flex-row items-center gap-2 pointer-events-auto select-none transition-all duration-300 ease-in-out`}
+                    className={`fixed bottom-6 right-6 ${floatingRightPosition} z-50 flex flex-row items-center gap-2 pointer-events-auto select-none transition-colors ease-in-out`}
                   >
-                    {/* Button 🔍: Toggle page zoom mode (hyperfocus) */}
+                    {/* Button 🔭: Cycle layout zoom from 100% to 10% */}
                     <button
                       type="button"
                       onClick={() => {
                         triggerSensoryFeedback("click", accSettings);
-                        setGlobalHyperfocus((prev) => !prev);
+                        setLayoutZoom((prev) => {
+                          const next = prev - 10;
+                          return next < 10 ? 100 : next;
+                        });
                       }}
-                      className={`font-mono font-black w-11 h-11 rounded-full flex items-center justify-center border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-2px] hover:shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] active:translate-y-[1px] active:shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] transition-all cursor-pointer`}
-                      title="🔍 Zoom da Página (Hiperfoco 80%)"
+                      className="font-mono font-black h-7 px-2 rounded-md flex items-center justify-center border border-zinc-950 shadow-sm hover:translate-y-[-1px] active:translate-y-[0.5px] transition-all cursor-pointer text-[10px] gap-1"
+                      title="🔭 Zoom do Layout (10% a 100%)"
                       style={{
-                        backgroundColor: globalHyperfocus
-                          ? "#f59e0b"
-                          : "#18181b",
-                        color: globalHyperfocus ? "#09090b" : "#f4f4f5",
+                        backgroundColor: layoutZoom !== 100 ? "#f59e0b" : "#18181b",
+                        color: layoutZoom !== 100 ? "#09090b" : "#f4f4f5",
                       }}
                     >
-                      <span className="text-base select-none leading-none">
-                        🔍
+                      <span className="text-xs select-none leading-none">
+                        🔭
+                      </span>
+                      <span className="font-black font-mono text-[8.5px]">
+                        {layoutZoom}%
                       </span>
                     </button>
 
@@ -5470,7 +5262,7 @@ export default function App() {
                           prev === 0 ? 2 : 0,
                         );
                       }}
-                      className={`font-mono font-black w-11 h-11 rounded-full flex items-center justify-center border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-2px] hover:shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] active:translate-y-[1px] active:shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] transition-all cursor-pointer`}
+                      className={`font-mono font-black w-7 h-7 rounded-md flex items-center justify-center border border-zinc-950 shadow-sm hover:translate-y-[-1px] active:translate-y-[0.5px] transition-all cursor-pointer`}
                       title="🔻 Alternar barra de pesquisa e filtros"
                       style={{
                         backgroundColor:
@@ -5478,7 +5270,7 @@ export default function App() {
                         color: "#f4f4f5",
                       }}
                     >
-                      <span className="text-base select-none leading-none">
+                      <span className="text-xs select-none leading-none">
                         🔻
                       </span>
                     </button>
@@ -5495,13 +5287,13 @@ export default function App() {
                           cycleVisibilityFilter();
                         }
                       }}
-                      className="bg-purple-600 hover:bg-purple-700 text-white font-black h-11 rounded-full px-3.5 flex items-center justify-center gap-2 border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-2px] hover:shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] active:translate-y-[1px] active:shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] transition-all cursor-pointer select-none"
+                      className="bg-purple-600 hover:bg-purple-700 text-white font-black h-7 rounded-md px-2 flex items-center justify-center gap-1 border border-zinc-950 shadow-sm hover:translate-y-[-1px] active:translate-y-[0.5px] transition-all cursor-pointer select-none"
                       title="👁️ Troca a visibilidade da página aberta"
                     >
-                      <span className="text-base select-none leading-none">
+                      <span className="text-xs select-none leading-none">
                         👁️
                       </span>
-                      <span className="uppercase text-[8.5px] tracking-wider font-extrabold max-w-[110px] truncate block select-none">
+                      <span className="uppercase text-[8px] tracking-tight font-black max-w-[80px] truncate block select-none">
                         {activeTab === "leads"
                           ? leadsViewMode
                           : visibilityFilter === "todos"
@@ -5520,40 +5312,58 @@ export default function App() {
 
         {/* Main dynamically scrolled workspace content viewport */}
         <main
-          style={{ zoom: globalHyperfocus ? "80%" : "100%" }}
           className={`relative flex-1 overflow-x-auto overflow-hidden flex flex-col ${
             theme === "claro"
               ? "bg-zinc-100/50"
               : theme === "escuro"
                 ? "bg-zinc-900/40"
-                : "bg-indigo-950/20 backdrop-blur-xs"
+                : "bg-indigo-950/20 "
           }`}
         >
           {/* FLOATING SUB-HEADER: Invisible limit line, transparent, and floating controls */}
-          <div className="flex items-center justify-between px-6 md:px-10 py-3 bg-zinc-900/5 dark:bg-zinc-100/5 backdrop-blur-xs text-zinc-950 dark:text-white border-b border-transparent relative z-30 shrink-0 select-none rounded-2xl mx-8 md:mx-16 lg:mx-24 my-3">
+          <div className="flex items-center justify-between px-6 md:px-10 py-3 bg-zinc-900/5 dark:bg-zinc-100/5  text-zinc-950 dark:text-white border-b border-transparent relative z-30 shrink-0 select-none rounded-2xl mx-8 md:mx-16 lg:mx-24 my-3">
             {/* Left Nav & Greeting */}
             <div className="flex items-center gap-3">
-              <div className="font-sans font-black text-[11px] md:text-sm uppercase tracking-tight text-zinc-500 truncate max-w-[150px] sm:max-w-none">
-                👋{" "}
-                {(() => {
-                  const h = new Date().getHours();
-                  return h < 12
-                    ? "Bom dia"
-                    : h < 18
-                      ? "Boa tarde"
-                      : "Boa noite";
-                })()}
-                ,{" "}
-                <span className="font-black text-indigo-500 dark:text-indigo-400">
-                  {userName ? userName.split(" ")[0] : "Usuário"}
-                </span>
-              </div>
-            </div>
+              {/* User Modal Button (Lado Esquerdo) */}
+              <button
+                type="button"
+                onClick={() => {
+                  triggerSensoryFeedback("click", accSettings);
+                  setIsUserCentralModalOpen(true);
+                }}
+                className="w-10 h-10 rounded-full border-2 border-zinc-950 bg-indigo-600 hover:bg-indigo-700 hover:scale-105 active:scale-95 transition flex items-center justify-center text-white shrink-0 cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] font-black text-xs uppercase"
+                title="👤 Abrir Central do Usuário"
+              >
+                {localStorage.getItem("ciclocred_user_photo") ? (
+                  <img
+                    src={localStorage.getItem("ciclocred_user_photo") || undefined}
+                    alt="Perfil"
+                    className="w-full h-full object-cover rounded-full"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <span>{userName ? userName.slice(0, 2).toUpperCase() : "US"}</span>
+                )}
+              </button>
 
-            {/* Right Status / Clock / Nav */}
-            <div className="flex items-center gap-3">
-              <div className="font-mono text-[9px] md:text-xs tracking-wider flex items-center gap-2 text-zinc-650 dark:text-zinc-400 shrink-0 bg-zinc-500/5 px-2.5 py-1.5 rounded-xl border border-zinc-500/5">
-                <span className="hidden sm:inline font-bold uppercase">
+              <div className="flex flex-col gap-0.5">
+                <div className="font-sans font-black text-[11px] md:text-sm uppercase tracking-tight text-zinc-500 truncate max-w-[150px] sm:max-w-none leading-none">
+                  👋{" "}
+                  {(() => {
+                    const h = new Date().getHours();
+                    return h < 12
+                      ? "Bom dia"
+                      : h < 18
+                        ? "Boa tarde"
+                        : "Boa noite";
+                  })()}
+                  ,{" "}
+                  <span className="font-black text-indigo-500 dark:text-indigo-400">
+                    {userName ? userName.split(" ")[0] : "Usuário"}
+                  </span>
+                </div>
+                <div className="font-mono text-[9px] md:text-xs tracking-wider text-zinc-400 uppercase font-bold leading-none mt-1">
+                  📅{" "}
                   {new Date()
                     .toLocaleDateString("pt-BR", {
                       weekday: "short",
@@ -5561,28 +5371,77 @@ export default function App() {
                       month: "long",
                     })
                     .replace("-feira", "")}
-                </span>
-                <span className="opacity-30 hidden sm:inline">|</span>
-                <span className="text-emerald-600 dark:text-emerald-400 font-extrabold font-mono">
+                </div>
+              </div>
+            </div>
+
+            {/* Right Status / Clock / Nav */}
+            <div className="flex items-center gap-3 select-none">
+              <div className="flex flex-col items-end gap-0.5">
+                <div className="text-indigo-600 dark:text-indigo-400 font-extrabold flex items-center gap-1 text-[11px] md:text-sm leading-none">
+                  🌤️ 26°C
+                </div>
+                <div className="text-emerald-600 dark:text-emerald-400 font-extrabold font-mono text-[9px] md:text-xs leading-none mt-1">
                   ⏰{" "}
                   {new Date().toLocaleTimeString("pt-BR", {
                     hour: "2-digit",
                     minute: "2-digit",
                   })}
-                </span>
-                <span className="opacity-30">|</span>
-                <span className="text-indigo-600 dark:text-indigo-400 font-extrabold flex items-center gap-1">
-                  🌤️ 26°C
-                </span>
+                </div>
               </div>
+
+              {/* WhatsApp Dashboard Button (Lado Direito) */}
+              <button
+                type="button"
+                onClick={() => {
+                  triggerSensoryFeedback("click", accSettings);
+                  setActiveTab("dashboard");
+                }}
+                className="w-10 h-10 rounded-full border-2 border-zinc-950 bg-emerald-500 hover:bg-emerald-600 hover:scale-105 active:scale-95 transition flex items-center justify-center text-white shrink-0 cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] text-lg"
+                title="💬 Ir para WhatsApp Dashboard"
+              >
+                💬
+              </button>
+            </div>
+          </div>
+
+          {/* ZOOM SLIDER BAR (BARRINHA APARENTE DE ZOOM) */}
+          <div className="flex justify-end px-8 md:px-16 lg:px-24 mb-1">
+            <div className="bg-white dark:bg-zinc-900 border-4 border-zinc-950 px-4 py-2 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex items-center gap-3 text-zinc-950 dark:text-white">
+              <span className="font-mono text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                🔭 Zoom: <span className="text-indigo-600 dark:text-indigo-400">{layoutZoom}%</span>
+              </span>
+              <input
+                type="range"
+                min="10"
+                max="100"
+                step="5"
+                value={layoutZoom}
+                onChange={(e) => {
+                  triggerSensoryFeedback("click", accSettings);
+                  setLayoutZoom(Number(e.target.value));
+                }}
+                className="w-24 md:w-32 accent-indigo-600 cursor-pointer h-1.5"
+                title="Ajustar zoom do layout"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  triggerSensoryFeedback("click", accSettings);
+                  setLayoutZoom(100);
+                }}
+                className="text-[9px] font-black font-mono uppercase bg-zinc-100 dark:bg-zinc-850 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-300 border-2 border-zinc-950 px-1.5 py-0.5 rounded-lg cursor-pointer transition"
+              >
+                Reset
+              </button>
             </div>
           </div>
 
           {/* SCROLLABLE WORKSPACE AREA: Scrollbar starts below the header nav buttons */}
           <div className="flex-1 overflow-y-auto px-8 md:px-16 lg:px-24 py-4 md:py-8 flex flex-col w-full h-full space-y-8 pr-2 custom-scrollbar">
             {isQuotaExceeded && (
-              <div className="bg-amber-950/40 border-2 border-amber-500/70 rounded-2xl p-4 md:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-[0_4px_30px_rgba(0,0,0,0.5)] backdrop-blur-xs relative overflow-hidden group">
-                <div className="absolute top-0 right-0 p-4 opacity-10 font-mono tracking-tighter text-7xl select-none select-none pointer-events-none group-hover:scale-105 transition-all text-amber-500 font-extrabold font-black">
+              <div className="bg-amber-950/40 border-2 border-amber-500/70 rounded-2xl p-4 md:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-[0_4px_30px_rgba(0,0,0,0.5)]  relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-4 opacity-10 font-mono tracking-tighter text-7xl select-none select-none pointer-events-none group-hover:scale-105 transition-colors text-amber-500 font-extrabold font-black">
                   FIREBASE
                 </div>
                 <div className="flex gap-4 items-start max-w-3xl">
@@ -5638,7 +5497,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => handleToggleForceLocalMode(true)}
-                    className="bg-zinc-950 text-amber-500 hover:text-amber-400 font-black font-sans text-xs tracking-wider uppercase px-4 py-3 rounded-xl border border-amber-500/50 hover:border-amber-500 transition-all flex items-center gap-1.5 shrink-0"
+                    className="bg-zinc-950 text-amber-500 hover:text-amber-400 font-black font-sans text-xs tracking-wider uppercase px-4 py-3 rounded-xl border border-amber-500/50 hover:border-amber-500 transition-colors flex items-center gap-1.5 shrink-0"
                   >
                     <Database className="w-4 h-4 shrink-0" />
                     ATIVAR MEMÓRIA LOCAL PERMANENTE
@@ -5647,7 +5506,7 @@ export default function App() {
                     href="https://console.firebase.google.com/project/project-06c00c3b-56af-4fcd-b6a/firestore/databases/ai-studio-7295f37f-3832-47f6-8eec-a7e26d15c260/data?openUpgradeDialog=true"
                     target="_blank"
                     rel="noreferrer"
-                    className="bg-amber-500 hover:bg-amber-600 active:translate-y-0.5 text-zinc-950 font-black font-sans text-xs tracking-wider uppercase px-4 py-3 rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all flex items-center gap-1.5 shrink-0"
+                    className="bg-amber-500 hover:bg-amber-600 active:translate-y-0.5 text-zinc-950 font-black font-sans text-xs tracking-wider uppercase px-4 py-3 rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-colors flex items-center gap-1.5 shrink-0"
                   >
                     <span>UPGRADE NO CONSOLE</span>
                     <ExternalLink className="w-4 h-4 shrink-0" />
@@ -5665,7 +5524,7 @@ export default function App() {
               {activeTab === "painel-geral" && (
                 <div
                   id="crm-dashboard-default"
-                  className="flex flex-col flex-1 min-h-0 space-y-6 overflow-hidden"
+                  className="flex flex-col space-y-6 w-full"
                 >
                   <Reports
                     leads={leads}
@@ -5680,7 +5539,7 @@ export default function App() {
               {activeTab === "dashboard" && (
                 <div
                   id="crm-dashboard-whatsapp"
-                  className="flex flex-col flex-1 min-h-0 space-y-6 select-none animate-fadeIn"
+                  className="flex flex-col space-y-6 w-full select-none"
                 >
                   <div className="bg-gradient-to-br from-zinc-900 to-emerald-950/70 border-4 border-zinc-950 p-6 md:p-8 rounded-[30px] shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] text-white relative overflow-hidden group min-h-[300px] flex flex-col justify-center">
                     <div className="absolute top-0 right-0 p-6 opacity-5 font-mono tracking-tighter text-8xl select-none pointer-events-none font-black uppercase">
@@ -5689,7 +5548,7 @@ export default function App() {
 
                     <div className="relative z-10 space-y-5">
                       <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-[10px] font-black uppercase tracking-wider">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block" />
+                        <span className="w-2 h-2 rounded-full bg-emerald-500  inline-block" />
                         Iniciação Automática Ativa
                       </span>
 
@@ -5720,7 +5579,7 @@ export default function App() {
                             triggerSensoryFeedback("success", accSettings);
                             window.location.href = "whatsapp://send";
                           }}
-                          className="bg-emerald-500 hover:bg-emerald-600 active:translate-y-0.5 text-zinc-950 font-black font-sans text-xs tracking-wider uppercase px-6 py-4 rounded-xl border-4 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(255,255,255,1)] transition-all flex items-center gap-2 cursor-pointer"
+                          className="bg-emerald-500 hover:bg-emerald-600 active:translate-y-0.5 text-zinc-950 font-black font-sans text-xs tracking-wider uppercase px-6 py-4 rounded-xl border-4 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(255,255,255,1)] transition-colors flex items-center gap-2 cursor-pointer"
                         >
                           <span>ABRIR WHATSAPP MANUALMENTE</span>
                           <ExternalLink className="w-4 h-4 shrink-0" />
@@ -5732,7 +5591,7 @@ export default function App() {
                             triggerSensoryFeedback("click", accSettings);
                             setActiveTab("imoveis");
                           }}
-                          className="bg-zinc-800 hover:bg-zinc-700 active:translate-y-0.5 text-white font-black font-sans text-xs tracking-wider uppercase px-6 py-4 rounded-xl border-4 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(255,255,255,1)] transition-all flex items-center gap-2 cursor-pointer"
+                          className="bg-zinc-800 hover:bg-zinc-700 active:translate-y-0.5 text-white font-black font-sans text-xs tracking-wider uppercase px-6 py-4 rounded-xl border-4 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(255,255,255,1)] transition-colors flex items-center gap-2 cursor-pointer"
                         >
                           <span>IR PARA ESTOQUE E LANÇAMENTOS</span>
                           <span className="text-zinc-400">🏢</span>
@@ -5801,7 +5660,7 @@ export default function App() {
                   {/* cicloCRED WhatsApp Dashboard Sub-Visibilities Section */}
                   <div className="border-t-4 border-zinc-950 pt-6 mt-2 space-y-6">
                     {/* Integrated Sub-tab Component */}
-                    <div className="w-full animate-fadeIn">
+                    <div className="w-full ">
                       <MultiLevelMarketingTab
                         leads={leads}
                         globalFilteredLeads={unifiedFilteredLeads}
@@ -5916,8 +5775,7 @@ export default function App() {
                     });
 
                     const currentLeadsArray =
-                      leadsViewMode === "recentes" ||
-                      (leadsViewMode as any) === "novos"
+                      leadsViewMode === "recentes"
                         ? leadsRecentes
                         : leadsViewMode === "ativos"
                           ? leadsAtivos
@@ -5930,57 +5788,418 @@ export default function App() {
                               )
                             : unifiedFilteredLeads;
 
-
-
                     return (
-                      <div className="w-full flex-1 flex flex-col min-h-0 space-y-6">
+                      <div className="w-full flex-1 flex flex-col min-h-0 space-y-8 pb-12">
                         
+                        {/* GORGEOUS GESTÃO DE LEADS NAVIGATION CONTROL BAR */}
+                        <div className="w-full bg-zinc-900/30 p-3 rounded-2xl border-2 border-zinc-800 shadow-xl select-none">
+                          <div className="flex flex-wrap items-center justify-between gap-3 mb-2 px-1">
+                            <span className="text-[10px] md:text-xs font-black uppercase tracking-wider text-indigo-400">
+                              Navegação de Visibilidade / CRM:
+                            </span>
+                            <span className="text-[10px] font-mono text-zinc-500 font-bold">
+                              Clique para mudar de aba • Duplo clique no 🔍 do Kanban ativa hiperfocos
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {[
+                              { id: "todos", label: "📁 Todos os Leads", color: "text-indigo-400 hover:text-indigo-300" },
+                              { id: "recentes", label: "⏱️ Recentes (24h)", color: "text-amber-400 hover:text-amber-300" },
+                              { id: "ativos", label: "🟢 Leads Ativos", color: "text-emerald-400 hover:text-emerald-300" },
+                              { id: "followups", label: "📅 Tabela Follow-ups", color: "text-amber-500 hover:text-amber-400 font-bold" },
+                              { id: "kanban", label: "📋 Quadro Kanban", color: "text-purple-400 hover:text-purple-300" },
+                              { id: "mapa", label: "🗺️ Mapa Conectivo", color: "text-cyan-400 hover:text-cyan-300" },
+                              { id: "disparos", label: "💬 Disparos Massa", color: "text-pink-400 hover:text-pink-300" },
+                              { id: "roteiros", label: "🤖 Roteiros IA", color: "text-blue-400 hover:text-blue-300" },
+                              { id: "estoque", label: "🏢 Estoque Imóveis", color: "text-teal-400 hover:text-teal-300" },
+                              { id: "archived", label: "🗄️ Arquivados", color: "text-zinc-400 hover:text-zinc-300" },
+                            ].map((item) => {
+                              const isActive = leadsViewMode === item.id;
+                              return (
+                                <button
+                                  key={item.id}
+                                  onClick={() => {
+                                    triggerSensoryFeedback("click", accSettings);
+                                    setLeadsViewMode(item.id as any);
+                                    localStorage.setItem("ciclocred_filter_leads_view_mode", item.id);
+                                  }}
+                                  className={`px-1.5 py-1 rounded-md text-[8.5px] md:text-[9.5px] font-black uppercase tracking-tight border transition-all flex items-center gap-1 cursor-pointer select-none active:translate-y-[1px] ${
+                                    isActive
+                                      ? "bg-indigo-600 border-indigo-600 text-white shadow-sm scale-[1.02]"
+                                      : `border-zinc-800 text-zinc-400 bg-zinc-950/20 hover:bg-zinc-800/40 ${item.color}`
+                                  }`}
+                                >
+                                  {item.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
 
-                        {/* KANBAN/FUNNEL COMPONENT DIRECTLY INTEGRATED IN LEADS LIST */}
-                        <div
-                          id="integrated-kanban-board-scroll"
-                          className={`flex flex-col gap-4 flex-none shrink-0 border-t-4 border-dashed border-zinc-800 pt-8 mt-6`}
-                        >
-                          <div
-                            className={`flex-1 ${kanbanHyperfocus === 1 ? "overflow-visible" : "overflow-hidden"}`}
-                          >
-                            <KanbanBoard
-                              leads={leads}
-                              onMoveLead={handleMoveLead}
+                        {/* TABELA DINÂMICA UNIFICADA: Toggled views based on eye icon (👁️) click */}
+                        <div className="w-full shrink-0">
+                          <div className="mb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div>
+                              <h2 className="text-xl font-extrabold uppercase tracking-tight flex items-center gap-2 text-indigo-400">
+                                <span>TABELA DINÂMICA: {
+                                  leadsViewMode === "todos"
+                                    ? "Todos os Leads"
+                                    : leadsViewMode === "recentes"
+                                      ? "Leads Recentes (Últimas 24h)"
+                                      : leadsViewMode === "ativos"
+                                        ? "Leads Ativos"
+                                        : leadsViewMode === "followups"
+                                          ? "Tabela de Follow-ups & Compromissos Gerais"
+                                          : leadsViewMode === "archived"
+                                            ? "Leads Arquivados / Perdidos"
+                                            : leadsViewMode === "disparos"
+                                              ? "Fila e Automação de Disparos em Massa"
+                                              : leadsViewMode === "kanban"
+                                                ? "Visibilidade do Funil"
+                                                : leadsViewMode === "mapa"
+                                                  ? "Mapa Conectivo (Nós)"
+                                                  : leadsViewMode === "roteiros"
+                                                    ? "IA Preditiva e Roteiros de Atendimento"
+                                                    : "Acervo de Imóveis do Estoque"
+                                }</span>
+                              </h2>
+                              <p className="text-xs text-zinc-400">
+                                {leadsViewMode === "disparos"
+                                  ? "Gerencie a fila de disparos de mensagens, templates de respostas e histórico de envios ativos diretamente."
+                                  : leadsViewMode === "kanban"
+                                    ? "Arraste e solte cartões de leads para mover as etapas de status e gerenciar o funil visualmente."
+                                    : leadsViewMode === "mapa"
+                                      ? "Visualize as conexões, fluxos e interações dos leads de forma gráfica e interativa."
+                                      : leadsViewMode === "roteiros"
+                                        ? "Gerencie a comunicação do lead com roteiros de atendimento gerados por Inteligência Artificial."
+                                        : leadsViewMode === "estoque"
+                                          ? "Visualize, gerencie e faça o download de mídias e fotos do acervo imobiliário disponível."
+                                          : leadsViewMode === "followups"
+                                            ? "Gerencie, filtre e acompanhe todos os agendamentos, visitas e tarefas de follow-up integrados com os leads."
+                                            : "Utilize as bordas translúcidas laterais para alternar entre as visibilidades em sequência."
+                                }
+                              </p>
+                            </div>
+                            <span className="px-3 py-1 bg-zinc-850 text-zinc-300 font-mono text-xs font-black rounded-lg border-2 border-zinc-950 uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] self-start md:self-center">
+                              Visão Ativa: {leadsViewMode}
+                            </span>
+                          </div>
+
+                          {leadsViewMode === "disparos" ? (
+                            <div className="p-4 bg-zinc-900/40 rounded-2xl border-2 border-zinc-950">
+                              <EmailAutomation
+                                leads={leads}
+                                globalFilteredLeads={unifiedFilteredLeads}
+                                globalSearchTerm={searchTerm}
+                                templates={templates}
+                                logs={emailLogs}
+                                onAddTemplate={handleAddTemplate}
+                                onEditTemplate={handleEditTemplate}
+                                onDeleteTemplate={handleDeleteTemplate}
+                                onSendEmailSimulated={handleSendEmailSimulated}
+                                theme={theme}
+                                accSettings={accSettings}
+                                forcedSubTab="massa"
+                                setEmailLogs={setEmailLogs}
+                                addNotification={addNotification}
+                                onlyTable={false}
+                                tableHeaderComponent={(ids, actions) =>
+                                  renderTableSearchBar({
+                                    selectedLeadIds: ids,
+                                    blockActions: {
+                                      openCampaignModal: actions?.openCampaignModal,
+                                      onDelete: handleDeleteMultipleLeadsHandler,
+                                    },
+                                  })
+                                }
+                              />
+                            </div>
+                          ) : leadsViewMode === "kanban" ? (
+                            <div className="space-y-4">
+                              <div
+                                className={`flex-1 ${kanbanHyperfocus === 1 ? "overflow-visible" : "overflow-hidden"}`}
+                              >
+                                <KanbanBoard
+                                  layoutZoom={layoutZoom}
+leads={currentLeadsArray}
+                                  properties={properties}
+                                  onMoveLead={handleMoveLead}
+                                  onAddToDispatchQueue={handleAddMultipleToDisparos}
+                                  onOpenLeadDetails={(lead) => {
+                                    setSelectedLeadForDetails(lead);
+                                    setIsDetailsModalOpen(true);
+                                  }}
+                                  onOpenEditModal={(lead) => {
+                                    setSelectedLeadForEdit(lead);
+                                    setIsLeadModalOpen(true);
+                                  }}
+                                  onOpenCreateModal={(status) => {
+                                    setSelectedLeadForEdit(null);
+                                    setDefaultStatusForCreate(status || "novo");
+                                    setIsLeadModalOpen(true);
+                                  }}
+                                  showOrganizer={kanbanShowOrganizer}
+                                  setShowOrganizer={setKanbanShowOrganizer}
+                                  hyperfocusActive={kanbanHyperfocus}
+                                  setHyperfocusActive={setKanbanHyperfocus}
+                                  triggerCreateStatus={kanbanTriggerCreateStatus}
+                                  setTriggerCreateStatus={
+                                    setKanbanTriggerCreateStatus
+                                  }
+                                  triggerCreatePage={kanbanTriggerCreatePage}
+                                  setTriggerCreatePage={
+                                    setKanbanTriggerCreatePage
+                                  }
+                                  triggerEditPage={kanbanTriggerEditPage}
+                                  setTriggerEditPage={setKanbanTriggerEditPage}
+                                  triggerDeletePage={kanbanTriggerDeletePage}
+                                  setTriggerDeletePage={
+                                    setKanbanTriggerDeletePage
+                                  }
+                                  triggerHyperfocus={kanbanTriggerHyperfocus}
+                                  setTriggerHyperfocus={setKanbanTriggerHyperfocus}
+                                  onOpenAIAssistant={handleOpenAIAssistant}
+                                  onOpenRuleEngine={handleOpenRuleEngine}
+                                  renderOnlyColumns={true}
+                                />
+                              </div>
+                            </div>
+                          ) : leadsViewMode === "mapa" ? (
+                            <div className="space-y-4">
+                              <div className="flex-1 overflow-hidden">
+                                <KanbanBoard
+                                  layoutZoom={layoutZoom}
+leads={currentLeadsArray}
+                                  properties={properties}
+                                  onMoveLead={handleMoveLead}
+                                  onAddToDispatchQueue={handleAddMultipleToDisparos}
+                                  onOpenLeadDetails={(lead) => {
+                                    setSelectedLeadForDetails(lead);
+                                    setIsDetailsModalOpen(true);
+                                  }}
+                                  onOpenEditModal={(lead) => {
+                                    setSelectedLeadForEdit(lead);
+                                    setIsLeadModalOpen(true);
+                                  }}
+                                  onOpenCreateModal={(status) => {
+                                    setSelectedLeadForEdit(null);
+                                    setDefaultStatusForCreate(status || "novo");
+                                    setIsLeadModalOpen(true);
+                                  }}
+                                  showOrganizer={kanbanShowOrganizer}
+                                  setShowOrganizer={setKanbanShowOrganizer}
+                                  hyperfocusActive={kanbanHyperfocus}
+                                  setHyperfocusActive={setKanbanHyperfocus}
+                                  triggerCreateStatus={kanbanTriggerCreateStatus}
+                                  setTriggerCreateStatus={
+                                    setKanbanTriggerCreateStatus
+                                  }
+                                  triggerCreatePage={kanbanTriggerCreatePage}
+                                  setTriggerCreatePage={
+                                    setKanbanTriggerCreatePage
+                                  }
+                                  triggerEditPage={kanbanTriggerEditPage}
+                                  setTriggerEditPage={setKanbanTriggerEditPage}
+                                  triggerDeletePage={kanbanTriggerDeletePage}
+                                  setTriggerDeletePage={
+                                    setKanbanTriggerDeletePage
+                                  }
+                                  triggerHyperfocus={kanbanTriggerHyperfocus}
+                                  setTriggerHyperfocus={setKanbanTriggerHyperfocus}
+                                  onOpenAIAssistant={handleOpenAIAssistant}
+                                  onOpenRuleEngine={handleOpenRuleEngine}
+                                  renderOnlyMap={true}
+                                />
+                              </div>
+                              {marketingTargetLeadIds.length > 0 && (
+                                <div className="mt-4 border-t-2 border-dashed border-zinc-700 pt-4 relative bg-zinc-950 p-4 rounded-xl shadow-xl">
+                                  <button onClick={() => setMarketingTargetLeadIds([])} className="absolute -top-3 right-4 bg-zinc-900 border-2 border-zinc-950 px-3 py-1 text-[10px] font-black uppercase text-red-400 rounded-full hover:bg-red-950 transition shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] z-10 cursor-pointer flex items-center gap-1">❌ Fechar Painel de Disparos</button>
+                                  <EmailAutomation
+                                    leads={leads}
+                                    globalFilteredLeads={unifiedFilteredLeads}
+                                    globalSearchTerm={searchTerm}
+                                    templates={templates}
+                                    logs={emailLogs}
+                                    onAddTemplate={handleAddTemplate}
+                                    onEditTemplate={handleEditTemplate}
+                                    onDeleteTemplate={handleDeleteTemplate}
+                                    onSendEmailSimulated={handleSendEmailSimulated}
+                                    theme={theme}
+                                    accSettings={accSettings}
+                                    initialTargetLeadIds={marketingTargetLeadIds}
+                                    onClearInitialTargets={() => setMarketingTargetLeadIds([])}
+                                    setEmailLogs={setEmailLogs}
+                                    addNotification={addNotification}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          ) : leadsViewMode === "roteiros" ? (
+                            <div className="space-y-4">
+                              <div className="p-4 bg-zinc-900/40 rounded-2xl border-2 border-zinc-950">
+                                <ScriptsAndFlows
+                                  leads={leads}
+                                  onUpdateLeadField={handleUpdateLeadField}
+                                  accSettings={accSettings}
+                                  triggerSensoryFeedback={triggerSensoryFeedback}
+                                  addNotification={addNotification}
+                                  initialSearchTerm={scriptSearchTerm || searchTerm}
+                                  onChangeSearchTerm={setScriptSearchTerm}
+                                  onDeleteLead={handleDeleteLead}
+                                  onDeleteMultipleLeads={handleDeleteMultipleLeadsHandler}
+                                  operationalFlows={operationalFlows}
+                                  setOperationalFlows={setOperationalFlows}
+                                />
+                              </div>
+                            </div>
+                          ) : leadsViewMode === "followups" ? (
+                            <div className="space-y-4">
+                              <div className="p-4 bg-zinc-900/40 rounded-2xl border-2 border-zinc-950">
+                                <FollowUpsTable
+                                  appointments={appointments}
+                                  setAppointments={setAppointments}
+                                  leads={leads}
+                                  onOpenLeadDetails={(lead) => {
+                                    setSelectedLeadForDetails(lead);
+                                    setIsDetailsModalOpen(true);
+                                  }}
+                                  awardXP={(xp) => awardXP(xp)}
+                                  addNotification={addNotification}
+                                />
+                              </div>
+                            </div>
+                          ) : leadsViewMode === "estoque" ? (
+                            <div className="space-y-4">
+                              <div className="p-4 bg-zinc-900/40 rounded-2xl border-2 border-zinc-950">
+                                <RealEstateInventory
+                                  leads={leads}
+                                  globalFilteredLeads={unifiedFilteredLeads}
+                                  globalSearchTerm={searchTerm}
+                                  properties={properties}
+                                  setProperties={setProperties}
+                                  onAddProperty={handleAddProperty}
+                                  onAddBulkProperties={handleAddBulkProperties}
+                                  onAddBulkLeads={handleAddBulkLeads}
+                                  onDeleteProperty={handleDeleteProperty}
+                                  onDeleteMultipleProperties={
+                                    handleDeleteMultiplePropertiesHandler
+                                  }
+                                  onUpdatePropertyStatus={handleUpdatePropertyStatus}
+                                  onUpdateProperty={handleUpdateProperty}
+                                  onUpdateLeadField={handleUpdateLeadField}
+                                  theme={theme}
+                                  accSettings={accSettings}
+                                  addNotification={addNotification}
+                                  awardXP={(xp, cause) => awardXP(xp)}
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <LeadList
+                              leads={currentLeadsArray}
+                              tableHeaderComponent={(ids, actions) =>
+                                renderTableSearchBar({
+                                  selectedLeadIds: ids,
+                                  blockActions: {
+                                    openCampaignModal: actions.openCampaignModal,
+                                    openBulkScheduleModal: actions.openBulkScheduleModal,
+                                    onDelete: handleDeleteMultipleLeadsHandler,
+                                  },
+                                })
+                              }
                               onOpenLeadDetails={(lead) => {
                                 setSelectedLeadForDetails(lead);
                                 setIsDetailsModalOpen(true);
                               }}
-
                               onOpenEditModal={(lead) => {
                                 setSelectedLeadForEdit(lead);
                                 setIsLeadModalOpen(true);
                               }}
-                              onOpenCreateModal={(status) => {
+                              onDeleteLead={handleDeleteLead}
+                              onOpenCreateModal={() => {
                                 setSelectedLeadForEdit(null);
-                                setDefaultStatusForCreate(status || "novo");
+                                setDefaultStatusForCreate("novo");
                                 setIsLeadModalOpen(true);
                               }}
-                              showOrganizer={kanbanShowOrganizer}
-                              setShowOrganizer={setKanbanShowOrganizer}
-                              hyperfocusActive={kanbanHyperfocus}
-                              setHyperfocusActive={setKanbanHyperfocus}
-                              triggerCreateStatus={kanbanTriggerCreateStatus}
-                              setTriggerCreateStatus={
-                                setKanbanTriggerCreateStatus
-                              }
-                              triggerCreatePage={kanbanTriggerCreatePage}
-                              setTriggerCreatePage={setKanbanTriggerCreatePage}
-                              triggerEditPage={kanbanTriggerEditPage}
-                              setTriggerEditPage={setKanbanTriggerEditPage}
-                              triggerDeletePage={kanbanTriggerDeletePage}
-                              setTriggerDeletePage={setKanbanTriggerDeletePage}
-                              triggerHyperfocus={kanbanTriggerHyperfocus}
-                              setTriggerHyperfocus={setKanbanTriggerHyperfocus}
+                              onMoveLead={handleMoveLead}
+                              onNavigateToFollowUp={(lead) => {
+                                setActiveTab("dashboard");
+                              }}
+                              onAddBulkLeads={handleAddBulkLeads}
+                              onDeleteMultipleLeads={handleDeleteMultipleLeadsHandler}
+                              onUpdateLeadField={handleUpdateLeadField}
+                              awardXP={awardXP}
+                              addNotification={addNotification}
+                              appointments={appointments}
+                              setAppointments={setAppointments}
+                              searchTerm={searchTerm}
+                              setSearchTerm={setSearchTerm}
+                              theme={theme}
+                              isTodosView={leadsViewMode === "todos"}
+                              isActiveLeadsView={leadsViewMode === "ativos"}
                               onOpenAIAssistant={handleOpenAIAssistant}
                               onOpenRuleEngine={handleOpenRuleEngine}
                             />
-                          </div>
+                          )}
+
+                          {/* Fixed Connective Map below the main components for specific views */}
+                          {["todos", "recentes", "ativos", "kanban", "disparos", "roteiros"].includes(leadsViewMode) && (
+                            <div className="mt-8 p-6 bg-zinc-905 border-4 border-zinc-950 rounded-3xl shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] text-white">
+                              <div className="mb-4">
+                                <span className="text-[10px] uppercase font-mono font-black text-indigo-400 block">Visualização Gráfica Integrada</span>
+                                <h3 className="text-base font-black italic uppercase tracking-tight text-zinc-100 flex items-center gap-2">
+                                  <span>🗺️ Mapa Conectivo de Leads</span>
+                                  <span className="px-2 py-0.5 bg-zinc-800 text-zinc-400 font-mono text-[9px] font-black rounded border border-zinc-700 uppercase">Fixo</span>
+                                </h3>
+                                <p className="text-xs text-zinc-400 font-medium mt-0.5">Visão consolidada das conexões estruturadas, fluxo operacional e clusters de relacionamento.</p>
+                              </div>
+                              <div className="h-[450px] overflow-hidden rounded-2xl border-2 border-zinc-850 bg-zinc-950/20 relative">
+                                <KanbanBoard
+                                  layoutZoom={layoutZoom}
+leads={currentLeadsArray}
+                                  properties={properties}
+                                  onMoveLead={handleMoveLead}
+                                  onAddToDispatchQueue={handleAddMultipleToDisparos}
+                                  onOpenLeadDetails={(lead) => {
+                                    setSelectedLeadForDetails(lead);
+                                    setIsDetailsModalOpen(true);
+                                  }}
+                                  onOpenEditModal={(lead) => {
+                                    setSelectedLeadForEdit(lead);
+                                    setIsLeadModalOpen(true);
+                                  }}
+                                  onOpenCreateModal={(status) => {
+                                    setSelectedLeadForEdit(null);
+                                    setDefaultStatusForCreate(status || "novo");
+                                    setIsLeadModalOpen(true);
+                                  }}
+                                  showOrganizer={kanbanShowOrganizer}
+                                  setShowOrganizer={setKanbanShowOrganizer}
+                                  hyperfocusActive={kanbanHyperfocus}
+                                  setHyperfocusActive={setKanbanHyperfocus}
+                                  triggerCreateStatus={kanbanTriggerCreateStatus}
+                                  setTriggerCreateStatus={
+                                    setKanbanTriggerCreateStatus
+                                  }
+                                  triggerCreatePage={kanbanTriggerCreatePage}
+                                  setTriggerCreatePage={
+                                    setKanbanTriggerCreatePage
+                                  }
+                                  triggerEditPage={kanbanTriggerEditPage}
+                                  setTriggerEditPage={setKanbanTriggerEditPage}
+                                  triggerDeletePage={kanbanTriggerDeletePage}
+                                  setTriggerDeletePage={
+                                    setKanbanTriggerDeletePage
+                                  }
+                                  triggerHyperfocus={kanbanTriggerHyperfocus}
+                                  setTriggerHyperfocus={setKanbanTriggerHyperfocus}
+                                  onOpenAIAssistant={handleOpenAIAssistant}
+                                  onOpenRuleEngine={handleOpenRuleEngine}
+                                  renderOnlyMap={true}
+                                />
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -5988,46 +6207,8 @@ export default function App() {
                 </div>
               )}
 
-              {activeTab === "automation-flows" && (
-                <ScriptsAndFlows
-                  leads={leads}
-                  onUpdateLeadField={handleUpdateLeadField}
-                  accSettings={accSettings}
-                  triggerSensoryFeedback={triggerSensoryFeedback}
-                  addNotification={addNotification}
-                  initialSearchTerm={scriptSearchTerm}
-                  onChangeSearchTerm={setScriptSearchTerm}
-                  onDeleteLead={handleDeleteLead}
-                  onDeleteMultipleLeads={handleDeleteMultipleLeadsHandler}
-                  operationalFlows={operationalFlows}
-                  setOperationalFlows={setOperationalFlows}
-                />
-              )}
-
-              {/* 4.6. REAL ESTATE INVENTORY MODULE */}
-              {activeTab === "inventory" && (
-                <div className="w-full">
-                  <RealEstateInventory
-                    leads={leads}
-                    globalFilteredLeads={unifiedFilteredLeads}
-                    globalSearchTerm={searchTerm}
-                    properties={properties}
-                    setProperties={setProperties}
-                    onAddProperty={handleAddProperty}
-                    onAddBulkProperties={handleAddBulkProperties}
-                    onAddBulkLeads={handleAddBulkLeads}
-                    onDeleteProperty={handleDeleteProperty}
-                    onDeleteMultipleProperties={
-                      handleDeleteMultiplePropertiesHandler
-                    }
-                    onUpdatePropertyStatus={handleUpdatePropertyStatus}
-                    onUpdateProperty={handleUpdateProperty}
-                    theme={theme}
-                    accSettings={accSettings}
-                    addNotification={addNotification}
-                    awardXP={(xp, cause) => awardXP(xp)}
-                  />
-                </div>
+              {activeTab === "workspace" && (
+                <WorkspaceTab />
               )}
 
               {/* 6. STANDALONE FINANCE SIMULATOR */}
@@ -6129,19 +6310,19 @@ export default function App() {
 
               {/* 10. SETTINGS & ADMINISTRATION TAB */}
               {activeTab === "settings" && (
-                <div className="w-full flex-1 flex flex-col min-h-0 space-y-6 animate-fadeIn pb-10">
+                <div className="w-full flex-1 flex flex-col min-h-0 space-y-6  pb-10">
                   {/* Top Page Title Header (Broadcast Style) */}
                   <div className="bg-zinc-900 border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] flex flex-col md:flex-row md:items-center md:justify-between gap-4 select-none relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-6 opacity-5 font-mono tracking-tighter text-8xl select-none pointer-events-none font-black uppercase group-hover:scale-105 transition-all">
+                    <div className="absolute top-0 right-0 p-6 opacity-5 font-mono tracking-tighter text-8xl select-none pointer-events-none font-black uppercase group-hover:scale-105 transition-colors">
                       CONFIG
                     </div>
                     <div className="flex-1 z-10">
                       <h2 className="text-3xl font-black tracking-tighter text-white uppercase italic flex items-center gap-3">
-                        <Settings className="w-8 h-8 text-indigo-400 animate-spin-slow" />
+                        <Settings className="w-8 h-8 text-indigo-400 -slow" />
                         <span>Gestão & Administração</span>
                       </h2>
                       <p className="text-xs text-zinc-400 font-bold font-mono mt-1 flex items-center gap-2">
-                        <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                        <span className="w-2 h-2 bg-emerald-500 rounded-full " />
                         Acesse seu perfil, ajuste metas de gamificação e
                         gerencie backups do CRM.
                       </p>
@@ -6161,7 +6342,7 @@ export default function App() {
                             t === "config" ? "profile" : "database",
                           );
                         }}
-                        className={`flex-1 px-5 py-3 font-black text-xs uppercase tracking-widest transition-all rounded-xl border-2 text-center ${
+                        className={`flex-1 px-5 py-3 font-black text-xs uppercase tracking-widest transition-colors rounded-xl border-2 text-center ${
                           (settingsModalTab === "profile" && t === "config") ||
                           (settingsModalTab === "database" && t === "database")
                             ? "bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
@@ -6177,9 +6358,6 @@ export default function App() {
                       </button>
                     ))}
                   </div>
-
-                  {/* Search bar context - using the unified component */}
-                  {renderTableSearchBar({})}
 
                   {/* Scrollable Content Container */}
                   <div className="flex-1 min-h-0">
@@ -6277,7 +6455,7 @@ export default function App() {
                               </div>
                               <div className="w-full h-3 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700 p-0.5">
                                 <div
-                                  className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-400 rounded-full transition-all duration-1000"
+                                  className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-400 rounded-full transition-colors"
                                   style={{ width: `${(userXP % 500) / 5}%` }}
                                 />
                               </div>
@@ -6489,7 +6667,7 @@ export default function App() {
       {/* D. CUSTOM STYLED CONFIRMATION OVERLAY */}
 
       {confirmModal && confirmModal.isOpen && (
-        <div className="fixed inset-0 bg-zinc-950/80 flex items-center justify-center p-4 z-[9999] select-none backdrop-blur-xs">
+        <div className="fixed inset-0 bg-zinc-950/80 flex items-center justify-center p-4 z-[9999] select-none ">
           <div className="bg-white border-4 border-zinc-950 p-6 rounded-3xl w-full max-w-sm shadow-[6px_6px_0px_0px_rgba(24,24,27,1)] space-y-4 text-zinc-950">
             <div className="flex items-start gap-3">
               <div
@@ -6563,6 +6741,7 @@ export default function App() {
         isOpen={isDetailsModalOpen}
         lead={selectedLeadForDetails}
         emailLogs={emailLogs}
+        properties={properties}
         onClose={() => {
           setIsDetailsModalOpen(false);
           setSelectedLeadForDetails(null);
@@ -6574,6 +6753,8 @@ export default function App() {
         awardXP={(xp) => awardXP(xp)}
         onOpenAIAssistant={handleOpenAIAssistant}
         onOpenRuleEngine={handleOpenRuleEngine}
+        appointments={appointments}
+        setAppointments={setAppointments}
 
         onOpenEditModal={(lead) => {
           setSelectedLeadForEdit(lead);
@@ -6599,7 +6780,7 @@ export default function App() {
             </div>
             <button
               onClick={() => setCeoResponse(null)}
-              className="text-zinc-400 hover:text-white font-black font-mono text-[9px] bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 px-2 py-1 rounded-lg transition-all cursor-pointer uppercase"
+              className="text-zinc-400 hover:text-white font-black font-mono text-[9px] bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 px-2 py-1 rounded-lg transition-colors cursor-pointer uppercase"
             >
               Fechar ✕
             </button>
@@ -6617,8 +6798,8 @@ export default function App() {
           <div className="mt-4 max-h-80 overflow-y-auto bg-zinc-900/60 rounded-2xl p-4 border border-zinc-900 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
             {isCeoLoading ? (
               <div className="flex flex-col items-center justify-center py-10 gap-3">
-                <div className="w-8 h-8 rounded-full border-4 border-purple-500 border-t-transparent animate-spin"></div>
-                <p className="text-zinc-400 text-[9px] font-mono uppercase tracking-widest animate-pulse">
+                <div className="w-8 h-8 rounded-full border-4 border-purple-500 border-t-transparent "></div>
+                <p className="text-zinc-400 text-[9px] font-mono uppercase tracking-widest ">
                   Consultando dados de leads...
                 </p>
               </div>
@@ -6658,7 +6839,7 @@ export default function App() {
       {/* ADAPTIVE IMPORT AND EXPORT MODALS */}
 
       {isImportModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-4 backdrop-blur-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-4 ">
           <div className="bg-zinc-50 border-4 border-zinc-950 rounded-3xl w-full max-w-md shadow-[8px_8px_0px_0px_rgba(24,24,27,1)] overflow-hidden flex flex-col">
             <div className="p-4 bg-emerald-500 border-b-4 border-zinc-950 flex items-center justify-between">
               <h3 className="font-black text-zinc-950 uppercase italic text-sm tracking-widest flex items-center gap-2">
@@ -7110,7 +7291,7 @@ export default function App() {
       )}
 
       {isExportModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-4 backdrop-blur-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-4 ">
           <div className="bg-zinc-50 border-4 border-zinc-950 rounded-3xl w-full max-w-md shadow-[8px_8px_0px_0px_rgba(24,24,27,1)] overflow-hidden flex flex-col">
             <div className="p-4 bg-indigo-500 border-b-4 border-zinc-950 flex items-center justify-between">
               <h3 className="font-black text-white uppercase italic text-sm tracking-widest flex items-center gap-2">
@@ -7262,7 +7443,7 @@ export default function App() {
         <div className="fixed inset-0 z-50 overflow-hidden">
           <div
             onClick={() => setIsNotificationsOpen(false)}
-            className="absolute inset-0 bg-black/70 backdrop-blur-xs"
+            className="absolute inset-0 bg-black/70 "
           />
           <div className="absolute inset-y-0 right-0 max-w-full pl-10 flex">
             <div className="w-screen max-w-md bg-zinc-950 text-zinc-100 border-l-4 border-zinc-900 shadow-[0_0_40px_rgba(0,0,0,0.6)] flex flex-col h-full font-sans">
@@ -7332,7 +7513,7 @@ export default function App() {
                   notifications.map((notify) => (
                     <div
                       key={notify.id}
-                      className={`p-3.5 rounded-xl border-2 transition-all duration-350 ${
+                      className={`p-3.5 rounded-xl border-2 transition-colors ${
                         notify.read
                           ? "bg-zinc-905 bg-opacity-30 border-zinc-900 text-zinc-400"
                           : "bg-zinc-900 border-indigo-900 text-white shadow-[0_2px_8px_rgba(99,102,241,0.15)]"
@@ -7410,7 +7591,7 @@ export default function App() {
                     triggerSensoryFeedback("click", accSettings);
                     simulateCRMAction();
                   }}
-                  className="w-full flex items-center justify-center gap-1.5 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-lg text-xs uppercase border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition-all"
+                  className="w-full flex items-center justify-center gap-1.5 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-lg text-xs uppercase border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition-colors"
                 >
                   <Sparkles className="w-4 h-4 text-indigo-200" />
                   <span>DIAGNOSTICAR OPORTUNIDADES REAL 🔍</span>
@@ -7448,7 +7629,7 @@ export default function App() {
 
       {activeAlarm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-red-950/80 backdrop-blur-xs" />
+          <div className="absolute inset-0 bg-red-950/80 " />
           <div className="relative w-full max-w-md bg-white border-8 border-red-600 rounded-3xl p-6 text-zinc-900 shadow-[0_0_50px_rgba(239,68,68,0.5)] flex flex-col space-y-4">
             <div className="flex flex-col items-center justify-center text-center space-y-3.5">
               <div className="relative flex items-center justify-center">
@@ -7508,7 +7689,7 @@ export default function App() {
       {isUserCentralModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div
-            className="absolute inset-0 bg-zinc-950/80 backdrop-blur-xs"
+            className="absolute inset-0 bg-zinc-950/80 "
             onClick={() => setIsUserCentralModalOpen(false)}
           />
           <div
@@ -7721,14 +7902,14 @@ export default function App() {
                           );
                           triggerSensoryFeedback("click", updated);
                         }}
-                        className={`w-12 h-6 rounded-full p-1 transition-colors duration-300 ${
+                        className={`w-12 h-6 rounded-full p-1 transition-colors  ${
                           accSettings.soundsEnabled
                             ? "bg-indigo-600"
                             : "bg-zinc-800"
                         }`}
                       >
                         <div
-                          className={`w-4 h-4 bg-white rounded-full transition-transform duration-300 ${
+                          className={`w-4 h-4 bg-white rounded-full transition-transform  ${
                             accSettings.soundsEnabled
                               ? "translate-x-6"
                               : "translate-x-0"
@@ -7760,14 +7941,14 @@ export default function App() {
                           );
                           triggerSensoryFeedback("chime", updated);
                         }}
-                        className={`w-12 h-6 rounded-full p-1 transition-colors duration-300 ${
+                        className={`w-12 h-6 rounded-full p-1 transition-colors  ${
                           accSettings.hapticsEnabled
                             ? "bg-indigo-600"
                             : "bg-zinc-800"
                         }`}
                       >
                         <div
-                          className={`w-4 h-4 bg-white rounded-full transition-transform duration-300 ${
+                          className={`w-4 h-4 bg-white rounded-full transition-transform  ${
                             accSettings.hapticsEnabled
                               ? "translate-x-6"
                               : "translate-x-0"
@@ -7799,14 +7980,14 @@ export default function App() {
                           );
                           triggerSensoryFeedback("success", updated);
                         }}
-                        className={`w-12 h-6 rounded-full p-1 transition-colors duration-300 ${
+                        className={`w-12 h-6 rounded-full p-1 transition-colors  ${
                           accSettings.speakAloudEnabled
                             ? "bg-indigo-600"
                             : "bg-zinc-805"
                         }`}
                       >
                         <div
-                          className={`w-4 h-4 bg-white rounded-full transition-transform duration-300 ${
+                          className={`w-4 h-4 bg-white rounded-full transition-transform  ${
                             accSettings.speakAloudEnabled
                               ? "translate-x-6"
                               : "translate-x-0"
@@ -7839,14 +8020,14 @@ export default function App() {
                           );
                           triggerSensoryFeedback("click", updated);
                         }}
-                        className={`w-12 h-6 rounded-full p-1 transition-colors duration-300 ${
+                        className={`w-12 h-6 rounded-full p-1 transition-colors  ${
                           accSettings.highLegibilityFont
                             ? "bg-indigo-600"
                             : "bg-zinc-800"
                         }`}
                       >
                         <div
-                          className={`w-4 h-4 bg-white rounded-full transition-transform duration-300 ${
+                          className={`w-4 h-4 bg-white rounded-full transition-transform  ${
                             accSettings.highLegibilityFont
                               ? "translate-x-6"
                               : "translate-x-0"
@@ -8043,7 +8224,7 @@ export default function App() {
               </p>
               <button
                 onClick={handleMasterSystemReset}
-                className="w-full py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-mono font-black text-xs uppercase rounded-xl border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] active:translate-y-[1px] active:shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] transition-all cursor-pointer"
+                className="w-full py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-mono font-black text-xs uppercase rounded-xl border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] active:translate-y-[1px] active:shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] transition-colors cursor-pointer"
               >
                 🔥 Executar Master Reset Completo de Registro e Logs
               </button>
@@ -8058,48 +8239,49 @@ export default function App() {
         lead={selectedLeadForAutomation}
       />
 
-      {/* Absolute Translucent Edge Navigation Buttons - Próximo ao Cabeçalho */}
-      <div className="fixed left-4 top-[48px] z-[99] pointer-events-none">
-        <button
-          onClick={() => {
-            triggerSensoryFeedback("click", accSettings);
-            const evt = new CustomEvent("ciclocred_global_prev_visibility", {
-              detail: { handled: false },
-            });
-            window.dispatchEvent(evt);
-          }}
-          className="pointer-events-auto w-12 h-12 rounded-full bg-zinc-900/10 hover:bg-zinc-900/30 text-zinc-500 hover:text-indigo-400 dark:bg-white/5 dark:hover:bg-white/10 dark:text-zinc-400 dark:hover:text-indigo-400 border border-zinc-500/10 backdrop-blur-xs flex items-center justify-center transition-all cursor-pointer shadow-xs hover:scale-105 active:scale-95"
-          title="Visibilidade Anterior (Seta Esquerda)"
-        >
-          <span className="text-xl font-bold font-sans">‹</span>
-        </button>
+      {/* Fully Integrated Translucent Left Edge Click-Zone for seamless CRM visibility cycling */}
+      <div 
+        onClick={() => {
+          triggerSensoryFeedback("click", accSettings);
+          const evt = new CustomEvent("ciclocred_global_prev_visibility", {
+            detail: { handled: false },
+          });
+          window.dispatchEvent(evt);
+        }}
+        className="fixed left-0 top-[180px] bottom-[80px] w-6 md:w-10 z-[80] cursor-pointer flex items-center justify-center transition-all bg-transparent hover:bg-indigo-500/5 dark:hover:bg-indigo-500/5 border-r border-transparent hover:border-indigo-500/10 dark:hover:border-indigo-500/10 select-none group"
+        title="Clique na borda esquerda para alternar para a Visibilidade Anterior"
+      >
+        <span className="text-2xl font-black font-sans text-zinc-600/20 group-hover:text-indigo-400 group-hover:scale-125 transition-all">
+          ‹
+        </span>
       </div>
 
-      <div className="fixed right-4 top-[48px] z-[99] pointer-events-none">
-        <button
-          onClick={() => {
-            triggerSensoryFeedback("click", accSettings);
-            const evt = new CustomEvent("ciclocred_global_next_visibility", {
-              detail: { handled: false },
-            });
-            window.dispatchEvent(evt);
-          }}
-          className="pointer-events-auto w-12 h-12 rounded-full bg-zinc-900/10 hover:bg-zinc-900/30 text-zinc-500 hover:text-indigo-400 dark:bg-white/5 dark:hover:bg-white/10 dark:text-zinc-400 dark:hover:text-indigo-400 border border-zinc-500/10 backdrop-blur-xs flex items-center justify-center transition-all cursor-pointer shadow-xs hover:scale-105 active:scale-95"
-          title="Próxima Visibilidade (Seta Direita)"
-        >
-          <span className="text-xl font-bold font-sans">›</span>
-        </button>
+      {/* Fully Integrated Translucent Right Edge Click-Zone for seamless CRM visibility cycling */}
+      <div 
+        onClick={() => {
+          triggerSensoryFeedback("click", accSettings);
+          const evt = new CustomEvent("ciclocred_global_next_visibility", {
+            detail: { handled: false },
+          });
+          window.dispatchEvent(evt);
+        }}
+        className="fixed right-0 top-[180px] bottom-[80px] w-6 md:w-10 z-[80] cursor-pointer flex items-center justify-center transition-all bg-transparent hover:bg-indigo-500/5 dark:hover:bg-indigo-500/5 border-l border-transparent hover:border-indigo-500/10 dark:hover:indigo-500/10 select-none group"
+        title="Clique na borda direita para alternar para a Próxima Visibilidade"
+      >
+        <span className="text-2xl font-black font-sans text-zinc-600/20 group-hover:text-indigo-400 group-hover:scale-125 transition-all">
+          ›
+        </span>
       </div>
 
-      {/* Botões Laterais - Abaixo da Linha da Saudação e Horário */}
+      {/* Botões Laterais - Alternar Páginas Ativas (Abas) */}
       <div className="fixed left-4 top-[120px] z-[99] pointer-events-none">
         <button
           onClick={() => {
             triggerSensoryFeedback("click", accSettings);
             window.dispatchEvent(new CustomEvent("ciclocred_cycle_tab_prev"));
           }}
-          className="pointer-events-auto w-12 h-12 rounded-full bg-indigo-950/15 hover:bg-indigo-900/30 text-indigo-400 dark:bg-white/5 dark:hover:bg-white/10 dark:text-indigo-400 border border-indigo-500/20 backdrop-blur-xs flex items-center justify-center transition-all cursor-pointer shadow-xs hover:scale-105 active:scale-95"
-          title="Página Anterior"
+          className="pointer-events-auto w-12 h-12 rounded-full bg-indigo-950/15 hover:bg-indigo-900/30 text-indigo-400 dark:bg-white/5 dark:hover:bg-white/10 dark:text-indigo-400 border border-indigo-500/20  flex items-center justify-center transition-colors cursor-pointer shadow-xs hover:scale-105 active:scale-95"
+          title="Página Anterior (Abas)"
         >
           <span className="text-xl font-black font-sans">«</span>
         </button>
@@ -8111,8 +8293,8 @@ export default function App() {
             triggerSensoryFeedback("click", accSettings);
             window.dispatchEvent(new CustomEvent("ciclocred_cycle_tab_next"));
           }}
-          className="pointer-events-auto w-12 h-12 rounded-full bg-indigo-950/15 hover:bg-indigo-900/30 text-indigo-400 dark:bg-white/5 dark:hover:bg-white/10 dark:text-indigo-400 border border-indigo-500/20 backdrop-blur-xs flex items-center justify-center transition-all cursor-pointer shadow-xs hover:scale-105 active:scale-95"
-          title="Próxima Página"
+          className="pointer-events-auto w-12 h-12 rounded-full bg-indigo-950/15 hover:bg-indigo-900/30 text-indigo-400 dark:bg-white/5 dark:hover:bg-white/10 dark:text-indigo-400 border border-indigo-500/20  flex items-center justify-center transition-colors cursor-pointer shadow-xs hover:scale-105 active:scale-95"
+          title="Próxima Página (Abas)"
         >
           <span className="text-xl font-black font-sans">»</span>
         </button>

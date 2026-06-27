@@ -673,6 +673,181 @@ JSON esperado: {"objectionsFilter": "muito_caro", "regionFilter": "Leste", "fami
     }
   });
 
+  app.post("/api/ai/nlp-command", async (req, res) => {
+    const { command, leadsContext, propertiesContext } = req.body;
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        throw new Error("API Key not found");
+      }
+
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          headers: { 'User-Agent': 'aistudio-build' }
+        }
+      });
+
+      const prompt = `Você é o Agente de Inteligência Artificial para Automação do Mapa Conectivo do cicloCRED CRM.
+Sua missão é interpretar o comando natural do usuário e convertê-lo em ações estruturadas no sistema. O usuário pode dar comandos genéricos (apenas o primeiro nome, nome do imóvel, agir em lote baseado em preço, região, alterar a renda, etc).
+
+Comando do Usuário: "${command}"
+
+Você possui acesso a duas listas parciais do contexto:
+LEADS: ${JSON.stringify(leadsContext || [], null, 2)}
+IMÓVEIS: ${JSON.stringify(propertiesContext || [], null, 2)}
+
+Você DEVE retornar APENAS UM JSON VÁLIDO com a seguinte estrutura e NENHUM texto extra (nem markdown \`\`\`json):
+{
+  "message": "Sua resposta natural descrevendo o que fez (curta e objetiva)",
+  "actions": [
+    {
+      "type": "UPDATE_LEAD",
+      "leadId": "id-do-lead-a-alterar",
+      "updates": {
+         "status": "novo-status",
+         "propertyInterest": "codigo-do-imovel",
+         "value": 150000,
+         "familyGrossIncome": 5000,
+         "familyIncome": 5000,
+         "qualificacao": "A",
+         "notes": "..."
+      }
+    }
+  ]
+}
+
+- As ações possíveis no momento são UPDATE_LEAD, APPLY_PROPERTY (para vincular imovel), ADD_TO_DISPATCH_QUEUE (para enviar leads para a tabela de disparos), e FOCUS_LEAD (para destacar/expandir detalhes de um lead no mapa).
+- Se o usuário pedir para alterar vários leads (ex: "atualize todos que procuram X"), gere uma action "UPDATE_LEAD" separada para cada lead correspondente.
+- Se o usuário pedir "criar fila de disparos para leads X" ou "adicionar Y aos disparos", use:
+  {"type": "ADD_TO_DISPATCH_QUEUE", "leadIds": ["id1", "id2"], "message": "Fila criada"}
+- Se o usuário pedir "detalhes do João", "focar João", "expandir dados de X", "ver qualificação de Y", use:
+  {"type": "FOCUS_LEAD", "leadIds": ["id1"], "message": "Lead expandido"}
+- "Renda" mapeia para "familyGrossIncome", "familyIncome" e/ou "value" (orçamento dependendo do contexto).
+- Seja tolerante a erros de digitação.
+- Sempre retorne arrays válidos em actions.`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json"
+        }
+      });
+
+      let responseText = response.text || "{}";
+      const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+      res.json(JSON.parse(cleanJson));
+    } catch (error: any) {
+      console.warn("Erro no nlp-command do Gemini:", error);
+      res.status(500).json({ error: "Falha na comunicação com o Gemini. Tente novamente." });
+    }
+  });
+
+  app.post("/api/ai/parse-followup-npl", async (req, res) => {
+    const { text, leads } = req.body;
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        throw new Error("API Key not found");
+      }
+
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          headers: { 'User-Agent': 'aistudio-build' }
+        }
+      });
+
+      const todayStr = new Date().toISOString().split("T")[0];
+      const todayDayOfWeek = new Date().toLocaleDateString("pt-BR", { weekday: 'long' });
+
+      const prompt = `Você é o interpretador NPL (Processamento de Linguagem Natural) de agendamentos do cicloCRED CRM.
+Sua missão é extrair informações de um comando de voz/texto escrito em português e estruturá-lo em um JSON de agendamento de follow-up.
+
+Comando do Usuário: "${text}"
+
+Data de hoje: ${todayStr} (${todayDayOfWeek})
+
+Lista de leads cadastrados: ${JSON.stringify((leads || []).map((l: any) => ({ id: l.id, name: l.name })), null, 2)}
+
+Você DEVE mapear a ação para um dos seguintes tipos:
+- 'whatsapp' (se falar whatsapp, zap, mensagem, etc.)
+- 'telefone' (se falar ligação, ligar, telefone, contato, etc.)
+- 'reuniao' (se falar reunião, call, meeting, alinhar, etc.)
+- 'proposta' (se falar proposta, orçamentar, enviar valores, etc.)
+- 'visita' (se falar visita, stand, decorado, visitar, etc.)
+- 'presencial' (se falar ação ativa presencial, panfletagem, plantão, ativo, etc.)
+
+Ademais, tente inferir a data relativa (ex: "amanhã" -> amanhã em relação a ${todayStr}, "quarta-feira" -> próxima quarta-feira, etc.) e o horário aproximado (ex: "15h" -> "15:00", "meio dia" -> "12:00").
+
+Retorne APENAS UM JSON VÁLIDO no formato a seguir, sem blocos markdown (sem \`\`\`json):
+{
+  "title": "Breve título do compromisso",
+  "type": "whatsapp | telefone | reuniao | proposta | visita | presencial",
+  "date": "YYYY-MM-DD",
+  "time": "HH:MM",
+  "description": "Notas e contexto extraído do compromisso",
+  "matchedLeadId": "id-do-lead-se-houver-combinação-ou-vazio",
+  "matchedLeadName": "nome-do-lead-se-encontrado-ou-vazio"
+}`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json"
+        }
+      });
+
+      let responseText = response.text || "{}";
+      const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+      res.json(JSON.parse(cleanJson));
+    } catch (error: any) {
+      console.warn("Erro no parse-followup-npl do Gemini:", error);
+      res.status(500).json({ error: "Falha ao processar comando NPL." });
+    }
+  });
+
+  app.post("/api/ai/followups-assistant", async (req, res) => {
+    const { appointments, leads } = req.body;
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        throw new Error("API Key not found");
+      }
+
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          headers: { 'User-Agent': 'aistudio-build' }
+        }
+      });
+
+      const prompt = `Você é o Assistente Preditivo e Consultor de Negócios de Alta Performance do cicloCRED CRM.
+Analise a lista de agendamentos e leads selecionados abaixo e gere um relatório tático de vendas contendo:
+1. 🎯 **Análise de Crédito & Perfil**: Insights rápidos sobre o perfil de crédito, faixas de renda e produtos compatíveis dos leads selecionados.
+2. ✍️ **Scripts de Abordagem Personalizados**: Scripts de altíssima conversão (copywriting persuasivo) prontos para enviar por WhatsApp ou falar no telefone para cada lead, conforme o tipo de compromisso agendado (whatsapp, ligação, visita, etc.).
+3. 🗺️ **Plano de Ação Comercial**: Passos táticos imediatos recomendados para concretizar estas vendas.
+
+Dados dos Compromissos e Leads Selecionados:
+Compromissos: ${JSON.stringify(appointments || [], null, 2)}
+Leads Correspondentes: ${JSON.stringify(leads || [], null, 2)}
+
+Escreva sua resposta de forma clara, altamente profissional, objetiva e estruturada em Markdown com formatação elegante.`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: prompt
+      });
+
+      res.json({ text: response.text });
+    } catch (error: any) {
+      console.warn("Erro no followups-assistant:", error);
+      res.status(500).json({ error: "Falha na comunicação com o assistente Gemini." });
+    }
+  });
+
   app.post("/api/ai/ceo-query", async (req, res) => {
     const { query, leadsContext, activeTab } = req.body;
     try {
@@ -774,6 +949,161 @@ Retorne apenas o JSON puro, sem usar blocos de código markdown do tipo \`\`\`js
   });
 
   // API Route for AI Campaign Planning & Metric calculation based on Lead volume
+  // API Route for Browser Proxy (Bypass X-Frame-Options & CORS)
+  app.get("/api/browser-proxy", async (req, res) => {
+    try {
+      const targetUrl = req.query.url as string;
+      if (!targetUrl) return res.status(400).send("URL required");
+
+      // Handle search queries directly
+      let finalUrl = targetUrl;
+      if (!/^https?:\/\//i.test(finalUrl)) {
+        finalUrl = `https://www.google.com/search?q=${encodeURIComponent(finalUrl)}`;
+      }
+
+      const response = await fetch(finalUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7'
+        }
+      });
+
+      const contentType = response.headers.get("content-type") || "";
+      const isHtml = contentType.includes("text/html");
+
+      if (!isHtml) {
+        // Forward non-HTML as is
+        res.setHeader("Content-Type", contentType);
+        const arrayBuffer = await response.arrayBuffer();
+        return res.send(Buffer.from(arrayBuffer));
+      }
+
+      let html = await response.text();
+      const origin = new URL(finalUrl).origin;
+      const baseUrl = finalUrl.substring(0, finalUrl.lastIndexOf('/') + 1) || origin + '/';
+
+      // Inject <base> tag and an interception script
+      const injection = `
+        <base href="${baseUrl}">
+        <script>
+          // Intercept all link clicks to route them back through our proxy
+          document.addEventListener('click', function(e) {
+            const a = e.target.closest('a');
+            if (a && a.href) {
+              e.preventDefault();
+              let targetUrl = a.href;
+              // Redirect parent or self to proxy
+              window.location.href = '/api/browser-proxy?url=' + encodeURIComponent(targetUrl);
+            }
+          }, true);
+
+          // Intercept forms
+          document.addEventListener('submit', function(e) {
+            const form = e.target.closest('form');
+            if (form && form.action) {
+               // Let simple GET forms pass through proxy if possible, but it's tricky.
+               // For now, just allow default or proxy the action.
+               if (form.method.toLowerCase() === 'get') {
+                 e.preventDefault();
+                 const formData = new FormData(form);
+                 const params = new URLSearchParams(formData as any);
+                 let targetUrl = form.action;
+                 targetUrl += (targetUrl.includes('?') ? '&' : '?') + params.toString();
+                 window.location.href = '/api/browser-proxy?url=' + encodeURIComponent(targetUrl);
+               }
+            }
+          }, true);
+        </script>
+        <style>
+          /* Hide typical cookie banners which might break */
+          #cookie-notice, .cookie-banner, #onetrust-consent-sdk { display: none !important; }
+        </style>
+      `;
+
+      html = html.replace(/<head>/i, `<head>${injection}`);
+      
+      // Send response
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.send(html);
+
+    } catch (err: any) {
+      console.error("Browser Proxy Error:", err);
+      res.status(500).send(`
+        <html>
+          <body style="font-family:sans-serif; padding:2rem; text-align:center; color:#333;">
+            <h2>Erro ao carregar a página</h2>
+            <p>${err.message}</p>
+            <p style="color:#666; font-size:12px;">O servidor de destino recusou a conexão ou demorou a responder.</p>
+          </body>
+        </html>
+      `);
+    }
+  });
+
+  app.post("/api/ai/organize-leads", async (req, res) => {
+    try {
+      const { leads } = req.body;
+      if (!leads || !Array.isArray(leads)) {
+        return res.status(400).json({ error: "Lista de leads inválida" });
+      }
+
+      const currentConfig = db.prepare("SELECT * FROM config WHERE id = 1").get() as any;
+      const apiKey = currentConfig.gemini_api_key || process.env.GEMINI_API_KEY;
+
+      if (!apiKey) {
+        return res.status(500).json({ error: "Chave API do Gemini não configurada." });
+      }
+
+      const genAI = new GoogleGenAI({ apiKey });
+      const usedModelOrMethod = currentConfig.model_name || "gemini-3.5-flash";
+
+      const promptText = `
+Você é um especialista em estruturação de dados de CRM.
+Abaixo está uma lista JSON de leads importados (com possíveis erros de formatação, telefones juntos com nomes, ou nomes em colunas erradas).
+Seu objetivo é analisar, limpar e corrigir os dados.
+Regras:
+1. Retorne APENAS um array JSON válido.
+2. Formate telefones para o padrão brasileiro: apenas números, incluir DDI 55 se ausente, ou apenas manter (DDD) 9XXXX-XXXX formatado. Se o telefone estiver no campo do nome ou email, extraia-o para o campo "phone" e limpe o nome/email.
+3. Se um nome estiver todo em minúsculas ou maiúsculas, ajuste para Capitalized Case.
+4. Mantenha os campos "id", "value", "status", "origin", "createdAt", "notes", etc., exatamente como estão, modificando apenas "name", "email" e "phone" se necessário.
+5. Remova emojis, aspas extras e preencha email com vazio se não for um email válido.
+
+Dados brutos (JSON):
+${JSON.stringify(leads, null, 2)}
+`;
+
+      const response = await genAI.models.generateContent({
+        model: usedModelOrMethod,
+        contents: promptText,
+        config: {
+          temperature: 0.2,
+          responseMimeType: "application/json",
+          systemInstruction: "Você é um formatador de dados rigoroso. Você deve retornar exclusivamente um array JSON válido com a mesma estrutura de entrada, contendo os dados corrigidos.",
+        }
+      });
+
+      const responseText = response.text;
+      if (!responseText) {
+         return res.status(500).json({ error: "Resposta vazia da IA." });
+      }
+      
+      let organizedLeads = [];
+      try {
+        organizedLeads = JSON.parse(responseText);
+      } catch (err) {
+        // Fallback for markdown blocks
+        const cleanedText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+        organizedLeads = JSON.parse(cleanedText);
+      }
+
+      res.json({ leads: organizedLeads });
+    } catch (err: any) {
+      console.error("Erro no organize-leads AI:", err);
+      res.status(500).json({ error: err.message || "Erro desconhecido na análise da IA." });
+    }
+  });
+
   app.post("/api/ai/plan-campaign", async (req, res) => {
     const { leadCount, origin, averageValue, customNiches } = req.body;
     try {

@@ -16,7 +16,7 @@ export function autoGenerateScript(lead: Lead): string {
     ? lead.fgtsSaldo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
     : '';
   const valueStr = lead.value
-    ? lead.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
+    ? (lead.value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
     : '';
 
   // Greetings and Intro based on Profile

@@ -52,7 +52,11 @@ interface GoogleWorkspaceProps {
 }
 
 // In-memory token caching map indexed by firebase UID to support multi-user integrations safely without storage persistence
-const tokenCacheByUid: Record<string, string> = {};
+export const tokenCacheByUid: Record<string, string> = {};
+
+export function getCachedGoogleWorkspaceToken(uid: string): string | null {
+  return tokenCacheByUid[uid] || null;
+}
 
 export default function GoogleWorkspace({
   leads,
@@ -1535,7 +1539,7 @@ export default function GoogleWorkspace({
       <div className="flex border-b-4 border-zinc-950 pb-1.5 overflow-x-auto gap-2">
         <button
           onClick={() => { triggerSensoryFeedback('click', accSettings); setWorkspaceTab('status'); }}
-          className={`px-4.5 py-3 text-xs font-black uppercase tracking-wider font-mono rounded-xl shrink-0 transition-all flex items-center gap-2 ${
+          className={`px-4.5 py-3 text-xs font-black uppercase tracking-wider font-mono rounded-xl shrink-0 transition-colors flex items-center gap-2 ${
             workspaceTab === 'status' 
               ? 'bg-indigo-600 text-white border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]' 
               : 'text-zinc-400 hover:text-white bg-zinc-800'
@@ -1548,7 +1552,7 @@ export default function GoogleWorkspace({
         <button
           disabled={!token}
           onClick={() => { triggerSensoryFeedback('click', accSettings); setWorkspaceTab('calendar'); }}
-          className={`px-4.5 py-3 text-xs font-black uppercase tracking-wider font-mono rounded-xl shrink-0 transition-all flex items-center gap-2 ${
+          className={`px-4.5 py-3 text-xs font-black uppercase tracking-wider font-mono rounded-xl shrink-0 transition-colors flex items-center gap-2 ${
             !token ? 'opacity-40 cursor-not-allowed' : ''
           } ${
             workspaceTab === 'calendar' 
@@ -1563,7 +1567,7 @@ export default function GoogleWorkspace({
         <button
           disabled={!token}
           onClick={() => { triggerSensoryFeedback('click', accSettings); setWorkspaceTab('gmail'); }}
-          className={`px-4.5 py-3 text-xs font-black uppercase tracking-wider font-mono rounded-xl shrink-0 transition-all flex items-center gap-2 ${
+          className={`px-4.5 py-3 text-xs font-black uppercase tracking-wider font-mono rounded-xl shrink-0 transition-colors flex items-center gap-2 ${
             !token ? 'opacity-40 cursor-not-allowed' : ''
           } ${
             workspaceTab === 'gmail' 
@@ -1578,7 +1582,7 @@ export default function GoogleWorkspace({
         <button
           disabled={!token}
           onClick={() => { triggerSensoryFeedback('click', accSettings); setWorkspaceTab('drive'); }}
-          className={`px-4.5 py-3 text-xs font-black uppercase tracking-wider font-mono rounded-xl shrink-0 transition-all flex items-center gap-2 ${
+          className={`px-4.5 py-3 text-xs font-black uppercase tracking-wider font-mono rounded-xl shrink-0 transition-colors flex items-center gap-2 ${
             !token ? 'opacity-40 cursor-not-allowed' : ''
           } ${
             workspaceTab === 'drive' 
@@ -1593,7 +1597,7 @@ export default function GoogleWorkspace({
         <button
           disabled={!token}
           onClick={() => { triggerSensoryFeedback('click', accSettings); setWorkspaceTab('sheets'); }}
-          className={`px-4.5 py-3 text-xs font-black uppercase tracking-wider font-mono rounded-xl shrink-0 transition-all flex items-center gap-2 ${
+          className={`px-4.5 py-3 text-xs font-black uppercase tracking-wider font-mono rounded-xl shrink-0 transition-colors flex items-center gap-2 ${
             !token ? 'opacity-40 cursor-not-allowed' : ''
           } ${
             workspaceTab === 'sheets' 
@@ -1608,7 +1612,7 @@ export default function GoogleWorkspace({
         <button
           disabled={!token}
           onClick={() => { triggerSensoryFeedback('click', accSettings); setWorkspaceTab('contacts'); }}
-          className={`px-4.5 py-3 text-xs font-black uppercase tracking-wider font-mono rounded-xl shrink-0 transition-all flex items-center gap-2 ${
+          className={`px-4.5 py-3 text-xs font-black uppercase tracking-wider font-mono rounded-xl shrink-0 transition-colors flex items-center gap-2 ${
             !token ? 'opacity-40 cursor-not-allowed' : ''
           } ${
             workspaceTab === 'contacts' 
@@ -1660,7 +1664,7 @@ export default function GoogleWorkspace({
                     </div>
                     <button
                       onClick={handleDisconnectWorkspace}
-                      className="ml-2 px-3 py-2 bg-rose-950/40 text-rose-400 border border-rose-900 rounded-xl text-[10px] font-bold uppercase font-mono hover:bg-rose-900 hover:text-white transition-all cursor-pointer"
+                      className="ml-2 px-3 py-2 bg-rose-950/40 text-rose-400 border border-rose-900 rounded-xl text-[10px] font-bold uppercase font-mono hover:bg-rose-900 hover:text-white transition-colors cursor-pointer"
                     >
                       Desconectar
                     </button>
@@ -1669,7 +1673,7 @@ export default function GoogleWorkspace({
                   <button
                     onClick={handleConnectWorkspace}
                     disabled={isAuthorizing}
-                    className="flex items-center gap-2 px-5 py-3.5 bg-white text-zinc-950 hover:bg-zinc-50 border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(30,58,138,1)] text-xs font-black uppercase tracking-wider font-mono rounded-xl hover:translate-y-[-1px] transition-all cursor-pointer"
+                    className="flex items-center gap-2 px-5 py-3.5 bg-white text-zinc-950 hover:bg-zinc-50 border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(30,58,138,1)] text-xs font-black uppercase tracking-wider font-mono rounded-xl hover:translate-y-[-1px] transition-colors cursor-pointer"
                   >
                     <Key className="w-4 h-4 text-indigo-600" />
                     <span>{isAuthorizing ? 'Conectando...' : 'Conectar Google Workspace'}</span>
@@ -1742,9 +1746,9 @@ export default function GoogleWorkspace({
                         addSyncLog(`Sincronia em tempo real ${next ? 'ativada' : 'desativada'}.`);
                         triggerSensoryFeedback('click', accSettings);
                       }}
-                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isAutoSyncEnabled ? 'bg-indigo-600' : 'bg-zinc-800'}`}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors  ease-in-out focus:outline-none ${isAutoSyncEnabled ? 'bg-indigo-600' : 'bg-zinc-800'}`}
                     >
-                      <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isAutoSyncEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                      <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition  ease-in-out ${isAutoSyncEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
                     </button>
                   </div>
                 </div>
@@ -1766,7 +1770,7 @@ export default function GoogleWorkspace({
                         <button
                           onClick={handleCreateSyncSpreadsheet}
                           disabled={isPerformingSync}
-                          className="px-3 py-2 bg-zinc-850 hover:bg-zinc-800 text-white border border-zinc-750 hover:border-zinc-700 rounded-lg text-[9px] font-black uppercase font-mono tracking-wider cursor-pointer transition-all duration-150"
+                          className="px-3 py-2 bg-zinc-850 hover:bg-zinc-800 text-white border border-zinc-750 hover:border-zinc-700 rounded-lg text-[9px] font-black uppercase font-mono tracking-wider cursor-pointer transition-colors"
                         >
                           {syncSpreadsheetId ? 'Regerar Planilha do Banco' : 'Gerar Nova Planilha do Banco'}
                         </button>
@@ -1776,7 +1780,7 @@ export default function GoogleWorkspace({
                             onClick={() => {
                               window.open(`https://docs.google.com/spreadsheets/d/${syncSpreadsheetId}/edit`, '_blank');
                             }}
-                            className="px-3 py-2 bg-indigo-950/40 text-indigo-400 border border-indigo-900 hover:bg-indigo-900 hover:text-white rounded-lg text-[9px] font-black uppercase font-mono tracking-wider flex items-center gap-1.5 cursor-pointer transition-all duration-150"
+                            className="px-3 py-2 bg-indigo-950/40 text-indigo-400 border border-indigo-900 hover:bg-indigo-900 hover:text-white rounded-lg text-[9px] font-black uppercase font-mono tracking-wider flex items-center gap-1.5 cursor-pointer transition-colors"
                           >
                             <span>Vizualizar Arquivo</span>
                           </button>
@@ -1788,7 +1792,7 @@ export default function GoogleWorkspace({
                       <button
                         onClick={forceCompleteUploadToSheets}
                         disabled={isPerformingSync}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-4 py-3 bg-green-700 hover:bg-green-800 text-white font-black rounded-xl text-[10px] tracking-wide uppercase font-mono border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] active:translate-y-0 transition-all cursor-pointer"
+                        className="flex-1 flex items-center justify-center gap-1.5 px-4 py-3 bg-green-700 hover:bg-green-800 text-white font-black rounded-xl text-[10px] tracking-wide uppercase font-mono border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] active:translate-y-0 transition-colors cursor-pointer"
                       >
                         <Upload className="w-3.5 h-3.5" />
                         <span>Replicar CRM → Sheets</span>
@@ -1797,7 +1801,7 @@ export default function GoogleWorkspace({
                       <button
                         onClick={forceCompleteDownloadFromSheets}
                         disabled={isPerformingSync || !syncSpreadsheetId}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-4 py-3 bg-amber-600 hover:bg-amber-700 text-white font-black rounded-xl text-[10px] tracking-wide uppercase font-mono border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] active:translate-y-0 transition-all cursor-pointer disabled:opacity-40"
+                        className="flex-1 flex items-center justify-center gap-1.5 px-4 py-3 bg-amber-600 hover:bg-amber-700 text-white font-black rounded-xl text-[10px] tracking-wide uppercase font-mono border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] active:translate-y-0 transition-colors cursor-pointer disabled:opacity-40"
                       >
                         <Download className="w-3.5 h-3.5" />
                         <span>Puxar GSheets → CRM</span>
@@ -1807,7 +1811,7 @@ export default function GoogleWorkspace({
                     <button
                       onClick={handleBatchExportLeadsToContacts}
                       disabled={isSyncingContacts || leads.length === 0}
-                      className="w-full flex items-center justify-center gap-1.5 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-[10px] tracking-wide uppercase font-mono border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] active:translate-y-0 transition-all cursor-pointer"
+                      className="w-full flex items-center justify-center gap-1.5 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-[10px] tracking-wide uppercase font-mono border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] active:translate-y-0 transition-colors cursor-pointer"
                     >
                       <Users className="w-3.5 h-3.5" />
                       <span>Arquivar Carteira no Google Contatos ({leads.length} Leads)</span>
@@ -1847,7 +1851,7 @@ export default function GoogleWorkspace({
               </div>
               <button
                 onClick={() => { triggerSensoryFeedback('click', accSettings); setModalType('calendar'); }}
-                className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-lg text-[10px] tracking-wide uppercase font-mono border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all cursor-pointer"
+                className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-lg text-[10px] tracking-wide uppercase font-mono border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-colors cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 <span>Agendar com Google</span>
@@ -1875,7 +1879,7 @@ export default function GoogleWorkspace({
                   const formattedStart = startStr ? new Date(startStr).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'Dia todo';
                   
                   return (
-                    <div key={evt.id} className="bg-zinc-950 border-2 border-zinc-850 p-4 rounded-xl flex flex-col justify-between hover:border-emerald-600 transition-all space-y-4">
+                    <div key={evt.id} className="bg-zinc-950 border-2 border-zinc-850 p-4 rounded-xl flex flex-col justify-between hover:border-emerald-600 transition-colors space-y-4">
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
                           <span className="text-[8px] font-mono font-black bg-emerald-950/60 text-emerald-400 border border-emerald-900 rounded px-2 py-0.5 uppercase">
@@ -1932,7 +1936,7 @@ export default function GoogleWorkspace({
               </div>
               <button
                 onClick={() => { triggerSensoryFeedback('click', accSettings); setModalType('gmail'); }}
-                className="flex items-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-black rounded-lg text-[10px] tracking-wide uppercase font-mono border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all cursor-pointer"
+                className="flex items-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-black rounded-lg text-[10px] tracking-wide uppercase font-mono border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-colors cursor-pointer"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>Escrever E-mail</span>
@@ -1955,7 +1959,7 @@ export default function GoogleWorkspace({
             ) : (
               <div className="space-y-3.5">
                 {emails.map((msg: any) => (
-                  <div key={msg.id} className="bg-zinc-950 border-2 border-zinc-850 p-4 rounded-xl flex flex-col justify-between hover:border-rose-600 transition-all space-y-2.5">
+                  <div key={msg.id} className="bg-zinc-950 border-2 border-zinc-850 p-4 rounded-xl flex flex-col justify-between hover:border-rose-600 transition-colors space-y-2.5">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 text-[10px] font-mono">
                       <span className="font-sans font-black text-zinc-200 uppercase tracking-tight text-xs truncate max-w-xs block">
                         De: {msg.from}
@@ -2006,7 +2010,7 @@ export default function GoogleWorkspace({
 
                 <button
                   onClick={() => { triggerSensoryFeedback('click', accSettings); setModalType('drive'); }}
-                  className="flex items-center gap-1.5 px-3.5 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white font-black rounded-lg text-[10px] tracking-wide uppercase font-mono border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all cursor-pointer shrink-0"
+                  className="flex items-center gap-1.5 px-3.5 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white font-black rounded-lg text-[10px] tracking-wide uppercase font-mono border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-colors cursor-pointer shrink-0"
                 >
                   <Upload className="w-3.5 h-3.5" />
                   <span>Exportar Relatório</span>
@@ -2030,7 +2034,7 @@ export default function GoogleWorkspace({
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {filteredFiles.map((file: any) => (
-                  <div key={file.id} className="bg-zinc-950 border-2 border-zinc-850 p-4 rounded-xl flex flex-col justify-between hover:border-cyan-600 transition-all space-y-3">
+                  <div key={file.id} className="bg-zinc-950 border-2 border-zinc-850 p-4 rounded-xl flex flex-col justify-between hover:border-cyan-600 transition-colors space-y-3">
                     <div className="space-y-1">
                       <div className="text-[9px] font-mono font-black text-zinc-500 tracking-wider truncate mb-1">
                         MODIFICADO EM: {new Date(file.modifiedTime).toLocaleDateString('pt-BR')}
@@ -2078,7 +2082,7 @@ export default function GoogleWorkspace({
               <div className="flex gap-2">
                 <button
                   onClick={() => { triggerSensoryFeedback('click', accSettings); setModalType('sheets_import'); }}
-                  className="flex items-center gap-1.5 px-3.5 py-2.5 bg-green-700 hover:bg-green-800 text-white font-black rounded-lg text-[10px] tracking-wide uppercase font-mono border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 px-3.5 py-2.5 bg-green-700 hover:bg-green-800 text-white font-black rounded-lg text-[10px] tracking-wide uppercase font-mono border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-colors cursor-pointer"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>Importar Planilha</span>
@@ -2087,7 +2091,7 @@ export default function GoogleWorkspace({
                 <button
                   onClick={handleExportLeadsToNewSheet}
                   disabled={isLoadingSheets || leads.length === 0}
-                  className="flex items-center gap-1.5 px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-lg text-[10px] tracking-wide uppercase font-mono border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all cursor-pointer shrink-0"
+                  className="flex items-center gap-1.5 px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-lg text-[10px] tracking-wide uppercase font-mono border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-colors cursor-pointer shrink-0"
                 >
                   <Upload className="w-3.5 h-3.5" />
                   <span>Exportar Leads ({leads.length})</span>
@@ -2132,7 +2136,7 @@ export default function GoogleWorkspace({
                 <button
                   onClick={handleCreateInstantGoogleMeet}
                   disabled={isCreatingInstantMeet}
-                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase font-mono rounded-lg border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition-all cursor-pointer shrink-0"
+                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase font-mono rounded-lg border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition-colors cursor-pointer shrink-0"
                 >
                   {isCreatingInstantMeet ? 'Gerando Link...' : 'Criar Sala Instantânea'}
                 </button>
@@ -2217,7 +2221,7 @@ export default function GoogleWorkspace({
                     <button
                       onClick={handleImportAllContactsToCRM}
                       disabled={googleContacts.length === 0}
-                      className="flex items-center justify-center gap-2 px-5 py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-45 disabled:cursor-not-allowed text-white font-black text-xs uppercase font-mono rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition-all cursor-pointer shrink-0"
+                      className="flex items-center justify-center gap-2 px-5 py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-45 disabled:cursor-not-allowed text-white font-black text-xs uppercase font-mono rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition-colors cursor-pointer shrink-0"
                     >
                       <UserPlus className="w-4 h-4 text-zinc-100 " />
                       <span>Importar Todo o Google ({googleContacts.length} Contatos sem duplicar)</span>
@@ -2290,7 +2294,7 @@ export default function GoogleWorkspace({
                     <button
                       onClick={handleExportAllCRMLeadsToGoogle}
                       disabled={leads.length === 0 || isSyncingContacts}
-                      className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-45 disabled:cursor-not-allowed text-white font-black text-xs uppercase font-mono rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition-all cursor-pointer shrink-0"
+                      className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-45 disabled:cursor-not-allowed text-white font-black text-xs uppercase font-mono rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition-colors cursor-pointer shrink-0"
                     >
                       <Upload className="w-4 h-4 text-zinc-100" />
                       <span>{isSyncingContacts ? 'Sincronizando...' : `Exportar Todos para o Google (${leads.length} Leads sem duplicar)`}</span>
@@ -2334,7 +2338,7 @@ export default function GoogleWorkspace({
 
       {/* WORKSPACE OPERATIONS MODAL SUB-BLOCK */}
       {modalType && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/85 backdrop-blur-xs select-none">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/85  select-none">
           <div className="w-full max-w-lg bg-zinc-900 border-4 border-zinc-950 p-6 rounded-3xl space-y-5 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] text-zinc-100">
             
             <div className="flex justify-between items-center border-b-2 border-zinc-950 pb-2">
@@ -2606,7 +2610,7 @@ export default function GoogleWorkspace({
                         <button
                           key={item.id}
                           onClick={() => handlePreviewLeadsFromSheet(item.id)}
-                          className={`w-full text-left p-2.5 text-[11px] rounded transition-all font-mono uppercase flex justify-between ${
+                          className={`w-full text-left p-2.5 text-[11px] rounded transition-colors font-mono uppercase flex justify-between ${
                             selectedSheetId === item.id 
                               ? 'bg-green-950/60 text-green-400 border border-green-900 font-black' 
                               : 'text-zinc-300 hover:bg-zinc-900'
@@ -2636,7 +2640,7 @@ export default function GoogleWorkspace({
                         <div key={idx} className="p-2 border border-zinc-850 bg-zinc-900 text-[10px] flex justify-between rounded">
                           <span className="font-sans font-black text-white">{lead.name}</span>
                           <span className="text-zinc-500 font-sans">{lead.email}</span>
-                          <span className="text-green-500 font-bold">R$ {lead.value.toLocaleString()}</span>
+                          <span className="text-green-500 font-bold">R$ {(lead.value || 0).toLocaleString()}</span>
                         </div>
                       ))}
                     </div>
@@ -2709,7 +2713,13 @@ export async function syncCRMMovementToGoogleSheet(action: string, details: stri
       });
 
       if (!createRes.ok) {
-        throw new Error('Falha ao instanciar arquivo de planilha para sincronização realtime.');
+        let errorMsg = 'Unknown error';
+        try {
+          const errData = await createRes.json();
+          errorMsg = JSON.stringify(errData);
+        } catch(e) {}
+        console.warn(`Falha ao instanciar arquivo de planilha para sincronização realtime. Status: ${createRes.status}, Error: ${errorMsg}`);
+        return false;
       }
 
       const sheetInfo = await createRes.json();
@@ -2753,7 +2763,7 @@ export async function syncCRMMovementToGoogleSheet(action: string, details: stri
 
     return response.ok;
   } catch (err) {
-    console.error("Sheets Real-time Sync Error:", err);
+    console.warn("Sheets Real-time Sync Error:", err);
     return false;
   }
 }

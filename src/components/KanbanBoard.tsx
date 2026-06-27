@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 
 import { Lead, LeadStatus } from "../types";
+import CognitiveMap from "./CognitiveMap";
 import { handleWhatsAppAction } from "../utils/whatsapp";
 import {
   Plus,
@@ -33,7 +34,7 @@ import {
   Bot,
   FileText,
   ListTree,
-  Sparkles
+  Sparkles,
 } from "lucide-react";
 import {
   getKanbanColumns,
@@ -42,6 +43,7 @@ import {
 } from "../utils/kanban";
 
 interface KanbanBoardProps {
+  layoutZoom?: number;
   leads: Lead[];
   tableHeaderComponent?: React.ReactNode;
   onMoveLead: (
@@ -72,6 +74,10 @@ interface KanbanBoardProps {
   onOpenAIAssistant?: (lead: Lead) => void;
   onOpenRuleEngine?: (lead: Lead) => void;
   onNavigateToFollowUp?: (lead: Lead) => void;
+  renderOnlyColumns?: boolean;
+  renderOnlyMap?: boolean;
+  properties?: any[];
+  onAddToDispatchQueue?: (leadIds: string[]) => void;
 }
 
 const getDaysSinceContact = (lastContactAt?: string): number | null => {
@@ -148,6 +154,7 @@ const COLOR_SCHEMES: Record<
 };
 
 export default function KanbanBoard({
+  layoutZoom = 100,
   leads,
   tableHeaderComponent,
   onMoveLead,
@@ -174,6 +181,10 @@ export default function KanbanBoard({
   onOpenAIAssistant,
   onOpenRuleEngine,
   onNavigateToFollowUp,
+  renderOnlyColumns = false,
+  renderOnlyMap = false,
+  properties: externalProperties,
+  onAddToDispatchQueue
 }: KanbanBoardProps) {
   const [activeDragCol, setActiveDragCol] = useState<string | null>(null);
 
@@ -182,28 +193,504 @@ export default function KanbanBoard({
     getKanbanColumns(),
   );
 
-  // Hiperfoco 3 State Variables
+  // Dynamic Map height state for bottom border resize dragging
+  const [mapHeight, setMapHeight] = useState<number>(() => {
+    const saved = localStorage.getItem("ciclocred_kanban_map_height");
+    const parsed = Number(saved);
+    return saved && !isNaN(parsed) ? parsed : 650;
+  });
+
+  // Funnel visible pages count state (🔍 button)
+  const [visiblePagesCount, setVisiblePagesCount] = useState<number>(() => {
+    const saved = localStorage.getItem("ciclocred_kanban_visible_pages_count");
+    const parsed = Number(saved);
+    return saved && !isNaN(parsed) ? parsed : 1;
+  });
+
+  const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleFocusClick = () => {
+    if (clickTimeoutRef.current) {
+      clearTimeout(clickTimeoutRef.current);
+      clickTimeoutRef.current = null;
+      // Double click action: turn off hyperfocus completely!
+      if (setHyperfocusActive) {
+        setHyperfocusActive(0);
+      }
+      return;
+    }
+
+    clickTimeoutRef.current = setTimeout(() => {
+      // Single click action: cycle through hyperfocus levels
+      if (setHyperfocusActive) {
+        const current =
+          typeof hyperfocusActive === "number"
+            ? hyperfocusActive
+            : hyperfocusActive
+              ? 1
+              : 0;
+        let nextValue = 1;
+        if (current === 0) {
+          nextValue = 1;
+        } else if (current === 1) {
+          nextValue = 2;
+        } else if (current === 2) {
+          nextValue = 3;
+        } else if (current === 3) {
+          nextValue = 1;
+        }
+        setHyperfocusActive(nextValue);
+      }
+      clickTimeoutRef.current = null;
+    }, 250); // 250ms is perfect for double-click detection
+  };
+
+  // Mapa (formerly Hiperfoco 3) State Variables
   const [kanbanSearchText, setKanbanSearchText] = useState("");
-  const [hiperfoco3Columns, setHiperfoco3Columns] = useState<Array<{ colId: string; pageId: string }>>([]);
-  const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>({});
+  const [mapaColumns, setMapaColumns] = useState<
+    Array<{ colId: string; pageId: string }>
+  >(() => {
+    const saved =
+      localStorage.getItem("ciclocred_mapa_columns") ||
+      localStorage.getItem("ciclocred_h3_columns");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (_) {}
+    }
+    return [];
+  });
+  const [nodePositions, setNodePositions] = useState<
+    Record<string, { x: number; y: number }>
+  >(() => {
+    const saved = localStorage.getItem("ciclocred_h3_node_positions");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+      } catch (_) {}
+    }
+    return {};
+  });
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
   const [isDraggingColumn, setIsDraggingColumn] = useState(false);
   const [draggingColId, setDraggingColId] = useState<string | null>(null);
 
+  const [h3Pan, setH3Pan] = useState<{ x: number; y: number }>(() => {
+    const saved = localStorage.getItem("ciclocred_h3_pan");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === "object" && typeof parsed.x === "number" && typeof parsed.y === "number") return parsed;
+      } catch (_) {}
+    }
+    return { x: 0, y: 0 };
+  });
+  const [isPanningCanvas, setIsPanningCanvas] = useState(false);
+
+  // Advanced Interactive H3 states for CRM Intelligence
+  const [selectedH3LeadId, setSelectedH3LeadId] = useState<string | null>(null);
+  const [mapaFilter, setMapaFilter] = useState<{
+    initial?: string;
+    today?: boolean;
+  } | null>(null);
+  const [nlpCommandText, setNlpCommandText] = useState("");
+  const [nlpProcessing, setNlpProcessing] = useState(false);
+  const [nlpFeedback, setNlpFeedback] = useState<{
+    type: "success" | "error" | "info";
+    msg: string;
+  } | null>(null);
+  const [agendaDate, setAgendaDate] = useState("");
+  const [agendaTime, setAgendaTime] = useState("");
+  const [agendaActivity, setAgendaActivity] = useState(
+    "Visita no Decorado Cury",
+  );
+  const [generatedPitch, setGeneratedPitch] = useState("");
+  const [isGeneratingPitch, setIsGeneratingPitch] = useState(false);
+  const [searchClickCount, setSearchClickCount] = useState(0);
+
+  // Atomic Zoom state from 10% to 1000%
+  const [h3Zoom, setH3Zoom] = useState<number>(() => {
+    const saved = localStorage.getItem("ciclocred_h3_zoom");
+    const parsed = Number(saved);
+    return saved && !isNaN(parsed) ? Math.max(10, Math.min(1000, parsed)) : 100;
+  });
+
+  const canvasContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Real Estate stock loaded from localStorage directly
+  const [properties, setProperties] = useState<any[]>(() => {
+    if (externalProperties && externalProperties.length > 0)
+      return externalProperties;
+    const saved = localStorage.getItem("ciclocred_crm_properties");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (_) {}
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    if (externalProperties && externalProperties.length > 0) {
+      setProperties(externalProperties);
+    }
+  }, [externalProperties]);
+
+  // Persists Mapa columns & node positions instantly on edit to sustain full page reloading!
+  useEffect(() => {
+    localStorage.setItem("ciclocred_mapa_columns", JSON.stringify(mapaColumns));
+  }, [mapaColumns]);
+
+  useEffect(() => {
+    localStorage.setItem("ciclocred_h3_zoom", String(h3Zoom));
+  }, [h3Zoom]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      localStorage.setItem(
+        "ciclocred_h3_node_positions",
+        JSON.stringify(nodePositions),
+      );
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [nodePositions]);
+
   // High performance visual translation tracking
   const dragStartMouseRef = useRef({ x: 0, y: 0 });
   const dragStartNodeRef = useRef({ x: 0, y: 0 });
+  const dragStartPanRef = useRef({ x: 0, y: 0 });
+  const lastMoveCoords = useRef({ clientX: 0, clientY: 0 });
   const requestRef = useRef<number | null>(null);
 
-  const handleNodeMouseDown = (id: string, initialPos: { x: number; y: number }, e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
+  const handleNodeStartDrag = (
+    id: string,
+    initialPos: { x: number; y: number },
+    clientX: number,
+    clientY: number,
+  ) => {
     setDraggingNodeId(id);
-    
     // Retrieve current position safely
     const currentPos = nodePositions[id] || initialPos;
     dragStartNodeRef.current = { x: currentPos.x, y: currentPos.y };
+    dragStartMouseRef.current = { x: clientX, y: clientY };
+    lastMoveCoords.current = { clientX, clientY };
+  };
+
+  const handleNodeMouseDown = (
+    id: string,
+    initialPos: { x: number; y: number },
+    e: React.MouseEvent,
+  ) => {
+    e.stopPropagation();
+    handleNodeStartDrag(id, initialPos, e.clientX, e.clientY);
+  };
+
+  const handleNodeTouchStart = (
+    id: string,
+    initialPos: { x: number; y: number },
+    e: React.TouchEvent,
+  ) => {
+    e.stopPropagation();
+    if (e.touches && e.touches[0]) {
+      handleNodeStartDrag(
+        id,
+        initialPos,
+        e.touches[0].clientX,
+        e.touches[0].clientY,
+      );
+    }
+  };
+
+  const handleCanvasMouseDown = (e: React.MouseEvent) => {
+    setIsPanningCanvas(true);
+    dragStartPanRef.current = { x: h3Pan.x, y: h3Pan.y };
     dragStartMouseRef.current = { x: e.clientX, y: e.clientY };
+    lastMoveCoords.current = { clientX: e.clientX, clientY: e.clientY };
+  };
+
+  const handleCanvasTouchStart = (e: React.TouchEvent) => {
+    if (e.touches && e.touches[0]) {
+      setIsPanningCanvas(true);
+      dragStartPanRef.current = { x: h3Pan.x, y: h3Pan.y };
+      dragStartMouseRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+      };
+      lastMoveCoords.current = {
+        clientX: e.touches[0].clientX,
+        clientY: e.touches[0].clientY,
+      };
+    }
+  };
+
+  // Process NLP intents via pattern extraction & appointments copilot
+  const handleNlpExecute = async () => {
+    if (!nlpCommandText.trim()) return;
+    setNlpProcessing(true);
+    setNlpFeedback(null);
+
+    const promptLow = nlpCommandText.toLowerCase();
+
+    try {
+      if (
+        promptLow.includes("agendar") ||
+        promptLow.includes("marcar") ||
+        promptLow.includes("visita") ||
+        promptLow.includes("reuniao") ||
+        promptLow.includes("agenda")
+      ) {
+        const res = await fetch("/api/ai/appointments-copilot", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "nlp-alarm", text: nlpCommandText }),
+        });
+        const data = await res.json();
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(data.text);
+        } catch {
+          const match = data.text.match(/\{[\s\S]*\}/);
+          if (match) {
+            parsed = JSON.parse(match[0]);
+          }
+        }
+
+        if (parsed && parsed.date && parsed.time) {
+          let foundLead = leads.find((l) =>
+            nlpCommandText.toLowerCase().includes(l.name.toLowerCase()),
+          );
+          if (!foundLead && selectedH3LeadId) {
+            foundLead = leads.find((l) => l.id === selectedH3LeadId);
+          }
+
+          if (foundLead) {
+            if (onUpdateLeadField) {
+              onUpdateLeadField(foundLead.id, {
+                notes: `${foundLead.notes || ""}\n\n[COMPROMISSO AGENDADO NLP]: ${parsed.title} para ${parsed.date} às ${parsed.time}. Obs: ${parsed.description || ""}`,
+              });
+            }
+            setNlpFeedback({
+              type: "success",
+              msg: `Compromisso "${parsed.title}" agendado no calendário para o lead "${foundLead.name}" em ${parsed.date} às ${parsed.time}!`,
+            });
+          } else {
+            setNlpFeedback({
+              type: "success",
+              msg: `Compromisso "${parsed.title}" estruturado para ${parsed.date} às ${parsed.time}! Forneça ou selecione um Lead no grafo para coligar.`,
+            });
+          }
+        } else {
+          throw new Error("Não foi possível extrair a data/hora da instrução.");
+        }
+      } else if (
+        promptLow.includes("mover") ||
+        promptLow.includes("mudar") ||
+        promptLow.includes("enviar") ||
+        promptLow.includes("colocar")
+      ) {
+        let targetColId: any = null;
+        let targetPageId = "etapas";
+
+        if (promptLow.includes("abordagem")) targetColId = "abordagem";
+        else if (promptLow.includes("triagem") || promptLow.includes("analise"))
+          targetColId = "triagem";
+        else if (promptLow.includes("proposta")) targetColId = "proposta";
+        else if (
+          promptLow.includes("fechado") ||
+          promptLow.includes("ganho") ||
+          promptLow.includes("fechou")
+        )
+          targetColId = "fechado";
+        else if (
+          promptLow.includes("arquivado") ||
+          promptLow.includes("perda") ||
+          promptLow.includes("perdeu")
+        )
+          targetColId = "arquivado";
+        else if (promptLow.includes("novo") || promptLow.includes("novos")) {
+          targetColId = "novo";
+          targetPageId = "status";
+        } else if (promptLow.includes("ativo")) {
+          targetColId = "ativo";
+          targetPageId = "status";
+        }
+
+        const foundLead = leads.find((l) =>
+          nlpCommandText.toLowerCase().includes(l.name.toLowerCase()),
+        );
+
+        if (foundLead && targetColId) {
+          onMoveLead(foundLead.id, targetColId, targetPageId);
+          setNlpFeedback({
+            type: "success",
+            msg: `Lead "${foundLead.name}" movido com sucesso para a etapa "${targetColId}" via NLP!`,
+          });
+        } else if (!foundLead) {
+          setNlpFeedback({
+            type: "error",
+            msg: "Lead não reconhecido na frase. Exemplo de comando: 'Mudar João Silva para proposta'",
+          });
+        } else {
+          setNlpFeedback({
+            type: "error",
+            msg: `Etapa ou coluna não reconhecida. Certifique-se de usar nomes como Abordagem, Triagem, Proposta, Novo ou Ativo.`,
+          });
+        }
+      } else if (
+        promptLow.includes("abrir") ||
+        promptLow.includes("detalhes") ||
+        promptLow.includes("focar") ||
+        promptLow.includes("editar") ||
+        promptLow.includes("qualificação")
+      ) {
+        const foundLead = leads.find((l) =>
+          nlpCommandText.toLowerCase().includes(l.name.toLowerCase()),
+        );
+        if (foundLead) {
+          if (onOpenLeadDetails) {
+            onOpenLeadDetails(foundLead);
+            setNlpFeedback({
+              type: "success",
+              msg: `Ficha de detalhes aberta para o lead "${foundLead.name}".`,
+            });
+          } else {
+            setNlpFeedback({
+              type: "error",
+              msg: "Ação de abrir detalhes não está disponível.",
+            });
+          }
+        } else {
+          setNlpFeedback({
+            type: "error",
+            msg: "Lead não reconhecido na frase. Exemplo: 'abrir detalhes João'",
+          });
+        }
+      } else if (promptLow.includes("mapa") || promptLow.includes("aplique")) {
+        let updated = false;
+        let msgs = [];
+
+        // Add Columns
+        const newCols: { colId: string; pageId: string }[] = [];
+        const possibleCols = [
+          "abordagem",
+          "triagem",
+          "proposta",
+          "fechado",
+          "arquivado",
+          "novo",
+          "ativo",
+          "ativos",
+        ];
+        possibleCols.forEach((c) => {
+          if (promptLow.includes(c)) {
+            let col = c === "ativos" ? "ativo" : c;
+            let pageId = ["novo", "ativo", "arquivado"].includes(col)
+              ? "status"
+              : "etapas";
+            if (
+              !mapaColumns.some((m) => m.colId === col && m.pageId === pageId)
+            ) {
+              newCols.push({ colId: col, pageId });
+            }
+          }
+        });
+        if (newCols.length > 0) {
+          setMapaColumns((prev) => [...prev, ...newCols]);
+          msgs.push(
+            `Colunas adicionadas: ${newCols.map((c) => c.colId).join(", ")}`,
+          );
+          updated = true;
+        }
+
+        // Apply filters
+        let initial = "";
+        let today = false;
+        const matchInitial = promptLow.match(/inicial\s+([a-z])/);
+        if (matchInitial) initial = matchInitial[1];
+        if (promptLow.includes("hoje")) today = true;
+
+        if (initial || today) {
+          setMapaFilter({ initial, today });
+          msgs.push(
+            `Filtros aplicados (Inicial: ${initial || "nenhuma"}, Hoje: ${today ? "sim" : "não"})`,
+          );
+          updated = true;
+        }
+
+        if (promptLow.includes("limpar") || promptLow.includes("resetar")) {
+          setMapaFilter(null);
+          msgs.push("Filtros do mapa removidos");
+          updated = true;
+        }
+
+        if (updated) {
+          setNlpFeedback({ type: "success", msg: msgs.join(" | ") });
+        } else {
+          setNlpFeedback({
+            type: "info",
+            msg: "Comando de mapa não encontrou colunas ou filtros específicos para aplicar.",
+          });
+        }
+      } else if (
+        promptLow.includes("sugerir") ||
+        promptLow.includes("estoque") ||
+        promptLow.includes("cury") ||
+        promptLow.includes("imóvel") ||
+        promptLow.includes("imovel")
+      ) {
+        const foundLead =
+          leads.find(
+            (l) =>
+              l.name &&
+              nlpCommandText.toLowerCase().includes(l.name.toLowerCase()),
+          ) ||
+          (selectedH3LeadId
+            ? leads.find((l) => l.id === selectedH3LeadId)
+            : null);
+        if (foundLead) {
+          setSelectedH3LeadId(foundLead.id);
+          setNlpFeedback({
+            type: "info",
+            msg: `Estoque de imóveis acionado para o lead "${foundLead.name}". Veja as sugestões de coligação abaixo!`,
+          });
+        } else {
+          setNlpFeedback({
+            type: "info",
+            msg: "Exibindo estoque de lançamentos imobiliários. Selecione um Lead para vincular e coligar o projeto.",
+          });
+        }
+      } else {
+        const res = await fetch("/api/ai/appointments-copilot", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "generate-outline",
+            title: "Instrução Geral CRM",
+            leadName: selectedH3LeadId
+              ? leads.find((l) => l.id === selectedH3LeadId)?.name
+              : "",
+            description: nlpCommandText,
+          }),
+        });
+        const data = await res.json();
+        setNlpFeedback({
+          type: "success",
+          msg: `Diretriz da IA:\n\n${data.text}`,
+        });
+      }
+      setNlpCommandText("");
+    } catch (err: any) {
+      console.error(err);
+      setNlpFeedback({
+        type: "error",
+        msg: `Err: ${err.message || "Falha ao processar comando."}`,
+      });
+    } finally {
+      setNlpProcessing(false);
+    }
   };
 
   const handleDropOnH3Canvas = (e: React.DragEvent) => {
@@ -214,35 +701,81 @@ export default function KanbanBoard({
       if (parts.length >= 3) {
         const colId = parts[1];
         const pageId = parts[2];
-        if (!hiperfoco3Columns.some(item => item.colId === colId && item.pageId === pageId)) {
-          setHiperfoco3Columns(prev => [...prev, { colId, pageId }]);
+        if (
+          !mapaColumns.some(
+            (item) => item.colId === colId && item.pageId === pageId,
+          )
+        ) {
+          setMapaColumns((prev) => [...prev, { colId, pageId }]);
+        }
+      }
+    } else if (data) {
+      // It might be a lead drag
+      const draggedLead = leads.find((l) => l.id === data);
+      if (draggedLead) {
+        // Find which column this lead belongs to in the currently active page or all pages
+        // We'll just look through active funnel pages to find its status
+        for (const page of funnelPages) {
+          const statusId = getLeadStatusForPage(draggedLead, page.id);
+          if (statusId) {
+            if (
+              !mapaColumns.some(
+                (item) => item.colId === statusId && item.pageId === page.id,
+              )
+            ) {
+              setMapaColumns((prev) => [
+                ...prev,
+                { colId: statusId, pageId: page.id },
+              ]);
+            }
+            break;
+          }
         }
       }
     }
   };
 
   // Layout helper for Hiperfoco 3 Nodes (Columns and Leads) to space them beautifully
-  const getHiperfocoPos = (nodeId: string, isCol: boolean, columnIdx: number, itemIdxInCol?: number) => {
+  const getHiperfocoPos = (
+    nodeId: string,
+    isCol: boolean,
+    columnIdx: number,
+    itemIdxInCol?: number,
+  ) => {
     if (nodePositions[nodeId]) {
       return nodePositions[nodeId];
     }
-    // As colCount grows, we spread columns horizontally to prevent overlapping.
-    const hInterval = 340 + (hiperfoco3Columns.length * 18);
-    const vInterval = 90 + (leads.length * 0.1); // Expands as more leads exist
-    
+    // Fixed intervals so existing elements don't shift when new columns are added
+    const hInterval = 400;
+    const vInterval = 120;
+
     if (isCol) {
-      const x = 70 + columnIdx * hInterval;
-      const y = 80;
-      return { x, y };
+      return { x: 70 + columnIdx * hInterval, y: 80 };
     } else {
       const parentX = 70 + columnIdx * hInterval;
       const idx = itemIdxInCol || 0;
       const colCol = idx % 2;
       const rowRow = Math.floor(idx / 2);
-      
+
       const x = parentX + (colCol === 0 ? -15 : 135) + (idx % 3) * 6;
       const y = 220 + rowRow * vInterval + (idx % 2) * 6;
       return { x, y };
+    }
+  };
+
+  const getH3DetailNodePos = (
+    nodeId: string,
+    leadPos: { x: number; y: number },
+    index: number,
+    isFicha: boolean,
+  ) => {
+    if (nodePositions[nodeId]) {
+      return nodePositions[nodeId];
+    }
+    if (isFicha) {
+      return { x: leadPos.x + 280, y: leadPos.y - 20 };
+    } else {
+      return { x: leadPos.x + 550, y: leadPos.y - 150 + index * 70 };
     }
   };
 
@@ -273,9 +806,12 @@ export default function KanbanBoard({
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const filtered = parsed.filter(p => p.id !== "status");
-          if (!filtered.some(p => p.id === "qualificacao")) {
-            filtered.splice(1, 0, { id: "qualificacao", name: "Visibilidade: Qualificação" });
+          const filtered = parsed.filter((p) => p.id !== "status");
+          if (!filtered.some((p) => p.id === "qualificacao")) {
+            filtered.splice(1, 0, {
+              id: "qualificacao",
+              name: "Visibilidade: Qualificação",
+            });
           }
           filtered.unshift({ id: "status", name: "Visibilidade: Status" });
           return filtered;
@@ -296,7 +832,12 @@ export default function KanbanBoard({
   });
 
   useEffect(() => {
-    if (kanbanViewMode && ["status", "etapas", "perfil", "qualificacao", "objecoes"].includes(kanbanViewMode)) {
+    if (
+      kanbanViewMode &&
+      ["status", "etapas", "perfil", "qualificacao", "objecoes"].includes(
+        kanbanViewMode,
+      )
+    ) {
       setActiveFunnelsPage(kanbanViewMode);
       localStorage.setItem("ciclocred_active_funnel_page_id", kanbanViewMode);
     }
@@ -317,7 +858,8 @@ export default function KanbanBoard({
   const handleCycleVisibility = () => {
     const sequence = ["status", "etapas", "perfil", "qualificacao", "objecoes"];
     const currentIndex = sequence.indexOf(activeFunnelsPage);
-    const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % sequence.length;
+    const nextIndex =
+      currentIndex === -1 ? 0 : (currentIndex + 1) % sequence.length;
     const nextValue = sequence[nextIndex];
     setActiveFunnelsPage(nextValue);
     localStorage.setItem("ciclocred_active_funnel_page_id", nextValue);
@@ -363,17 +905,26 @@ export default function KanbanBoard({
   useEffect(() => {
     if (triggerEditPage) {
       setEditingPageId(activeFunnelsPage);
-      setEditingPageName(funnelPages.find(p => p.id === activeFunnelsPage)?.name || "");
+      setEditingPageName(
+        funnelPages.find((p) => p.id === activeFunnelsPage)?.name || "",
+      );
       if (setTriggerEditPage) setTriggerEditPage(false);
     }
   }, [triggerEditPage, activeFunnelsPage, funnelPages, setTriggerEditPage]);
 
   useEffect(() => {
     if (triggerDeletePage) {
-      if (!["etapas", "perfil", "qualificacao", "objecoes"].includes(activeFunnelsPage)) {
-        handleDeleteFunnelPage(activeFunnelsPage, funnelPages.find(p => p.id === activeFunnelsPage)?.name || "");
+      if (
+        !["etapas", "perfil", "qualificacao", "objecoes"].includes(
+          activeFunnelsPage,
+        )
+      ) {
+        handleDeleteFunnelPage(
+          activeFunnelsPage,
+          funnelPages.find((p) => p.id === activeFunnelsPage)?.name || "",
+        );
       } else {
-         alert("Não é possível inativar/excluir este funil padrão.");
+        alert("Não é possível inativar/excluir este funil padrão.");
       }
       if (setTriggerDeletePage) setTriggerDeletePage(false);
     }
@@ -382,27 +933,43 @@ export default function KanbanBoard({
   useEffect(() => {
     if (triggerHyperfocus) {
       if (setHyperfocusActive) {
-        const current = typeof hyperfocusActive === 'number' ? hyperfocusActive : (hyperfocusActive ? 1 : 0);
+        const current =
+          typeof hyperfocusActive === "number"
+            ? hyperfocusActive
+            : hyperfocusActive
+              ? 1
+              : 0;
         let nextValue: number = 0;
         if (current === 0) {
           nextValue = 1;
         } else if (current === 1) {
           nextValue = 2;
         } else if (current === 2) {
-          nextValue = 3;
-          if (hiperfoco3Columns.length === 0) {
+          if (mapaColumns.length > 0) {
+            nextValue = 0;
+          } else {
+            nextValue = 3;
             const statusCols = getKanbanColumns("status");
-            setHiperfoco3Columns(statusCols.map(col => ({ colId: col.id, pageId: "status" })));
+            setMapaColumns(
+              statusCols.map((col) => ({ colId: col.id, pageId: "status" })),
+            );
           }
         } else {
           nextValue = 0;
-          setHiperfoco3Columns([]);
+          if (mapaColumns.length === 0) {
+            setMapaColumns([]);
+          }
         }
         setHyperfocusActive(nextValue);
       }
       if (setTriggerHyperfocus) setTriggerHyperfocus(false);
     }
-  }, [triggerHyperfocus, setTriggerHyperfocus, setHyperfocusActive, hiperfoco3Columns]);
+  }, [
+    triggerHyperfocus,
+    setTriggerHyperfocus,
+    setHyperfocusActive,
+    mapaColumns,
+  ]);
 
   // Create / Edit aba state
   const [newAbaName, setNewAbaName] = useState("");
@@ -414,10 +981,17 @@ export default function KanbanBoard({
   const [zoomState, setZoomState] = useState<
     "compact" | "normal" | "expanded" | "overview"
   >("normal");
-  const zoomMode = hyperfocusActive === 1 ? "overview" : (hyperfocusActive === 2 ? "compact" : zoomState);
+  const zoomMode =
+    hyperfocusActive === 1
+      ? "overview"
+      : hyperfocusActive === 2
+        ? "compact"
+        : zoomState;
   const [showAbaOrganizer, setShowAbaOrganizer] = useState(false);
-  const showAbaOrganizerState = showOrganizer !== undefined ? showOrganizer : showAbaOrganizer;
-  const setShowAbaOrganizerState = setShowOrganizer !== undefined ? setShowOrganizer : setShowAbaOrganizer;
+  const showAbaOrganizerState =
+    showOrganizer !== undefined ? showOrganizer : showAbaOrganizer;
+  const setShowAbaOrganizerState =
+    setShowOrganizer !== undefined ? setShowOrganizer : setShowAbaOrganizer;
 
   const [funnelPageToDelete, setFunnelPageToDelete] = useState<{
     id: string;
@@ -530,84 +1104,460 @@ export default function KanbanBoard({
       );
       if (placement) return placement.status;
     }
-    
-    if (pageId === 'etapas') {
-       return lead.stage || 'abordagem';
+
+    if (pageId === "etapas") {
+      return lead.stage || "abordagem";
     }
-    if (pageId === 'perfil') {
-       return lead.mainProfile || '';
+    if (pageId === "perfil") {
+      return lead.mainProfile || "";
     }
-    if (pageId === 'qualificacao') {
-       if (lead.restricacaoBacen === 'Sim' || lead.restricaoBacen === 'Sim') return 'nao_qualificado';
-       if (lead.programaDesejado === 'Minha Casa Minha Vida') return 'qualificado_mcmv';
-       if (lead.programaDesejado === 'SBPE') return 'qualificado_sbpe';
-       return 'em_qualificacao';
+    if (pageId === "qualificacao") {
+      if (lead.restricacaoBacen === "Sim" || lead.restricaoBacen === "Sim")
+        return "nao_qualificado";
+      if (lead.programaDesejado === "Minha Casa Minha Vida")
+        return "qualificado_mcmv";
+      if (lead.programaDesejado === "SBPE") return "qualificado_sbpe";
+      return "em_qualificacao";
     }
-    if (pageId === 'objecoes') {
-       return lead.objection || '';
+    if (pageId === "objecoes") {
+      return lead.objection || "";
     }
     return lead.status;
   }
 
   // Dynamic metrics of the H3 canvas to give more internal space when there are more items
-  const h3ColCount = hiperfoco3Columns.length;
+  const h3ColCount = mapaColumns.length;
   const h3LeadsCount = useMemo(() => {
-    return leads.filter(l =>
-      hiperfoco3Columns.some(item => {
+    return leads.filter((l) =>
+      mapaColumns.some((item) => {
         const leadColId = getLeadStatusForPage(l, item.pageId);
         return leadColId === item.colId;
-      })
+      }),
     ).length;
-  }, [leads, hiperfoco3Columns]);
+  }, [leads, mapaColumns]);
 
   // Scaled level of hyperfocus goes up to 10
   const h3Level = h3ColCount > 0 ? Math.min(10, h3ColCount + 2) : 0;
 
   // Responsive zoom scale to provide a modular viewport inside the canvas
   const dynamicZoom = useMemo(() => {
-    if (h3ColCount === 0) return 1.0;
-    const calculated = 1.15 - (h3ColCount * 0.081) - (h3LeadsCount * 0.010);
-    return Math.max(0.40, calculated);
-  }, [h3ColCount, h3LeadsCount]);
+    return Math.max(0.1, Math.min(10.0, h3Zoom / 100));
+  }, [h3Zoom]);
 
-  // High performance window dragging handler with dynamic scaling and frame rate synchronization
+  // Handle active wheel zooming with smooth browser prevention
   useEffect(() => {
-    if (!draggingNodeId) return;
+    const container = canvasContainerRef.current;
+    if (!container) return;
 
-    const handleWindowMouseMove = (e: MouseEvent) => {
-      // Scale mouse movement delta strictly according to the zoom factor
-      const dx = (e.clientX - dragStartMouseRef.current.x) / dynamicZoom;
-      const dy = (e.clientY - dragStartMouseRef.current.y) / dynamicZoom;
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
       
-      const newX = dragStartNodeRef.current.x + dx;
-      const newY = dragStartNodeRef.current.y + dy;
+      const containerRect = container.getBoundingClientRect();
+      const mouseX = e.clientX - containerRect.left;
+      const mouseY = e.clientY - containerRect.top;
 
-      if (requestRef.current) cancelAnimationFrame(requestRef.current);
-      requestRef.current = requestAnimationFrame(() => {
-        setNodePositions((prev) => ({
-          ...prev,
-          [draggingNodeId]: { x: newX, y: newY },
-        }));
+      setH3Zoom((prevZoom) => {
+        // Increment/decrement based on wheel direction
+        const delta = e.deltaY < 0 ? 15 : -15;
+        const nextZoom = Math.max(10, Math.min(1000, prevZoom + delta));
+        
+        if (nextZoom !== prevZoom) {
+          const oldScale = prevZoom / 100;
+          const newScale = nextZoom / 100;
+          
+          setH3Pan(prevPan => {
+            const mapX = (mouseX - prevPan.x) / oldScale;
+            const mapY = (mouseY - prevPan.y) / oldScale;
+            
+            const newPanX = mouseX - (mapX * newScale);
+            const newPanY = mouseY - (mapY * newScale);
+            
+            return { x: newPanX, y: newPanY };
+          });
+        }
+        
+        return nextZoom;
       });
     };
 
-    const handleWindowMouseUp = () => {
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      container.removeEventListener("wheel", handleWheel);
+    };
+  }, []);
+
+  // Auto-center map when columns are added
+  useEffect(() => {
+    if (mapaColumns.length > 0) {
+      const lastColIdx = mapaColumns.length - 1;
+      const lastColPos = getHiperfocoPos(
+        `col-${mapaColumns[lastColIdx].colId}-${mapaColumns[lastColIdx].pageId}`,
+        true,
+        lastColIdx
+      );
+      
+      const container = canvasContainerRef.current;
+      if (container) {
+        const { width, height } = container.getBoundingClientRect();
+        
+        // Target pan: Center the newly added column on screen
+        const targetPanX = (width / 2) - (lastColPos.x * dynamicZoom);
+        const targetPanY = (height / 3) - (lastColPos.y * dynamicZoom);
+        
+        setH3Pan({ x: targetPanX, y: targetPanY });
+      }
+    }
+  }, [mapaColumns.length]);
+
+  // High performance window dragging handler with dynamic scaling and direct DOM updates to bypass React re-renders during active drag
+  useEffect(() => {
+    if (!draggingNodeId) return;
+
+    const handleMove = (clientX: number, clientY: number) => {
+      lastMoveCoords.current = { clientX, clientY };
+
+      if (requestRef.current) cancelAnimationFrame(requestRef.current);
+      requestRef.current = requestAnimationFrame(() => {
+        const dx = (clientX - dragStartMouseRef.current.x) / dynamicZoom;
+        const dy = (clientY - dragStartMouseRef.current.y) / dynamicZoom;
+
+        const newX = dragStartNodeRef.current.x + dx;
+        const newY = dragStartNodeRef.current.y + dy;
+
+        // Update node DOM position directly for ultra-fluid responsive rendering
+        const nodeEl = document.getElementById(draggingNodeId);
+        if (nodeEl) {
+          nodeEl.style.left = `${newX}px`;
+          nodeEl.style.top = `${newY}px`;
+        }
+
+        // Update connected cables (SVG paths) in the DOM directly for instantaneous redraws
+        if (draggingNodeId.startsWith("col-")) {
+          const parts = draggingNodeId.split("-");
+          if (parts.length >= 3) {
+            const colId = parts[1];
+            const pageId = parts[2];
+
+            const colIdx = mapaColumns.findIndex(
+              (item) => item.colId === colId && item.pageId === pageId,
+            );
+            if (colIdx !== -1) {
+              const colLeads = mapaFilteredLeads.filter(
+                (l) => getLeadStatusForPage(l, pageId) === colId,
+              );
+              colLeads.forEach((lead, leadIdx) => {
+                const leadNodeId = `lead-${lead.id}-${pageId}`;
+                const leadPos = getHiperfocoPos(
+                  leadNodeId,
+                  false,
+                  colIdx,
+                  leadIdx,
+                );
+
+                const startX = newX + 88;
+                const startY = newY + 40;
+                const endX = leadPos.x + 61;
+                const endY = leadPos.y + 30;
+                const midY = (startY + endY) / 2;
+                const dStr = `M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`;
+
+                const outerPath = document.getElementById(
+                  `cable-outer-${draggingNodeId}-${lead.id}`,
+                );
+                const innerPath = document.getElementById(
+                  `cable-inner-${draggingNodeId}-${lead.id}`,
+                );
+                if (outerPath) outerPath.setAttribute("d", dStr);
+                if (innerPath) innerPath.setAttribute("d", dStr);
+              });
+            }
+          }
+        } else if (draggingNodeId.startsWith("lead-")) {
+          const parts = draggingNodeId.split("-");
+          if (parts.length >= 3) {
+            const leadId = parts[1];
+            const pageId = parts[2];
+            const leadObj = leads.find((l) => l.id === leadId);
+            if (leadObj) {
+              const colId = getLeadStatusForPage(leadObj, pageId);
+              const colIdx = mapaColumns.findIndex(
+                (item) => item.colId === colId && item.pageId === pageId,
+              );
+              if (colIdx !== -1) {
+                const colNodeId = `col-${colId}-${pageId}`;
+                const colPos = getHiperfocoPos(colNodeId, true, colIdx);
+
+                const colLeads = mapaFilteredLeads.filter(
+                  (l) => getLeadStatusForPage(l, pageId) === colId,
+                );
+                const leadIdx = colLeads.findIndex((l) => l.id === leadId);
+
+                if (leadIdx !== -1) {
+                  const startX = colPos.x + 88;
+                  const startY = colPos.y + 40;
+                  const endX = newX + 61;
+                  const endY = newY + 30;
+                  const midY = (startY + endY) / 2;
+                  const dStr = `M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`;
+
+                  const outerPath = document.getElementById(
+                    `cable-outer-${colNodeId}-${leadId}`,
+                  );
+                  const innerPath = document.getElementById(
+                    `cable-inner-${colNodeId}-${leadId}`,
+                  );
+                  if (outerPath) outerPath.setAttribute("d", dStr);
+                  if (innerPath) innerPath.setAttribute("d", dStr);
+                }
+              }
+            }
+
+            // Ficha cables
+            const fichaNodeId = `fichalead-${leadId}`;
+            const fichaPos = nodePositions[fichaNodeId];
+            if (fichaPos || document.getElementById(fichaNodeId)) {
+              const fichaEl = document.getElementById(fichaNodeId);
+              let fx = fichaPos?.x || 0;
+              let fy = fichaPos?.y || 0;
+              if (fichaEl) {
+                fx = parseFloat(fichaEl.style.left) || fx;
+                fy = parseFloat(fichaEl.style.top) || fy;
+              }
+              const sx = newX + 123;
+              const sy = newY + 30;
+              const ex = fx;
+              const ey = fy + 30;
+              const mx = (sx + ex) / 2;
+              const dStrFicha = `M ${sx} ${sy} C ${mx} ${sy}, ${mx} ${ey}, ${ex} ${ey}`;
+              const outerFicha = document.getElementById(
+                `cable-outer-${draggingNodeId}-${fichaNodeId}`,
+              );
+              const innerFicha = document.getElementById(
+                `cable-inner-${draggingNodeId}-${fichaNodeId}`,
+              );
+              if (outerFicha) outerFicha.setAttribute("d", dStrFicha);
+              if (innerFicha) innerFicha.setAttribute("d", dStrFicha);
+            }
+          }
+        } else if (draggingNodeId.startsWith("fichalead-")) {
+          const leadId = draggingNodeId.replace("fichalead-", "");
+          const leadNodeEl = document.querySelector(`[id^='lead-${leadId}-']`);
+          if (leadNodeEl) {
+            const leadNodeId = leadNodeEl.id;
+            const lx = parseFloat((leadNodeEl as HTMLElement).style.left) || 0;
+            const ly = parseFloat((leadNodeEl as HTMLElement).style.top) || 0;
+
+            const sx = lx + 123;
+            const sy = ly + 30;
+            const ex = newX;
+            const ey = newY + 30;
+            const mx = (sx + ex) / 2;
+            const dStr = `M ${sx} ${sy} C ${mx} ${sy}, ${mx} ${ey}, ${ex} ${ey}`;
+            const outerPath = document.getElementById(
+              `cable-outer-${leadNodeId}-${draggingNodeId}`,
+            );
+            const innerPath = document.getElementById(
+              `cable-inner-${leadNodeId}-${draggingNodeId}`,
+            );
+            if (outerPath) outerPath.setAttribute("d", dStr);
+            if (innerPath) innerPath.setAttribute("d", dStr);
+          }
+
+          const detailProps = [
+            "name",
+            "email",
+            "phone",
+            "income",
+            "notes",
+            "property",
+            "tags",
+          ];
+          detailProps.forEach((prop) => {
+            const detailNodeId = `detail-${leadId}-${prop}`;
+            const detailEl = document.getElementById(detailNodeId);
+            if (detailEl) {
+              const dX = parseFloat(detailEl.style.left) || 0;
+              const dY = parseFloat(detailEl.style.top) || 0;
+
+              const dsx = newX + 70;
+              const dsy = newY + 30;
+              const dex = dX;
+              const dey = dY + 10;
+              const dmx = (dsx + dex) / 2;
+              const dStrDet = `M ${dsx} ${dsy} C ${dmx} ${dsy}, ${dmx} ${dey}, ${dex} ${dey}`;
+
+              const outerDet = document.getElementById(
+                `cable-outer-${draggingNodeId}-${detailNodeId}`,
+              );
+              const innerDet = document.getElementById(
+                `cable-inner-${draggingNodeId}-${detailNodeId}`,
+              );
+              if (outerDet) outerDet.setAttribute("d", dStrDet);
+              if (innerDet) innerDet.setAttribute("d", dStrDet);
+            }
+          });
+        } else if (draggingNodeId.startsWith("detail-")) {
+          const parts = draggingNodeId.split("-");
+          if (parts.length >= 3) {
+            const leadId = parts[1];
+            const fichaNodeId = `fichalead-${leadId}`;
+            const fichaEl = document.getElementById(fichaNodeId);
+            if (fichaEl) {
+              const fx = parseFloat(fichaEl.style.left) || 0;
+              const fy = parseFloat(fichaEl.style.top) || 0;
+
+              const dsx = fx + 70;
+              const dsy = fy + 30;
+              const dex = newX;
+              const dey = newY + 10;
+              const dmx = (dsx + dex) / 2;
+              const dStrDet = `M ${dsx} ${dsy} C ${dmx} ${dsy}, ${dmx} ${dey}, ${dex} ${dey}`;
+
+              const outerDet = document.getElementById(
+                `cable-outer-${fichaNodeId}-${draggingNodeId}`,
+              );
+              const innerDet = document.getElementById(
+                `cable-inner-${fichaNodeId}-${draggingNodeId}`,
+              );
+              if (outerDet) outerDet.setAttribute("d", dStrDet);
+              if (innerDet) innerDet.setAttribute("d", dStrDet);
+            }
+          }
+        }
+      });
+    };
+
+    const handleWindowMouseMove = (e: MouseEvent) => {
+      handleMove(e.clientX, e.clientY);
+    };
+
+    const handleWindowTouchMove = (e: TouchEvent) => {
+      if (e.touches && e.touches[0]) {
+        // Prevent default browser scrolling or bouncing during drag
+        if (e.cancelable) e.preventDefault();
+        handleMove(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    };
+
+    const handleWindowEndDrag = () => {
+      // Calculate final position from last known move coordinates to lock into state
+      const dx =
+        (lastMoveCoords.current.clientX - dragStartMouseRef.current.x) /
+        dynamicZoom;
+      const dy =
+        (lastMoveCoords.current.clientY - dragStartMouseRef.current.y) /
+        dynamicZoom;
+
+      const finalX = dragStartNodeRef.current.x + dx;
+      const finalY = dragStartNodeRef.current.y + dy;
+
       setDraggingNodeId(null);
+
+      // Commit exactly once to state and storage
+      setNodePositions((prev) => {
+        const next = {
+          ...prev,
+          [draggingNodeId]: { x: finalX, y: finalY },
+        };
+        try {
+          localStorage.setItem(
+            "ciclocred_h3_node_positions",
+            JSON.stringify(next),
+          );
+        } catch (_) {}
+        return next;
+      });
     };
 
     window.addEventListener("mousemove", handleWindowMouseMove);
-    window.addEventListener("mouseup", handleWindowMouseUp);
+    window.addEventListener("mouseup", handleWindowEndDrag);
+    window.addEventListener("touchmove", handleWindowTouchMove, {
+      passive: false,
+    });
+    window.addEventListener("touchend", handleWindowEndDrag);
+    window.addEventListener("touchcancel", handleWindowEndDrag);
 
     return () => {
       window.removeEventListener("mousemove", handleWindowMouseMove);
-      window.removeEventListener("mouseup", handleWindowMouseUp);
+      window.removeEventListener("mouseup", handleWindowEndDrag);
+      window.removeEventListener("touchmove", handleWindowTouchMove);
+      window.removeEventListener("touchend", handleWindowEndDrag);
+      window.removeEventListener("touchcancel", handleWindowEndDrag);
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
-  }, [draggingNodeId, dynamicZoom]);
+  }, [draggingNodeId, dynamicZoom, leads, mapaColumns]);
+
+  useEffect(() => {
+    if (!isPanningCanvas) return;
+
+    const handleMove = (clientX: number, clientY: number) => {
+      lastMoveCoords.current = { clientX, clientY };
+
+      if (requestRef.current) cancelAnimationFrame(requestRef.current);
+      requestRef.current = requestAnimationFrame(() => {
+        const dx = clientX - dragStartMouseRef.current.x;
+        const dy = clientY - dragStartMouseRef.current.y;
+
+        const newX = dragStartPanRef.current.x + dx;
+        const newY = dragStartPanRef.current.y + dy;
+
+        const canvasEl = document.getElementById("h3-canvas-inner");
+        if (canvasEl) {
+          canvasEl.style.transform = `translate(${newX}px, ${newY}px) scale(${dynamicZoom})`;
+        }
+      });
+    };
+
+    const handleWindowMouseMove = (e: MouseEvent) => {
+      handleMove(e.clientX, e.clientY);
+    };
+
+    const handleWindowTouchMove = (e: TouchEvent) => {
+      if (e.touches && e.touches[0]) {
+        if (e.cancelable) e.preventDefault();
+        handleMove(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    };
+
+    const handleWindowEndDrag = () => {
+      setIsPanningCanvas(false);
+      
+      const dx = lastMoveCoords.current.clientX - dragStartMouseRef.current.x;
+      const dy = lastMoveCoords.current.clientY - dragStartMouseRef.current.y;
+      
+      const newX = dragStartPanRef.current.x + dx;
+      const newY = dragStartPanRef.current.y + dy;
+      
+      const newPan = { x: newX, y: newY };
+      setH3Pan(newPan);
+      localStorage.setItem("ciclocred_h3_pan", JSON.stringify(newPan));
+    };
+
+    window.addEventListener("mousemove", handleWindowMouseMove);
+    window.addEventListener("mouseup", handleWindowEndDrag);
+    window.addEventListener("touchmove", handleWindowTouchMove, {
+      passive: false,
+    });
+    window.addEventListener("touchend", handleWindowEndDrag);
+    window.addEventListener("touchcancel", handleWindowEndDrag);
+
+    return () => {
+      window.removeEventListener("mousemove", handleWindowMouseMove);
+      window.removeEventListener("mouseup", handleWindowEndDrag);
+      window.removeEventListener("touchmove", handleWindowTouchMove);
+      window.removeEventListener("touchend", handleWindowEndDrag);
+      window.removeEventListener("touchcancel", handleWindowEndDrag);
+      if (requestRef.current) cancelAnimationFrame(requestRef.current);
+    };
+  }, [isPanningCanvas, dynamicZoom]);
 
   // Filtered leads by selected Funnel Page
   const filteredPageLeads = leads.filter((l) => {
-    if (["status", "etapas", "perfil", "qualificacao", "objecoes"].includes(activeFunnelsPage)) {
+    if (
+      ["status", "etapas", "perfil", "qualificacao", "objecoes"].includes(
+        activeFunnelsPage,
+      )
+    ) {
       return true;
     }
     if (l.funnelPlacements && l.funnelPlacements.length > 0) {
@@ -627,15 +1577,43 @@ export default function KanbanBoard({
         (l.phone && l.phone.toLowerCase().includes(searchLow)) ||
         (l.email && l.email.toLowerCase().includes(searchLow)) ||
         (l.region && l.region.toLowerCase().includes(searchLow)) ||
-        (l.bairroEspecifico && l.bairroEspecifico.toLowerCase().includes(searchLow)) ||
+        (l.bairroEspecifico &&
+          l.bairroEspecifico.toLowerCase().includes(searchLow)) ||
         (l.origin && l.origin.toLowerCase().includes(searchLow)) ||
         (l.comoSoube && l.comoSoube.toLowerCase().includes(searchLow)) ||
-        (l.programaDesejado && l.programaDesejado.toLowerCase().includes(searchLow)) ||
-        (l.familyGrossIncome && String(l.familyGrossIncome).toLowerCase().includes(searchLow)) ||
-        (l.familyIncome && String(l.familyIncome).toLowerCase().includes(searchLow))
+        (l.programaDesejado &&
+          l.programaDesejado.toLowerCase().includes(searchLow)) ||
+        (l.familyGrossIncome &&
+          String(l.familyGrossIncome).toLowerCase().includes(searchLow)) ||
+        (l.familyIncome &&
+          String(l.familyIncome).toLowerCase().includes(searchLow))
       );
     });
   }, [filteredPageLeads, kanbanSearchText]);
+
+  const mapaFilteredLeads = useMemo(() => {
+    if (!mapaFilter) return leads;
+    return leads.filter((l) => {
+      let matches = true;
+      if (mapaFilter.initial) {
+        matches =
+          matches &&
+          (l.name || "").toLowerCase().startsWith(mapaFilter.initial.toLowerCase());
+      }
+      if (mapaFilter.today) {
+        const todayStr = new Date().toISOString().split("T")[0];
+        let leadDate = "";
+        if (l.createdAt) {
+          const d = new Date(l.createdAt);
+          if (!isNaN(d.getTime())) {
+            leadDate = d.toISOString().split("T")[0];
+          }
+        }
+        matches = matches && leadDate === todayStr;
+      }
+      return matches;
+    });
+  }, [leads, mapaFilter]);
 
   // O usuário pediu que hiperfoco apenas diminua o zoom para ver todos os status na tela
   const visibleColumns = columns;
@@ -648,26 +1626,32 @@ export default function KanbanBoard({
   };
 
   const goPreviousFunnelPage = () => {
-    const currentIndex = funnelPages.findIndex(p => p.id === activeFunnelsPage);
+    const currentIndex = funnelPages.findIndex(
+      (p) => p.id === activeFunnelsPage,
+    );
     if (currentIndex > 0) {
-       const newPage = funnelPages[currentIndex - 1].id;
-       setActiveFunnelsPage(newPage);
-       localStorage.setItem("ciclocred_active_funnel_page_id", newPage);
-       if ((window as any).setKanbanViewMode) (window as any).setKanbanViewMode(newPage);
+      const newPage = funnelPages[currentIndex - 1].id;
+      setActiveFunnelsPage(newPage);
+      localStorage.setItem("ciclocred_active_funnel_page_id", newPage);
+      if ((window as any).setKanbanViewMode)
+        (window as any).setKanbanViewMode(newPage);
     } else {
-       window.dispatchEvent(new CustomEvent('ciclocred_cycle_tab_prev'));
+      window.dispatchEvent(new CustomEvent("ciclocred_cycle_tab_prev"));
     }
   };
 
   const goNextFunnelPage = () => {
-    const currentIndex = funnelPages.findIndex(p => p.id === activeFunnelsPage);
+    const currentIndex = funnelPages.findIndex(
+      (p) => p.id === activeFunnelsPage,
+    );
     if (currentIndex < funnelPages.length - 1) {
-       const newPage = funnelPages[currentIndex + 1].id;
-       setActiveFunnelsPage(newPage);
-       localStorage.setItem("ciclocred_active_funnel_page_id", newPage);
-       if ((window as any).setKanbanViewMode) (window as any).setKanbanViewMode(newPage);
+      const newPage = funnelPages[currentIndex + 1].id;
+      setActiveFunnelsPage(newPage);
+      localStorage.setItem("ciclocred_active_funnel_page_id", newPage);
+      if ((window as any).setKanbanViewMode)
+        (window as any).setKanbanViewMode(newPage);
     } else {
-       window.dispatchEvent(new CustomEvent('ciclocred_cycle_tab_next'));
+      window.dispatchEvent(new CustomEvent("ciclocred_cycle_tab_next"));
     }
   };
 
@@ -681,19 +1665,28 @@ export default function KanbanBoard({
       goNextFunnelPage();
     };
 
-    window.addEventListener('ciclocred_global_prev_visibility', prevListener);
-    window.addEventListener('ciclocred_global_next_visibility', nextListener);
+    window.addEventListener("ciclocred_global_prev_visibility", prevListener);
+    window.addEventListener("ciclocred_global_next_visibility", nextListener);
 
     return () => {
-      window.removeEventListener('ciclocred_global_prev_visibility', prevListener);
-      window.removeEventListener('ciclocred_global_next_visibility', nextListener);
+      window.removeEventListener(
+        "ciclocred_global_prev_visibility",
+        prevListener,
+      );
+      window.removeEventListener(
+        "ciclocred_global_next_visibility",
+        nextListener,
+      );
     };
   }, [activeFunnelsPage, funnelPages]);
 
-  const renderKanbanColumnsForPage = (pageId: "status" | "etapas" | "perfil" | "qualificacao" | "objecoes") => {
+  const renderKanbanColumnsForPage = (
+    pageId: "status" | "etapas" | "perfil" | "qualificacao" | "objecoes",
+  ) => {
     const pageCols = getKanbanColumns(pageId);
-    
+
     if (pageCols.length === 0) {
+      if (visiblePagesCount > 1) return null;
       return (
         <div className="w-full text-center py-10 bg-zinc-900 border-4 border-dashed border-zinc-700 rounded-2xl p-6 select-none font-mono">
           <span className="text-3xl">🔍</span>
@@ -714,7 +1707,9 @@ export default function KanbanBoard({
       const totalValue = colLeads.reduce((sum, l) => sum + (l.value || 0), 0);
       const isOverThisCol = activeDragCol === col.id;
       // Only allow editing in non-hyperfocus, or if the page matches
-      const isEditing = editingColId === col.id && (!hyperfocusActive || activeFunnelsPage === pageId);
+      const isEditing =
+        editingColId === col.id &&
+        (!hyperfocusActive || activeFunnelsPage === pageId);
 
       return (
         <div
@@ -736,14 +1731,12 @@ export default function KanbanBoard({
             }
             setActiveDragCol(null);
           }}
-          className={`bg-zinc-950/90 rounded-2xl border-[3px] border-zinc-800 shrink-0 select-none ${
-            zoomMode === "compact" ? "min-h-[260px] h-full" : "min-h-[370px]"
-          } flex flex-col transition-all duration-300 relative overflow-hidden group hover:border-indigo-500/50 ${
+          className={`bg-zinc-950/90 rounded-2xl border-[3px] border-zinc-800 shrink-0 select-none h-[calc(100vh-320px)] flex flex-col transition-colors relative overflow-hidden group hover:border-indigo-500/50 ${
             zoomMode === "compact"
               ? "w-52"
               : zoomMode === "expanded"
-                ? "w-full xl:w-52"
-                : "w-full xl:w-48"
+                ? "w-full xl:w-[280px]"
+                : "w-full xl:w-64"
           } ${
             isOverThisCol
               ? "ring-2 ring-indigo-500 bg-indigo-950/20 translate-y-[-2px] shadow-[0_0_20px_rgba(99,102,241,0.2)]"
@@ -751,13 +1744,16 @@ export default function KanbanBoard({
           }`}
         >
           {/* Subtle top color bar */}
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-600 to-indigo-400 group-hover:h-1.5 transition-all" />
-          
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-600 to-indigo-400 group-hover:h-1.5 transition-colors" />
+
           {/* Column Header */}
           <div
             draggable
             onDragStart={(e) => {
-              e.dataTransfer.setData("text/plain", `col-header:${col.id}:${pageId}`);
+              e.dataTransfer.setData(
+                "text/plain",
+                `col-header:${col.id}:${pageId}`,
+              );
               e.dataTransfer.effectAllowed = "move";
               setIsDraggingColumn(true);
               setDraggingColId(col.id);
@@ -769,7 +1765,7 @@ export default function KanbanBoard({
               setIsDraggingColumn(false);
               setDraggingColId(null);
             }}
-            className={`cursor-grab active:cursor-grabbing flex flex-col gap-1 transition-all duration-300 ${
+            className={`cursor-grab active:cursor-grabbing flex flex-col gap-1 transition-colors ${
               draggingColId === col.id
                 ? "bg-purple-950/90 border-2 border-purple-500 rounded-xl p-2 scale-95 shadow-[0_0_20px_rgba(168,85,247,0.6)] text-purple-200"
                 : `border-b-[3px] border-zinc-800 bg-zinc-900 rounded-t-xl hover:bg-zinc-850/80 ${
@@ -811,15 +1807,22 @@ export default function KanbanBoard({
               ) : (
                 <div className="flex items-center gap-2 group/header w-full justify-between">
                   <div className="flex items-center gap-1.5 truncate">
-                    <h3
-                      className={`font-sans font-black uppercase italic tracking-tight ${
-                        zoomMode === "compact"
-                          ? "text-[10px]"
-                          : "text-xs"
-                      } text-zinc-100 truncate mr-1`}
-                    >
-                      {col.label}
-                    </h3>
+                    <div className="flex flex-col truncate">
+                      {visiblePagesCount > 1 && (
+                        <span className="text-[8px] font-black tracking-widest text-indigo-400 uppercase leading-none mb-1 select-none block truncate max-w-[130px]">
+                          {funnelPages
+                            .find((p) => p.id === pageId)
+                            ?.name?.replace("Visibilidade: ", "") || pageId}
+                        </span>
+                      )}
+                      <h3
+                        className={`font-sans font-black uppercase italic tracking-tight ${
+                          zoomMode === "compact" ? "text-[9px]" : "text-[11px]"
+                        } text-zinc-100 truncate mr-1`}
+                      >
+                        {col.label}
+                      </h3>
+                    </div>
                     <button
                       onClick={() => {
                         setEditingColId(col.id);
@@ -836,10 +1839,23 @@ export default function KanbanBoard({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (hiperfoco3Columns.some(item => item.colId === col.id && item.pageId === pageId)) {
-                          setHiperfoco3Columns(prev => prev.filter(item => !(item.colId === col.id && item.pageId === pageId)));
+                        if (
+                          mapaColumns.some(
+                            (item) =>
+                              item.colId === col.id && item.pageId === pageId,
+                          )
+                        ) {
+                          setMapaColumns((prev) =>
+                            prev.filter(
+                              (item) =>
+                                !(
+                                  item.colId === col.id &&
+                                  item.pageId === pageId
+                                ),
+                            ),
+                          );
                         } else {
-                          setHiperfoco3Columns(prev => {
+                          setMapaColumns((prev) => {
                             if (prev.length >= 10) return prev;
                             return [...prev, { colId: col.id, pageId }];
                           });
@@ -849,11 +1865,21 @@ export default function KanbanBoard({
                         }
                       }}
                       className={`p-1 rounded text-xs transition flex items-center justify-center ${
-                        hiperfoco3Columns.some(item => item.colId === col.id && item.pageId === pageId)
+                        mapaColumns.some(
+                          (item) =>
+                            item.colId === col.id && item.pageId === pageId,
+                        )
                           ? "bg-purple-950/40 text-purple-400 border border-purple-500/30"
                           : "text-zinc-400 hover:text-purple-450 hover:bg-purple-950/20"
                       }`}
-                      title={hiperfoco3Columns.some(item => item.colId === col.id && item.pageId === pageId) ? "Retirar do Hiperfoco 3" : "Enviar ao Hiperfoco 3 🌌"}
+                      title={
+                        mapaColumns.some(
+                          (item) =>
+                            item.colId === col.id && item.pageId === pageId,
+                        )
+                          ? "Retirar do Mapa"
+                          : "Enviar ao Mapa 🌌"
+                      }
                     >
                       🌌
                     </button>
@@ -892,16 +1918,20 @@ export default function KanbanBoard({
           <div
             className={`flex-1 overflow-y-auto overflow-x-hidden ${
               zoomMode === "compact"
-                ? "max-h-[180px] p-1.5 space-y-1.5"
-                : "max-h-[40vh] xl:max-h-[44vh] p-2.5 space-y-2.5"
-            } transition-colors duration-200 scrollbar-thin ${
+                ? "p-1 space-y-1"
+                : "p-2 space-y-2"
+            } transition-colors custom-scrollbar ${
               isOverThisCol ? "bg-indigo-950/40" : "bg-zinc-950/50"
             }`}
             id={`kanban-column-${col.id}`}
           >
             {colLeads.length === 0 ? (
-              <div className={`flex flex-col items-center justify-center ${zoomMode === "compact" ? "py-6" : "py-16"} text-center select-none text-zinc-400`}>
-                <Building2 className={`${zoomMode === "compact" ? "w-6 h-6 mb-1" : "w-8 h-8 mb-2"} opacity-20`} />
+              <div
+                className={`flex flex-col items-center justify-center ${zoomMode === "compact" ? "py-6" : "py-16"} text-center select-none text-zinc-400`}
+              >
+                <Building2
+                  className={`${zoomMode === "compact" ? "w-6 h-6 mb-1" : "w-8 h-8 mb-2"} opacity-20`}
+                />
                 <p className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-400">
                   Vazio
                 </p>
@@ -926,7 +1956,7 @@ export default function KanbanBoard({
                     onDragEnd={(e) => {
                       e.currentTarget.classList.remove("opacity-40");
                     }}
-                    className={`group bg-zinc-900 border-[2px] border-zinc-805/90 hover:border-indigo-500 rounded-xl transition-all relative overflow-hidden ${
+                    className={`group bg-zinc-900 border-[2px] border-zinc-805/90 hover:border-indigo-500 rounded-xl transition-colors relative overflow-hidden ${
                       zoomMode === "compact" || zoomMode === "overview"
                         ? "p-2 shadow-[2px_2px_0px_0px_rgba(15,15,15,1)]"
                         : zoomMode === "expanded"
@@ -936,159 +1966,80 @@ export default function KanbanBoard({
                   >
                     <div className="flex flex-col gap-2 font-sans">
                       {/* Header NOME */}
-                      <div className="border-b-[1.5px] border-zinc-805/85 pb-2 flex flex-col items-center">
-                        <div className="flex items-center gap-1 w-full justify-between mb-0.5">
-                          {lead.tags && lead.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-0.5">
-                              {lead.tags.slice(0, 1).map((tg: string) => (
-                                <span key={tg} className="text-[7px] font-black uppercase bg-indigo-50 border border-indigo-150 text-indigo-700 rounded px-1 tracking-tight shrink-0 font-mono">
-                                  🏷️ {tg}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                          {isOverdue && (
-                            <span className="flex items-center gap-0.5 text-[7px] bg-red-100 border border-red-650 text-red-950 rounded px-1 font-mono font-black select-none shrink-0" title={`Último contato foi há ${daysSinceContact} dias!`}>
-                              <AlertTriangle className="w-2 h-2 text-red-650 shrink-0" />
-                              {daysSinceContact}d
-                            </span>
-                          )}
-                        </div>
+                      <div className="border-b border-zinc-805/85 pb-1 flex justify-between items-center px-1">
                         <button
                           onClick={() => onOpenLeadDetails(lead)}
-                          className={`w-full text-zinc-100 hover:text-indigo-400 font-sans font-black text-center transition-colors truncate uppercase tracking-tight ${
-                            zoomMode === 'compact' || zoomMode === 'overview' ? 'text-[9.5px]' : 'text-[10.5px]'
-                          }`}
+                          className="text-zinc-100 hover:text-indigo-400 font-sans font-black text-left transition-colors truncate uppercase tracking-tight text-[9px] w-full"
                         >
                           {lead.name}
                         </button>
+                        {isOverdue && (
+                            <span className="flex items-center gap-0.5 text-[7px] bg-red-100 text-red-950 rounded px-1 font-mono font-black select-none shrink-0" title={`Último contato foi há ${daysSinceContact} dias!`}>
+                                <AlertTriangle className="w-2 h-2 text-red-650 shrink-0" />
+                                {daysSinceContact}d
+                            </span>
+                        )}
                       </div>
 
-                      {/* INFOS */}
-                      <div className={`text-zinc-400 ${zoomMode === 'compact' || zoomMode === 'overview' ? 'text-[8.5px]' : 'text-[9px]'} border-b-[1.5px] border-zinc-805/85 pb-2`}>
-                        <div className={`text-center font-black uppercase bg-zinc-950 border border-zinc-800/80 rounded mb-1 py-0.5 tracking-widest text-zinc-400 ${
-                          zoomMode === 'compact' || zoomMode === 'overview' ? 'text-[7.5px]' : 'text-[8px]'
-                        }`}>Infos</div>
-                        <div className="grid grid-cols-3 gap-x-1 gap-y-0.5 text-center font-semibold text-zinc-400 text-[8px] leading-tight font-mono bg-zinc-950/40 p-1.5 rounded-lg border border-zinc-850/50">
-                          <div className="truncate border-r border-zinc-800" title={lead.phone}>{lead.phone || '-'}</div>
-                          <div className="truncate border-r border-zinc-800" title={lead.region}>{lead.region || '-'}</div>
-                          <div className="truncate" title={lead.programaDesejado}>
-                            {lead.programaDesejado === 'Minha Casa Minha Vida' ? 'MCMV' : lead.programaDesejado || '-'}
-                          </div>
-                          <div className="truncate border-r border-zinc-800" title={lead.gender}>{lead.gender || '-'}</div>
-                          <div className="truncate border-r border-zinc-800" title={lead.ageBracket}>{lead.ageBracket || '-'}</div>
-                          <div className="truncate" title={lead.sqmMatters}>{lead.sqmMatters === 'sim' ? 'Imp. m²' : (lead.sqmMatters === 'nao' ? 'M² indif.' : '-')}</div>
-                        </div>
-                      </div>
-
-                      {/* CHECKLIST */}
-                      <div className="border-b-[1.5px] border-zinc-805/85 pb-2">
-                        <div className="text-center font-black uppercase text-[7.5px] bg-zinc-950 border border-zinc-800/80 rounded mb-1 py-0.5 tracking-widest text-zinc-400">Documentação Financeira</div>
-                        <div className="flex items-center justify-between gap-1 mt-1">
-                          <div className="flex-1 border border-indigo-500/50 bg-indigo-950/40 rounded px-1 flex flex-col items-center justify-center shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] py-0.5" title="Renda Familiar Líquida">
-                            <span className="text-[7.5px] text-zinc-400 font-black uppercase tracking-tight leading-none block">Líquida</span>
-                            <div className="flex items-center text-[10px] font-mono font-black text-indigo-400">
-                              <span className="text-[8px] mr-0.5">R$</span>
-                              <input 
-                                type="number"
-                                defaultValue={lead.familyIncome || 0}
-                                onBlur={(e) => { 
-                                  if (onUpdateLeadField && Number(e.target.value) !== lead.familyIncome) {
-                                    onUpdateLeadField(lead.id, { familyIncome: Number(e.target.value) });
-                                  }
-                                }}
-                                className="bg-transparent text-center focus:outline-none w-12"
-                              />
-                            </div>
-                          </div>
-                          <div className="flex-1 border border-emerald-500/50 bg-emerald-950/40 rounded px-1 flex flex-col items-center justify-center shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] py-0.5" title="Renda Familiar Bruta">
-                            <span className="text-[7.5px] text-zinc-400 font-black uppercase tracking-tight leading-none block">Bruta</span>
-                            <div className="flex items-center text-[10px] font-mono font-black text-emerald-400">
-                              <span className="text-[8px] mr-0.5">R$</span>
-                              <input 
-                                type="number"
-                                defaultValue={lead.familyGrossIncome || lead.familyIncome || 0}
-                                onBlur={(e) => { 
-                                  if (onUpdateLeadField && Number(e.target.value) !== lead.familyGrossIncome) {
-                                    onUpdateLeadField(lead.id, { familyGrossIncome: Number(e.target.value) });
-                                  }
-                                }}
-                                className="bg-transparent text-center focus:outline-none w-12"
-                              />
-                            </div>
+                      {/* CARD CONTENT COMPACT */}
+                      <div className="text-zinc-400 text-[8px] pb-1 px-1 flex flex-col gap-1">
+                        <div className="flex justify-between items-center font-mono">
+                          <span className="text-zinc-300 font-bold truncate">{lead.phone || "-"}</span>
+                          <div className="flex items-center text-emerald-400 font-black" title="Renda Fam.">
+                            <span className="mr-0.5">R$</span>
+                            <input
+                              type="number"
+                              defaultValue={lead.familyIncome || 0}
+                              onBlur={(e) => {
+                                if (onUpdateLeadField && Number(e.target.value) !== lead.familyIncome) {
+                                  onUpdateLeadField(lead.id, { familyIncome: Number(e.target.value) });
+                                }
+                              }}
+                              className="bg-transparent focus:outline-none w-12 text-right"
+                            />
                           </div>
                         </div>
-                      </div>
 
-                      {/* BLOCOS */}
-                      <div className="border-b-[1.5px] border-zinc-805/85 pb-2">
-                        <div className="text-center font-black uppercase text-[7.5px] bg-zinc-950 border border-zinc-800/80 rounded mb-1 py-0.5 tracking-widest text-zinc-400">Blocos</div>
-                        <div className="grid grid-cols-3 gap-1">
-                            <select
-                              title="Etapa"
-                              value={lead.stage || ""}
-                              onChange={(e) => onUpdateLeadField && onUpdateLeadField(lead.id, { stage: e.target.value })}
-                              className="text-[6.5px] font-black uppercase font-mono border border-zinc-700 rounded bg-zinc-950 text-zinc-300 tracking-tighter cursor-pointer focus:outline-none w-full shadow-sm px-0.5 py-0.5"
-                            >
-                              <option value="">ETAPA</option>
-                              {getKanbanColumns("etapas").map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                            </select>
-                            <select
-                              title="Perfil"
-                              value={lead.mainProfile || ""}
-                              onChange={(e) => onUpdateLeadField && onUpdateLeadField(lead.id, { mainProfile: e.target.value as any })}
-                              className="text-[6.5px] font-black uppercase font-mono border border-zinc-700 rounded bg-zinc-950 text-zinc-300 tracking-tighter cursor-pointer focus:outline-none w-full shadow-sm px-0.5 py-0.5"
-                            >
-                              <option value="">PERFIL</option>
-                              {getKanbanColumns("perfil").map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                            </select>
-                            <select
-                              title="Objeção"
-                              value={lead.objection || ""}
-                              onChange={(e) => onUpdateLeadField && onUpdateLeadField(lead.id, { objection: e.target.value })}
-                              className="text-[6.5px] font-black uppercase font-mono border border-zinc-700 rounded bg-zinc-950 text-zinc-300 tracking-tighter cursor-pointer focus:outline-none w-full shadow-sm px-0.5 py-0.5"
-                            >
-                              <option value="">OBJEÇÃO</option>
-                              {getKanbanColumns("objecoes").map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                            </select>
+                        {/* BLOCOS RAPIDOS */}
+                        <div className="grid grid-cols-3 gap-0.5">
+                          <select
+                            title="Etapa"
+                            value={lead.stage || ""}
+                            onChange={(e) => onUpdateLeadField && onUpdateLeadField(lead.id, { stage: e.target.value })}
+                            className="text-[6px] font-black uppercase font-mono border border-zinc-800 rounded bg-zinc-950 text-zinc-300 tracking-tighter cursor-pointer focus:outline-none w-full shadow-sm py-0.5"
+                          >
+                            <option value="">ETAPA</option>
+                            {getKanbanColumns("etapas").map((c) => (<option key={c.id} value={c.id}>{c.label}</option>))}
+                          </select>
+                          <select
+                            title="Perfil"
+                            value={lead.mainProfile || ""}
+                            onChange={(e) => onUpdateLeadField && onUpdateLeadField(lead.id, { mainProfile: e.target.value as any })}
+                            className="text-[6px] font-black uppercase font-mono border border-zinc-800 rounded bg-zinc-950 text-zinc-300 tracking-tighter cursor-pointer focus:outline-none w-full shadow-sm py-0.5"
+                          >
+                            <option value="">PERFIL</option>
+                            {getKanbanColumns("perfil").map((c) => (<option key={c.id} value={c.id}>{c.label}</option>))}
+                          </select>
+                          <select
+                            title="Objeção"
+                            value={lead.objection || ""}
+                            onChange={(e) => onUpdateLeadField && onUpdateLeadField(lead.id, { objection: e.target.value })}
+                            className="text-[6px] font-black uppercase font-mono border border-zinc-800 rounded bg-zinc-950 text-zinc-300 tracking-tighter cursor-pointer focus:outline-none w-full shadow-sm py-0.5"
+                          >
+                            <option value="">OBJEÇÃO</option>
+                            {getKanbanColumns("objecoes").map((c) => (<option key={c.id} value={c.id}>{c.label}</option>))}
+                          </select>
                         </div>
                       </div>
 
-                      {/* AÇÕES */}
-                      <div>
-                        <div className="text-center font-black uppercase text-[7.5px] bg-zinc-950 border border-zinc-800/80 rounded mb-1 py-0.5 tracking-widest text-zinc-400">Ações</div>
-                        <div className="grid grid-cols-4 gap-[2px]">
-                          <button onClick={() => window.open(`https://wa.me/${lead.phone.replace(/\D/g, '')}`)} title="WhatsApp" className="p-1 bg-zinc-800 hover:bg-emerald-950/40 border border-zinc-700 hover:border-emerald-500/50 text-emerald-500 rounded flex items-center justify-center transition">
-                            <MessageCircle className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => window.open(`tel:${lead.phone.replace(/\D/g, '')}`)} title="Ligar" className="p-1 bg-zinc-800 hover:bg-blue-950/40 border border-zinc-700 hover:border-blue-500/50 text-blue-500 rounded flex items-center justify-center transition">
-                            <Phone className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => onNavigateToFollowUp ? onNavigateToFollowUp(lead) : onOpenEditModal(lead)} title="Follow-Up" className="p-1 bg-zinc-800 hover:bg-amber-950/40 border border-zinc-700 hover:border-amber-500/50 text-amber-500 rounded flex items-center justify-center transition">
-                            <Bell className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => onOpenRuleEngine && onOpenRuleEngine(lead)} title="Ações Automáticas" className="p-1 bg-zinc-800 hover:bg-indigo-950/40 border border-zinc-700 hover:border-indigo-500/50 text-indigo-500 rounded flex items-center justify-center transition">
-                            <Bot className="w-3.5 h-3.5" />
-                          </button>
-                          
-                          <button onClick={() => onOpenLeadDetails(lead)} title="Ficha" className="p-1 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-white rounded flex items-center justify-center transition">
-                            <FileText className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => onMoveLead(lead.id, 'prospect', 'etapas')} title="Funil" className="p-1 bg-zinc-800 hover:bg-sky-950/40 border border-zinc-700 hover:border-sky-500/50 text-sky-500 rounded flex items-center justify-center transition">
-                            <ChevronDown className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={(e) => {
-                              e.stopPropagation();
-                              if (window.confirm("Certeza que deseja excluir este lead?")) {
-                                onDeleteLead && onDeleteLead(lead.id);
-                              }
-                            }} title="Excluir" className="p-1 bg-zinc-800 hover:bg-rose-950/40 border border-zinc-700 hover:border-rose-500/50 text-rose-500 rounded flex items-center justify-center transition">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => onOpenAIAssistant && onOpenAIAssistant(lead)} title="Assistente AI" className="p-1 bg-zinc-800 hover:bg-fuchsia-950/40 border border-zinc-700 hover:border-fuchsia-500/50 text-fuchsia-500 rounded flex items-center justify-center transition">
-                            <Sparkles className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                      {/* AÇÕES COMPACT */}
+                      <div className="grid grid-cols-6 gap-0.5 pt-0.5 border-t border-zinc-800/80 px-1">
+                          <button onClick={() => window.open(`https://wa.me/${lead.phone.replace(/\D/g, "")}`)} className="p-0.5 bg-zinc-800 hover:bg-emerald-950/40 text-emerald-500 rounded flex justify-center"><MessageCircle className="w-2.5 h-2.5" /></button>
+                          <button onClick={() => onNavigateToFollowUp ? onNavigateToFollowUp(lead) : onOpenEditModal(lead)} className="p-0.5 bg-zinc-800 hover:bg-amber-950/40 text-amber-500 rounded flex justify-center"><Bell className="w-2.5 h-2.5" /></button>
+                          <button onClick={() => onOpenRuleEngine && onOpenRuleEngine(lead)} className="p-0.5 bg-zinc-800 hover:bg-indigo-950/40 text-indigo-500 rounded flex justify-center"><Bot className="w-2.5 h-2.5" /></button>
+                          <button onClick={() => onOpenLeadDetails(lead)} className="p-0.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded flex justify-center"><FileText className="w-2.5 h-2.5" /></button>
+                          <button onClick={() => onMoveLead(lead.id, "prospect", "etapas")} className="p-0.5 bg-zinc-800 hover:bg-sky-950/40 text-sky-500 rounded flex justify-center"><ChevronDown className="w-2.5 h-2.5" /></button>
+                          <button onClick={() => { if(window.confirm("Certeza?")) { onDeleteLead && onDeleteLead(lead.id) } }} className="p-0.5 bg-zinc-800 hover:bg-rose-950/40 text-rose-500 rounded flex justify-center"><Trash2 className="w-2.5 h-2.5" /></button>
                       </div>
                     </div>
                   </div>
@@ -1103,896 +2054,1216 @@ export default function KanbanBoard({
 
   return (
     <div className="space-y-6 relative">
-      
       {/* Table search bar block injected from App.tsx */}
-      {tableHeaderComponent && (
+      {tableHeaderComponent && !renderOnlyMap && (
         <div className="w-full">
-          {typeof tableHeaderComponent === 'function' ? tableHeaderComponent([], {}) : tableHeaderComponent}
+          {typeof tableHeaderComponent === "function"
+            ? tableHeaderComponent([], {})
+            : tableHeaderComponent}
         </div>
       )}
 
-      {/* Dynamic Clickable Section Tabs from funnelPages */}
-      <div className="flex flex-wrap gap-2.5 items-center justify-start w-full mb-2 px-1 select-none">
-        {funnelPages.map((page) => {
-          const isActive = activeFunnelsPage === page.id;
-          // Determine clean name and icon based on id
-          let icon = "📁";
-          let displayName = page.name.replace("Visibilidade: ", "");
-          if (page.id === "status") {
-            icon = "📊";
-            displayName = "Status";
-          } else if (page.id === "etapas") {
-            icon = "🚀";
-            displayName = "Etapas";
-          } else if (page.id === "perfil") {
-            icon = "👤";
-            displayName = "Perfil";
-          } else if (page.id === "qualificacao") {
-            icon = "🎯";
-            displayName = "Qualificação";
-          } else if (page.id === "objecoes") {
-            icon = "🛑";
-            displayName = "Objeções";
-          }
-          
-          return (
-            <button
-              key={page.id}
-              onClick={() => {
-                setActiveFunnelsPage(page.id);
-                localStorage.setItem("ciclocred_active_funnel_page_id", page.id);
-                if ((window as any).setKanbanViewMode) (window as any).setKanbanViewMode(page.id);
-              }}
-              className={`flex items-center gap-2 px-5 py-2.5 hover:bg-zinc-800/40 rounded-xl border transition-all text-xs font-bold uppercase tracking-wider relative ${
-                isActive
-                  ? "bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] translate-y-[-1px]"
-                  : "bg-zinc-900/40 text-zinc-400 border-zinc-800/80"
-              }`}
+      {/* 🗺️ AMBIENTE MAPA: AMBIENTE DE CONEXÃO DE NÓS (Renders stably above the Kanban columns) */}
+      {!renderOnlyColumns && (
+        <div className="mb-6 bg-zinc-950 border-0 border-transparent rounded-[30px] p-4 xl:p-6 w-full relative transition-colors shadow-[0_4px_30px_rgba(0,0,0,0.4)] pb-8">
+          <div className="flex flex-col xl:flex-row gap-6 w-full items-start">
+            {/* WIDGET 1: CÉREBRO DE COMANDO NLP & COLIGAÇÃO DE ESTOQUE */}
+            <div
+              style={{ height: `${mapHeight}px` }}
+              className="w-full xl:w-[350px] shrink-0 bg-zinc-950/80 border-2 border-purple-500/10 rounded-2xl p-4 shadow-md flex flex-col gap-4 self-stretch justify-start overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 text-white"
             >
-              <span className="text-sm">{icon}</span>
-              <span>{displayName}</span>
-            </button>
-          );
-        })}
-      </div>
-      {/* Transparent Unified Search Bar with Side Action Buttons */}
-      <div className="flex flex-col sm:flex-row items-center gap-3 bg-zinc-900/30 backdrop-blur-md border-[2px] border-zinc-800 p-3 rounded-2xl shadow-lg w-full mb-3">
-        {/* LADO ESQUERDO: 🗑️✏️📁 */}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => confirmDeleteFunnelPage(activeFunnelsPage)}
-            title="Excluir Página Atual (🗑️ - Excluir visibilidade)"
-            className="w-10 h-10 rounded-xl bg-zinc-800/40 hover:bg-red-500/10 border border-zinc-700/50 hover:border-red-500/40 text-rose-400 font-bold transition flex items-center justify-center text-lg shrink-0 shadow-sm"
-          >
-            🗑️
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setEditingPageId(activeFunnelsPage);
-              setEditingPageName(funnelPages.find(p => p.id === activeFunnelsPage)?.name || "");
-            }}
-            title="Editar Título de Visibilidade (✏️ - Editar título de visibilidade)"
-            className="w-10 h-10 rounded-xl bg-zinc-800/40 hover:bg-amber-500/10 border border-zinc-700/50 hover:border-amber-500/40 text-amber-400 font-bold transition flex items-center justify-center text-lg shrink-0 shadow-sm"
-          >
-            ✏️
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowPageCreatorDirect(true)}
-            title="Criar Nova Visibilidade (📁 - Criar nova visibilidade)"
-            className="w-10 h-10 rounded-xl bg-zinc-800/40 hover:bg-emerald-500/10 border border-zinc-700/50 hover:border-emerald-500/40 text-emerald-400 font-bold transition flex items-center justify-center text-lg shrink-0 shadow-sm"
-          >
-            📁
-          </button>
-        </div>
+              {/* NLP Prompt Section */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold tracking-wider font-sans uppercase text-zinc-300 flex items-center gap-1.5">
+                    <Bot className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Linguagem Natural (NLP)</span>
+                  </span>
+                  <span className="text-[8px] font-mono font-black py-0.5 px-1 bg-purple-950 text-purple-400 border border-purple-500/20 uppercase rounded leading-none">
+                    Gemini Ativo
+                  </span>
+                </div>
+                <textarea
+                  value={nlpCommandText}
+                  onChange={(e) => setNlpCommandText(e.target.value)}
+                  placeholder="Ex: 'Agendar visita com João Silva amanhã às 14:00' ou 'Mover Marcos para Proposta'..."
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-[10px] text-white focus:outline-none focus:border-purple-500/60 placeholder-zinc-600 h-24 resize-none leading-relaxed font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={handleNlpExecute}
+                  disabled={nlpProcessing}
+                  className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-black uppercase tracking-wider transition shadow-[0_2px_10px_rgba(168,85,247,0.3)] hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                >
+                  {nlpProcessing ? (
+                    <>
+                      <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full " />
+                      <span>Processando Ordenação...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Executar Comando CRM</span>
+                    </>
+                  )}
+                </button>
 
-        {/* CENTRO: Barra de pesquisa transparente */}
-        <div className="flex-1 relative w-full">
-          <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
-            <Search className="h-4 w-4 text-zinc-400" />
-          </span>
-          <input
-            type="text"
-            placeholder="Buscar Leads no Funil..."
-            value={kanbanSearchText}
-            onChange={(e) => setKanbanSearchText(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border-2 border-zinc-800 bg-zinc-950/20 hover:bg-zinc-950/40 text-white placeholder-zinc-500 font-bold font-mono text-xs rounded-xl focus:border-indigo-500/60 focus:ring-0 outline-none transition-all"
-          />
-        </div>
+                {nlpFeedback && (
+                  <div
+                    className={`p-3 rounded-xl border text-[9px] font-bold font-mono transition-colors uppercase leading-relaxed ${
+                      nlpFeedback.type === "success"
+                        ? "bg-emerald-950/40 border-emerald-500/20 text-emerald-400"
+                        : nlpFeedback.type === "error"
+                          ? "bg-rose-950/40 border-rose-500/20 text-rose-400"
+                          : "bg-zinc-900 border-zinc-800 text-zinc-300"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1 border-b border-white/5 pb-1">
+                      <span>Resultado:</span>
+                      <button
+                        onClick={() => setNlpFeedback(null)}
+                        className="hover:text-white"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <p className="whitespace-pre-line">{nlpFeedback.msg}</p>
+                  </div>
+                )}
+              </div>
 
-        {/* LADO DIREITO: 🔍🔄➕ */}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              if (setHyperfocusActive) {
-                const current = typeof hyperfocusActive === 'number' ? hyperfocusActive : (hyperfocusActive ? 1 : 0);
-                let nextValue = 0;
-                if (current === 0) {
-                  nextValue = 1;
-                } else if (current === 1) {
-                  nextValue = 2;
-                } else if (current === 2) {
-                  nextValue = 3;
-                  if (hiperfoco3Columns.length === 0) {
-                    const statusCols = getKanbanColumns("status");
-                    setHiperfoco3Columns(statusCols.map(col => ({ colId: col.id, pageId: "status" })));
-                  }
-                } else {
-                  nextValue = 0;
-                  setHiperfoco3Columns([]);
-                }
-                setHyperfocusActive(nextValue);
-              }
-            }}
-            className={`w-10 h-10 flex items-center justify-center rounded-xl border transition shrink-0 text-lg shadow-sm ${
-              hyperfocusActive === 3
-                ? "bg-purple-500/20 border-purple-500/50 text-purple-300"
-                : hyperfocusActive === 1 || hyperfocusActive === 2
-                  ? "bg-amber-500/20 border-amber-500/50 text-amber-300"
-                  : "bg-zinc-800/40 border-zinc-700/50 text-indigo-400 hover:bg-zinc-700/40"
-            }`}
-            title={hyperfocusActive === 3 ? "Sair do Hiperfoco" : `Ativar Hiperfoco (Nível Atual: ${hyperfocusActive || 0})`}
-          >
-            🔍
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowAbaOrganizerState(!showAbaOrganizerState)}
-            className={`w-10 h-10 flex items-center justify-center rounded-xl border transition shrink-0 text-lg shadow-sm ${
-              showAbaOrganizerState
-                ? "bg-indigo-500/20 border-indigo-500/50 text-indigo-300"
-                : "bg-zinc-800/40 border-zinc-700/50 text-indigo-400 hover:bg-zinc-700/40"
-            }`}
-            title="Organizador de colunas (🔄)"
-          >
-            🔄
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowStatusCreatorDirect(!showStatusCreatorDirect)}
-            className={`w-10 h-10 flex items-center justify-center rounded-xl border transition shrink-0 text-lg shadow-sm ${
-              showStatusCreatorDirect
-                ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300"
-                : "bg-zinc-800/40 border-zinc-700/50 text-emerald-500 hover:bg-zinc-700/40"
-            }`}
-            title="Adicionar colunas (➕)"
-          >
-            ➕
-          </button>
-        </div>
-      </div>
+              {/* Connected / Selected Node Workspace */}
+              <div className="border-t border-zinc-800/80 pt-3 flex-1 flex flex-col justify-start">
+                {!selectedH3LeadId ? (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center p-4 py-8 border-2 border-dashed border-zinc-800/60 rounded-xl bg-zinc-900/10 self-stretch">
+                    <span className="text-2xl opacity-40">🔌</span>
+                    <h5 className="text-[10px] uppercase font-black tracking-widest text-zinc-400 mt-2">
+                      Nenhum Nó Vinculado
+                    </h5>
+                    <p className="text-[8px] text-zinc-500 leading-normal max-w-xs mt-1">
+                      Clique em qualquer nó de Lead no Canvas ao lado para
+                      linkar sua ficha à Coligação de Estoque e Google Agenda.
+                    </p>
+                  </div>
+                ) : (
+                  (() => {
+                    const lead = leads.find((l) => l.id === selectedH3LeadId);
+                    if (!lead)
+                      return (
+                        <p className="text-[10px] text-zinc-500">
+                          Lead não encontrado ou removido.
+                        </p>
+                      );
 
-      {showStatusCreatorDirect && (
-        <div className="bg-zinc-50 border-2 border-zinc-300 p-3 rounded-xl flex flex-wrap items-center gap-3 w-full ">
-          <input
-            type="text"
-            placeholder="Nome do Novo Bloco..."
-            value={newAbaName}
-            onChange={(e) => setNewAbaName(e.target.value)}
-            className="bg-white border-2 border-zinc-950 text-xs px-3 py-2 rounded-lg font-bold shrink-0 w-48 font-mono outline-none"
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleCreateAba();
-              if (e.key === "Escape") setShowStatusCreatorDirect(false);
-            }}
-          />
-          <select
-            value={newAbaColor}
-            onChange={(e) => setNewAbaColor(e.target.value)}
-            className="bg-white border-2 border-zinc-950 text-xs px-2 py-2 rounded-lg font-black uppercase outline-none shrink-0 cursor-pointer"
-          >
-            <option value="blue">🔵 Azul</option>
-            <option value="amber">🟡 Amarelo</option>
-            <option value="indigo">🟣 Roxo</option>
-            <option value="emerald">🟢 Verde</option>
-            <option value="red">🔴 Vermelho</option>
-            <option value="pink">🌸 Rosa</option>
-            <option value="teal">🔷 Ciano</option>
-            <option value="orange">🟠 Laranja</option>
-            <option value="zinc">⚙️ Cinza</option>
-          </select>
-          <button
-            onClick={handleCreateAba}
-            className="bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-lg border-2 border-zinc-950 text-xs font-black uppercase"
-          >
-            Adicionar
-          </button>
-          <button
-            onClick={() => setShowStatusCreatorDirect(false)}
-            className="px-4 py-2 text-zinc-500 font-bold hover:bg-zinc-200 rounded-lg text-xs"
-          >
-            Cancelar
-          </button>
-        </div>
-      )}
+                    // Find linking property from the real estate stock list
+                    const linkedProp = properties.find(
+                      (p) =>
+                        p.id === lead.propertyInterest ||
+                        p.title === lead.propertyInterest,
+                    );
 
-      {/* Grid containing Columns and Sidebar Drawer */}
-      <div className="relative flex flex-col xl:flex-row gap-5 items-start">
-        {/* Kanban Columns Grid Scroll Container */}
-        <div className="flex-1 w-full overflow-hidden relative group">
-          <div className="absolute right-4 bottom-4 flex gap-2 z-20 md:hidden group-hover:flex">
-             <button
-                onClick={() => {
-                  const el = document.getElementById("kanban-columns-grid");
-                  if (el) el.scrollBy({ left: -300, behavior: "smooth" });
+                    // Filter properties that fit the familyGrossIncome or value
+                    const fitProps = properties
+                      .filter((p) => {
+                        const lValue = lead.value || 300000;
+                        return p.price ? p.price <= lValue * 1.35 : true;
+                      })
+                      .slice(0, 3);
+
+                    return (
+                      <div className="space-y-4 flex flex-col justify-start align-stretch w-full">
+                        {/* Header of Active Node */}
+                        <div className="bg-zinc-900 border border-zinc-800 p-3 rounded-xl relative">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <span className="text-[7px] font-mono font-black text-purple-400 bg-purple-950/55 px-1 py-0.5 rounded leading-none">
+                                NO-VINCULADO
+                              </span>
+                              <h4 className="text-xs font-black uppercase text-white tracking-widest mt-1 truncate max-w-[190px]">
+                                {lead.name}
+                              </h4>
+                              <p className="text-[8px] font-mono font-bold text-zinc-500 mt-0.5">
+                                {lead.email || "Sem e-mail"}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => setSelectedH3LeadId(null)}
+                              className="text-zinc-600 hover:text-white text-[9px]"
+                              title="Desvincular nó"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                          <div className="mt-2 grid grid-cols-2 gap-2 text-[8px] font-mono border-t border-zinc-800/80 pt-1.5 font-black uppercase">
+                            <div>
+                              <span className="block text-zinc-500">
+                                RENDA LÍQUIDA:
+                              </span>
+                              <span className="text-white">
+                                R${" "}
+                                {(
+                                  lead.familyIncome ||
+                                  lead.familyGrossIncome ||
+                                  0
+                                ).toLocaleString("pt-BR")}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="block text-zinc-500">
+                                CARTA CRÉDITO:
+                              </span>
+                              <span className="text-emerald-450 font-black">
+                                R$ {(lead.value || 0).toLocaleString("pt-BR")}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Google Agenda direct scheduler */}
+                        <div className="bg-zinc-900 border border-zinc-800 p-3 rounded-xl space-y-2">
+                          <h5 className="text-[9px] font-black text-white uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-800 pb-1.5">
+                            <span>📅 Agendador de Visitas Google</span>
+                          </h5>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <label className="text-[7px] text-zinc-500 font-mono font-black uppercase block">
+                                DATA:
+                              </label>
+                              <input
+                                type="date"
+                                value={agendaDate}
+                                onChange={(e) => setAgendaDate(e.target.value)}
+                                className="w-full bg-zinc-950 border border-zinc-800 text-[9px] text-white p-1 rounded-md outline-none"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[7px] text-zinc-500 font-mono font-black uppercase block">
+                                HORA:
+                              </label>
+                              <input
+                                type="time"
+                                value={agendaTime}
+                                onChange={(e) => setAgendaTime(e.target.value)}
+                                className="w-full bg-zinc-950 border border-zinc-800 text-[9px] text-white p-1 rounded-md outline-none"
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[7px] text-zinc-500 font-mono font-black uppercase block">
+                              ATIVIDADE COMPROMISSO:
+                            </label>
+                            <select
+                              value={agendaActivity}
+                              onChange={(e) =>
+                                setAgendaActivity(e.target.value)
+                              }
+                              className="w-full bg-zinc-950 border border-zinc-800 text-[9px] text-white p-1.5 rounded-md outline-none"
+                            >
+                              <option value="Visita Técnica no Decorado Cury">
+                                Visita Técnica no Decorado Cury
+                              </option>
+                              <option value="Assinatura de Contrato cicloCRED">
+                                Assinatura de Contrato cicloCRED
+                              </option>
+                              <option value="Apresentação de Fluxo Caixa">
+                                Apresentação de Fluxo Caixa
+                              </option>
+                              <option value="Follow-up Call de crédito">
+                                Follow-up Call de crédito
+                              </option>
+                            </select>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!agendaDate || !agendaTime) {
+                                alert(
+                                  "Defina a data e o horário para o agendamento.",
+                                );
+                                return;
+                              }
+                              const startDateTime = `${agendaDate}T${agendaTime}:00`;
+                              const endHour =
+                                parseInt(agendaTime.slice(0, 2)) + 1;
+                              const endHourStr =
+                                endHour < 10 ? `0${endHour}` : String(endHour);
+                              const endDateTime = `${agendaDate}T${endHourStr === "24" ? "23" : endHourStr}:${agendaTime.slice(3, 5)}:00`;
+
+                              const hasGToken = !!(
+                                localStorage.getItem("gcal_access_token") ||
+                                localStorage.getItem("workspace_token")
+                              );
+
+                              if (onUpdateLeadField) {
+                                onUpdateLeadField(lead.id, {
+                                  lastContactAt: new Date().toISOString(),
+                                  notes: `${lead.notes || ""}\n\n[AGENDAMENTO ${agendaActivity.toUpperCase()}]: Agendado para ${agendaDate} às ${agendaTime}.`,
+                                });
+                              }
+
+                              if (hasGToken) {
+                                fetch(
+                                  "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+                                  {
+                                    method: "POST",
+                                    headers: {
+                                      Authorization: `Bearer ${localStorage.getItem("gcal_access_token") || localStorage.getItem("workspace_token")}`,
+                                      "Content-Type": "application/json",
+                                    },
+                                    body: JSON.stringify({
+                                      summary: `[cicloCRED] ${agendaActivity} - ${lead.name}`,
+                                      description: `Agendamento coligado via Workspace CRM.\n\nLead: ${lead.name}\nEmail: ${lead.email}\nTelefone: ${lead.phone}`,
+                                      start: {
+                                        dateTime: startDateTime,
+                                        timeZone:
+                                          Intl.DateTimeFormat().resolvedOptions()
+                                            .timeZone,
+                                      },
+                                      end: {
+                                        dateTime: endDateTime,
+                                        timeZone:
+                                          Intl.DateTimeFormat().resolvedOptions()
+                                            .timeZone,
+                                      },
+                                    }),
+                                  },
+                                )
+                                  .then((res) => {
+                                    if (res.ok) {
+                                      alert(
+                                        "Compromisso sincronizado e adicionado com sucesso na sua conta Google Agenda real!",
+                                      );
+                                    } else {
+                                      alert(
+                                        "Gravado localmente! Dica: O token do Google Agenda expirou. Recarregue e renove seu login na aba Workspace.",
+                                      );
+                                    }
+                                  })
+                                  .catch(() =>
+                                    alert(
+                                      "Agendado localmente com sucesso no histórico!",
+                                    ),
+                                  );
+                              } else {
+                                alert(
+                                  "Salvo localmente no histórico da ficha do Lead! Para enviar ao Google Agenda real, vincule seu login do Google na aba Configurações/Workspace.",
+                                );
+                              }
+                              setAgendaDate("");
+                              setAgendaTime("");
+                            }}
+                            className="w-full py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[8px] font-black uppercase tracking-wider transition font-sans"
+                          >
+                            Confirmar Agendamento Real
+                          </button>
+                        </div>
+
+                        {/* Real estate coligation */}
+                        <div className="bg-zinc-900 border border-zinc-855 p-3 rounded-xl space-y-2">
+                          <div className="flex items-center justify-between border-b border-zinc-800 pb-1.5">
+                            <h5 className="text-[9px] font-black text-white uppercase tracking-wider">
+                              🏡 Coligação de Estoque Cury / MCMV
+                            </h5>
+                            {linkedProp && (
+                              <span className="text-[7.5px] px-1 py-0.5 bg-emerald-950 border border-emerald-500/20 text-emerald-400 font-bold uppercase rounded leading-none">
+                                VINCULADO
+                              </span>
+                            )}
+                          </div>
+
+                          {linkedProp ? (
+                            <div className="p-2.5 bg-zinc-950/70 border border-emerald-500/10 rounded-lg">
+                              <span className="text-[7px] text-zinc-500 font-mono block">
+                                UNIDADE ATIVA:
+                              </span>
+                              <h6 className="text-[10px] font-black text-white uppercase mt-0.5">
+                                {linkedProp.title || linkedProp.name}
+                              </h6>
+                              <p className="text-[8px] text-zinc-400 font-mono mt-0.5">
+                                Valor: R${" "}
+                                {(linkedProp.price || 0).toLocaleString(
+                                  "pt-BR",
+                                )}
+                              </p>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (onUpdateLeadField) {
+                                    onUpdateLeadField(lead.id, {
+                                      propertyInterest: "",
+                                    });
+                                  }
+                                }}
+                                className="mt-2 text-[8px] text-rose-400 hover:text-rose-300 font-bold uppercase transition"
+                              >
+                                ✕ Desvincular Unidade
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="space-y-1.5">
+                              <p className="text-[8px] text-zinc-500 leading-normal">
+                                Selecione uma das opções do estoque para
+                                vincular com proposta ao lead:
+                              </p>
+                              <div className="space-y-1.5 max-h-[120px] overflow-y-auto pr-1">
+                                {fitProps.length === 0 ? (
+                                  <p className="text-[8px] text-zinc-650 font-mono italic">
+                                    Estoque vazio. Importe imóveis na aba
+                                    Estoque.
+                                  </p>
+                                ) : (
+                                  fitProps.map((prop, propIdx) => (
+                                    <div
+                                      key={propIdx}
+                                      className="flex items-center justify-between gap-1.5 p-1.5 bg-zinc-950/60 border border-zinc-800 rounded-lg hover:border-purple-500/20 transition font-sans"
+                                    >
+                                      <div className="min-w-0 flex-1">
+                                        <h6 className="text-[9px] font-black text-white truncate uppercase">
+                                          {prop.title || prop.name}
+                                        </h6>
+                                        <p className="text-[7.5px] text-emerald-400 font-mono font-bold">
+                                          R${" "}
+                                          {(prop.price || 0).toLocaleString(
+                                            "pt-BR",
+                                          )}
+                                        </p>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setIsGeneratingPitch(true);
+                                          setGeneratedPitch("");
+                                          if (onUpdateLeadField) {
+                                            onUpdateLeadField(lead.id, {
+                                              propertyInterest:
+                                                prop.title ||
+                                                prop.name ||
+                                                String(prop.id),
+                                              notes: `${lead.notes || ""}\n\n[PROPOSTA DE UNIDADE]: Coligou o imóvel "${prop.title || prop.name}" no valor de R$ ${(prop.price || 0).toLocaleString("pt-BR")}.`,
+                                            });
+                                          }
+
+                                          fetch("/api/ai/generate-pitch", {
+                                            method: "POST",
+                                            headers: {
+                                              "Content-Type":
+                                                "application/json",
+                                            },
+                                            body: JSON.stringify({
+                                              leadName: lead.name,
+                                              income:
+                                                lead.familyIncome ||
+                                                lead.familyGrossIncome ||
+                                                0,
+                                              budget:
+                                                prop.price ||
+                                                lead.value ||
+                                                250000,
+                                              propertyInterest:
+                                                prop.title || prop.name,
+                                              notes: lead.notes,
+                                              agency: "cicloCRED CRM",
+                                              agentName:
+                                                "Consultor de Crédito cicloCRED",
+                                            }),
+                                          })
+                                            .then((res) => res.json())
+                                            .then((data) => {
+                                              setGeneratedPitch(
+                                                data.script || data.text || "",
+                                              );
+                                            })
+                                            .catch(() => {
+                                              const fallbackP = `📲 *Apresentação cicloCRED imobiliária Cury*\n\nOlá *${lead.name}*, tudo bem?\n\nSelecionamos a dedo uma unidade no empreendimento *${prop.title || prop.name}*, com valor de R$ ${(prop.price || 240000).toLocaleString("pt-BR")}.\n\nEsse perfil está perfeitamente alinhado com a sua renda declarada de R$ ${(lead.familyIncome || 0).toLocaleString("pt-BR")}. Vamos agendar uma simulação com aprovação Caixa?\n\nFico à disposição!`;
+                                              setGeneratedPitch(fallbackP);
+                                            })
+                                            .finally(() =>
+                                              setIsGeneratingPitch(false),
+                                            );
+                                        }}
+                                        className="py-1 px-2 rounded-md bg-purple-900/60 border border-purple-500/20 text-[8px] font-black hover:bg-purple-800 text-purple-300 hover:text-white transition whitespace-nowrap"
+                                      >
+                                        Coligar
+                                      </button>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* WhatsApp Generated Pitch display */}
+                          {(isGeneratingPitch || generatedPitch) && (
+                            <div className="border-t border-zinc-800 pt-2 space-y-1">
+                              <span className="text-[8px] font-black text-purple-400 font-mono tracking-widest block uppercase ">
+                                ✨ WHATSAPP PITCH - CO-PRODUÇÃO GEMINI
+                              </span>
+                              {isGeneratingPitch ? (
+                                <div className="flex items-center gap-1.5 p-2 bg-zinc-950/60 rounded-lg text-zinc-500 font-mono text-[8px]">
+                                  <span className="w-2.5 h-2.5 border-2 border-purple-500 border-t-transparent rounded-full " />
+                                  <span>Co-produzindo pitch de vendas...</span>
+                                </div>
+                              ) : (
+                                <div className="space-y-1.5 w-full">
+                                  <textarea
+                                    readOnly
+                                    value={generatedPitch}
+                                    className="w-full bg-zinc-950 text-white rounded-lg p-2 text-[8.5px] border border-zinc-800 font-mono h-28 leading-relaxed outline-none"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(
+                                        generatedPitch,
+                                      );
+                                      alert(
+                                        "Pitch copiado para a área de transferência! Envie de forma premium via WhatsApp.",
+                                      );
+                                    }}
+                                    className="w-full py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[8px] font-black uppercase tracking-wider transition font-sans"
+                                  >
+                                    Copiar Mensagem do Whatsapp
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()
+                )}
+              </div>
+            </div>
+
+            {/* WIDGET 2: GRAPH NODES CANVAS AREA */}
+            <div
+              ref={canvasContainerRef}
+              style={{ height: `${mapHeight}px` }}
+              className="flex-1 min-w-0 relative overflow-hidden rounded-[24px] border border-zinc-800/60 bg-[#0c0c0e] w-full"
+              onDrop={handleDropOnH3Canvas}
+              onDragOver={(e) => e.preventDefault()}
+            >
+              <CognitiveMap 
+                leads={mapaFilteredLeads} 
+                properties={externalProperties} 
+                onUpdateLeadField={onUpdateLeadField} 
+                onNodeClick={onOpenLeadDetails}
+                onAddToDispatchQueue={onAddToDispatchQueue}
+              />
+              {/* Option for bottom border expansion by dragging down */}
+              <div
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  const startY = e.clientY;
+                  const startHeight = mapHeight;
+                  const onMouseMove = (moveEvent: MouseEvent) => {
+                    const deltaY = moveEvent.clientY - startY;
+                    const newHeight = Math.max(
+                      300,
+                      Math.min(1500, startHeight + deltaY),
+                    );
+                    setMapHeight(newHeight);
+                    localStorage.setItem(
+                      "ciclocred_kanban_map_height",
+                      String(newHeight),
+                    );
+                  };
+                  const onMouseUp = () => {
+                    document.removeEventListener("mousemove", onMouseMove);
+                    document.removeEventListener("mouseup", onMouseUp);
+                  };
+                  document.addEventListener("mousemove", onMouseMove);
+                  document.addEventListener("mouseup", onMouseUp);
                 }}
-                className="w-12 h-12 rounded-full bg-zinc-900 border-2 border-zinc-950 text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center hover:bg-zinc-800 transition active:translate-y-1 active:shadow-none"
-             >
-                <ChevronLeft className="w-6 h-6" />
-             </button>
-             <button
-                onClick={() => {
-                  const el = document.getElementById("kanban-columns-grid");
-                  if (el) el.scrollBy({ left: 300, behavior: "smooth" });
-                }}
-                className="w-12 h-12 rounded-full bg-zinc-900 border-2 border-zinc-950 text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center hover:bg-zinc-800 transition active:translate-y-1 active:shadow-none"
-             >
-                <ChevronRight className="w-6 h-6" />
-             </button>
-          </div>
-          {hyperfocusActive ? (
-            hyperfocusActive === 2 ? (
-              /* LEVEL 2 HYPERFOCUS - 2x2 GRID (Two on upper half, two on lower half, making all 4 visible at once) */
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 pr-4 w-full h-auto xl:h-[740px] overflow-hidden shrink-0 transition-all duration-300 pb-4">
-                <div className="flex flex-col gap-2 min-w-0 w-full h-[350px] xl:h-full overflow-hidden border-2 border-zinc-200 dark:border-zinc-800 p-3 rounded-2xl bg-zinc-50/40 dark:bg-zinc-950/20 shadow-inner">
-                  <h3 className="text-xs font-black uppercase text-indigo-500 tracking-widest border-l-4 border-indigo-500 pl-3 bg-zinc-50 border-y border-r border-zinc-200 py-1 pr-3 rounded-r-lg max-w-max shadow-sm mb-2 select-none">Etapas</h3>
-                  <div className="flex-1 overflow-x-auto overflow-y-hidden pb-1 flex flex-row gap-4 select-none transition-all w-full duration-300 custom-scrollbar min-h-0 items-start">
-                    {renderKanbanColumnsForPage("etapas")}
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2 min-w-0 w-full h-[350px] xl:h-full overflow-hidden border-2 border-zinc-200 dark:border-zinc-800 p-3 rounded-2xl bg-zinc-50/40 dark:bg-zinc-950/20 shadow-inner">
-                  <h3 className="text-xs font-black uppercase text-emerald-500 tracking-widest border-l-4 border-emerald-500 pl-3 bg-zinc-50 border-y border-r border-zinc-200 py-1 pr-3 rounded-r-lg max-w-max shadow-sm mb-2 select-none">Perfil</h3>
-                  <div className="flex-1 overflow-x-auto overflow-y-hidden pb-1 flex flex-row gap-4 select-none transition-all w-full duration-300 custom-scrollbar min-h-0 items-start">
-                    {renderKanbanColumnsForPage("perfil")}
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2 min-w-0 w-full h-[350px] xl:h-full overflow-hidden border-2 border-zinc-200 dark:border-zinc-800 p-3 rounded-2xl bg-zinc-50/40 dark:bg-zinc-950/20 shadow-inner">
-                  <h3 className="text-xs font-black uppercase text-rose-500 tracking-widest border-l-4 border-rose-500 pl-3 bg-zinc-50 border-y border-r border-zinc-200 py-1 pr-3 rounded-r-lg max-w-max shadow-sm mb-2 select-none">Qualificação</h3>
-                  <div className="flex-1 overflow-x-auto overflow-y-hidden pb-1 flex flex-row gap-4 select-none transition-all w-full duration-300 custom-scrollbar min-h-0 items-start">
-                    {renderKanbanColumnsForPage("qualificacao")}
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2 min-w-0 w-full h-[350px] xl:h-full overflow-hidden border-2 border-zinc-200 dark:border-zinc-800 p-3 rounded-xl bg-zinc-50/40 dark:bg-zinc-950/20 shadow-inner">
-                  <h3 className="text-xs font-black uppercase text-amber-500 tracking-widest border-l-4 border-amber-500 pl-3 bg-zinc-50 border-y border-r border-zinc-200 py-1 pr-3 rounded-r-lg max-w-max shadow-sm mb-2 select-none">Objeções</h3>
-                  <div className="flex-1 overflow-x-auto overflow-y-hidden pb-1 flex flex-row gap-4 select-none transition-all w-full duration-300 custom-scrollbar min-h-0 items-start">
-                    {renderKanbanColumnsForPage("objecoes")}
-                  </div>
+                className="absolute bottom-0 left-0 right-0 h-4 bg-zinc-900 hover:bg-indigo-600 cursor-row-resize flex items-center justify-center transition-colors rounded-b-[30px] border-t border-zinc-800/80 z-40 select-none group"
+                title="Arraste para baixo para expandir a altura do mapa"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-zinc-500 group-hover:bg-white animate-pulse" />
+                  <span className="text-[9px] font-mono font-black tracking-wider text-zinc-500 group-hover:text-white uppercase">
+                    Puxe para expandir ambiente ↕️
+                  </span>
+                  <div className="w-1.5 h-1.5 rounded-full bg-zinc-500 group-hover:bg-white animate-pulse" />
                 </div>
               </div>
-            ) : (
-              /* LEVEL 1 HYPERFOCUS - TWO-ROW SPLIT GRID (Upper pair and lower pair) */
-              <div className="flex flex-col gap-6 pr-4 pb-12 w-full overflow-x-hidden transition-all duration-300 h-auto">
-                 <div className="grid grid-cols-1 2xl:grid-cols-2 gap-8 min-h-0 shrink-0">
-                    <div className="flex flex-col gap-2 min-w-0 w-full overflow-hidden">
-                      <h3 className="text-xl font-black uppercase text-indigo-500 tracking-widest border-l-4 border-indigo-500 pl-4 bg-zinc-50 border-y border-r border-zinc-200 py-1 pr-4 rounded-r-xl max-w-max shadow-sm mb-4 select-none">Etapas</h3>
-                      <div className="flex xl:flex-row gap-6 items-start overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-zinc-800 select-none transition-all w-full duration-300">
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!renderOnlyMap && (
+        <>
+          {/* Dynamic Clickable Section Tabs from funnelPages */}
+          <div className="flex flex-wrap gap-2.5 items-center justify-between w-full mb-2 px-1 select-none">
+            {(() => {
+              const activePage =
+                funnelPages.find((p) => p.id === activeFunnelsPage) ||
+                funnelPages[0];
+              if (!activePage) return null;
+
+              let icon = "📁";
+              let displayName = activePage.name.replace("Visibilidade: ", "");
+              if (activePage.id === "status") {
+                icon = "📊";
+                displayName = "Status";
+              } else if (activePage.id === "etapas") {
+                icon = "🚀";
+                displayName = "Etapas";
+              } else if (activePage.id === "perfil") {
+                icon = "👤";
+                displayName = "Perfil";
+              } else if (activePage.id === "qualificacao") {
+                icon = "🎯";
+                displayName = "Qualificação";
+              } else if (activePage.id === "objecoes") {
+                icon = "🛑";
+                displayName = "Objeções";
+              }
+
+              const cycleFunnelPage = () => {
+                const currentIndex = funnelPages.findIndex(
+                  (p) => p.id === activeFunnelsPage,
+                );
+                const nextIndex = (currentIndex + 1) % funnelPages.length;
+                const nextPage = funnelPages[nextIndex];
+                setActiveFunnelsPage(nextPage.id);
+                localStorage.setItem(
+                  "ciclocred_active_funnel_page_id",
+                  nextPage.id,
+                );
+                if ((window as any).setKanbanViewMode)
+                  (window as any).setKanbanViewMode(nextPage.id);
+              };
+
+              return (
+                <div className="flex items-center gap-3">
+                  <span className="text-zinc-400 text-[10px] md:text-xs font-black uppercase tracking-wider">
+                    Visibilidade Funil:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={cycleFunnelPage}
+                    className="flex items-center gap-2.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white border-2 border-zinc-950 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-colors text-xs font-black uppercase tracking-wider relative cursor-pointer active:translate-y-[1px] hover:translate-y-[-1px] active:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+                    title="Clique para alternar a visibilidade do funil"
+                  >
+                    <span className="text-sm">{icon}</span>
+                    <span>{displayName}</span>
+                  </button>
+                </div>
+              );
+            })()}
+          </div>
+          {/* Transparent Unified Search Bar with Side Action Buttons */}
+          <div className="flex flex-col sm:flex-row items-center gap-3 bg-zinc-900/30  border-[2px] border-zinc-800 p-3 rounded-2xl shadow-lg w-full mb-3">
+            {/* LADO ESQUERDO: 🗑️✏️📁 */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => confirmDeleteFunnelPage(activeFunnelsPage)}
+                title="Excluir Página Atual (🗑️ - Excluir visibilidade)"
+                className="w-10 h-10 rounded-xl bg-zinc-800/40 hover:bg-red-500/10 border border-zinc-700/50 hover:border-red-500/40 text-rose-400 font-bold transition flex items-center justify-center text-lg shrink-0 shadow-sm"
+              >
+                🗑️
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingPageId(activeFunnelsPage);
+                  setEditingPageName(
+                    funnelPages.find((p) => p.id === activeFunnelsPage)?.name ||
+                      "",
+                  );
+                }}
+                title="Editar Título de Visibilidade (✏️ - Editar título de visibilidade)"
+                className="w-10 h-10 rounded-xl bg-zinc-800/40 hover:bg-amber-500/10 border border-zinc-700/50 hover:border-amber-500/40 text-amber-400 font-bold transition flex items-center justify-center text-lg shrink-0 shadow-sm"
+              >
+                ✏️
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowPageCreatorDirect(true)}
+                title="Criar Nova Visibilidade (📁 - Criar nova visibilidade)"
+                className="w-10 h-10 rounded-xl bg-zinc-800/40 hover:bg-emerald-500/10 border border-zinc-700/50 hover:border-emerald-500/40 text-emerald-400 font-bold transition flex items-center justify-center text-lg shrink-0 shadow-sm"
+              >
+                📁
+              </button>
+            </div>
+
+            {/* CENTRO: Barra de pesquisa transparente */}
+            <div className="flex-1 relative w-full">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
+                <Search className="h-4 w-4 text-zinc-400" />
+              </span>
+              <input
+                type="text"
+                placeholder="Buscar Leads no Funil..."
+                value={kanbanSearchText}
+                onChange={(e) => setKanbanSearchText(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border-2 border-zinc-800 bg-zinc-950/20 hover:bg-zinc-950/40 text-white placeholder-zinc-500 font-bold font-mono text-xs rounded-xl focus:border-indigo-500/60 focus:ring-0 outline-none transition-colors"
+              />
+            </div>
+
+            {/* LADO DIREITO: 🔍🔄➕ */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleFocusClick}
+                className={`w-10 h-10 flex flex-col items-center justify-center rounded-xl border transition shrink-0 shadow-sm ${
+                  hyperfocusActive
+                    ? "bg-indigo-500/20 border-indigo-500/50 text-indigo-400 hover:bg-indigo-500/30"
+                    : "bg-zinc-800/40 border-zinc-700/50 text-indigo-400 hover:bg-zinc-750/50"
+                }`}
+                title="Clique para alternar o Hiperfoco do Funil (H1 -> H2 -> H3 -> H1). Duplo clique para fechar e retornar à página ativa."
+              >
+                <span className="text-base">🔍</span>
+                {hyperfocusActive ? (
+                  <span className="text-[7px] leading-none text-indigo-400 font-mono font-bold">
+                    H{hyperfocusActive}
+                  </span>
+                ) : null}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAbaOrganizerState(!showAbaOrganizerState)}
+                className={`w-10 h-10 flex items-center justify-center rounded-xl border transition shrink-0 text-lg shadow-sm ${
+                  showAbaOrganizerState
+                    ? "bg-indigo-500/20 border-indigo-500/50 text-indigo-300"
+                    : "bg-zinc-800/40 border-zinc-700/50 text-indigo-400 hover:bg-zinc-700/40"
+                }`}
+                title="Organizador de colunas (🔄)"
+              >
+                🔄
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setShowStatusCreatorDirect(!showStatusCreatorDirect)
+                }
+                className={`w-10 h-10 flex items-center justify-center rounded-xl border transition shrink-0 text-lg shadow-sm ${
+                  showStatusCreatorDirect
+                    ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300"
+                    : "bg-zinc-800/40 border-zinc-700/50 text-emerald-500 hover:bg-zinc-700/40"
+                }`}
+                title="Adicionar colunas (➕)"
+              >
+                ➕
+              </button>
+            </div>
+          </div>
+
+          {showStatusCreatorDirect && (
+            <div className="bg-zinc-50 border-2 border-zinc-300 p-3 rounded-xl flex flex-wrap items-center gap-3 w-full ">
+              <input
+                type="text"
+                placeholder="Nome do Novo Bloco..."
+                value={newAbaName}
+                onChange={(e) => setNewAbaName(e.target.value)}
+                className="bg-white border-2 border-zinc-950 text-xs px-3 py-2 rounded-lg font-bold shrink-0 w-48 font-mono outline-none"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleCreateAba();
+                  if (e.key === "Escape") setShowStatusCreatorDirect(false);
+                }}
+              />
+              <select
+                value={newAbaColor}
+                onChange={(e) => setNewAbaColor(e.target.value)}
+                className="bg-white border-2 border-zinc-950 text-xs px-2 py-2 rounded-lg font-black uppercase outline-none shrink-0 cursor-pointer"
+              >
+                <option value="blue">🔵 Azul</option>
+                <option value="amber">🟡 Amarelo</option>
+                <option value="indigo">🟣 Roxo</option>
+                <option value="emerald">🟢 Verde</option>
+                <option value="red">🔴 Vermelho</option>
+                <option value="pink">🌸 Rosa</option>
+                <option value="teal">🔷 Ciano</option>
+                <option value="orange">🟠 Laranja</option>
+                <option value="zinc">⚙️ Cinza</option>
+              </select>
+              <button
+                onClick={handleCreateAba}
+                className="bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-lg border-2 border-zinc-950 text-xs font-black uppercase"
+              >
+                Adicionar
+              </button>
+              <button
+                onClick={() => setShowStatusCreatorDirect(false)}
+                className="px-4 py-2 text-zinc-500 font-bold hover:bg-zinc-200 rounded-lg text-xs"
+              >
+                Cancelar
+              </button>
+            </div>
+          )}
+
+          {/* Grid containing Columns and Sidebar Drawer */}
+          <div className="relative flex flex-col xl:flex-row gap-5 items-start">
+            {/* Kanban Columns Grid Scroll Container */}
+            <div className="flex-1 w-full overflow-hidden relative group">
+              <div className="absolute right-4 bottom-4 flex gap-2 z-20 md:hidden group-hover:flex">
+                <button
+                  onClick={() => {
+                    const el = document.getElementById("kanban-columns-grid");
+                    if (el) el.scrollBy({ left: -300, behavior: "smooth" });
+                  }}
+                  className="w-12 h-12 rounded-full bg-zinc-900 border-2 border-zinc-950 text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center hover:bg-zinc-800 transition active:translate-y-1 active:shadow-none"
+                >
+                  <ChevronLeft className="w-6 h-6" />
+                </button>
+                <button
+                  onClick={() => {
+                    const el = document.getElementById("kanban-columns-grid");
+                    if (el) el.scrollBy({ left: 300, behavior: "smooth" });
+                  }}
+                  className="w-12 h-12 rounded-full bg-zinc-900 border-2 border-zinc-950 text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center hover:bg-zinc-800 transition active:translate-y-1 active:shadow-none"
+                >
+                  <ChevronRight className="w-6 h-6" />
+                </button>
+              </div>
+              {hyperfocusActive ? (
+                hyperfocusActive === 1 ? (
+                  /* LEVEL 1 HYPERFOCUS - 2 BLOCKS with 2 visibilities each */
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 w-full h-auto xl:h-[700px] overflow-hidden pb-4">
+                    <div className="flex flex-col gap-2 min-w-0 w-full h-[350px] xl:h-full overflow-hidden border-2 border-zinc-200 dark:border-zinc-800 p-3 rounded-2xl bg-zinc-50/40 dark:bg-zinc-950/20 shadow-inner">
+                      <h3 className="text-xs font-black uppercase text-indigo-500 tracking-widest border-l-4 border-indigo-500 pl-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 py-1 pr-3 rounded-r-lg max-w-max shadow-sm mb-2 select-none">
+                        Etapas & Perfil
+                      </h3>
+                      <div className="flex-1 overflow-x-auto overflow-y-auto pb-1 flex flex-row gap-4 select-none transition-colors w-full custom-scrollbar min-h-0 items-start">
                         {renderKanbanColumnsForPage("etapas")}
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-2 min-w-0 w-full overflow-hidden">
-                      <h3 className="text-xl font-black uppercase text-emerald-500 tracking-widest border-l-4 border-emerald-500 pl-4 bg-zinc-50 border-y border-r border-zinc-200 py-1 pr-4 rounded-r-xl max-w-max shadow-sm mb-4 select-none">Perfil</h3>
-                      <div className="flex xl:flex-row gap-6 items-start overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-zinc-800 select-none transition-all w-full duration-300">
                         {renderKanbanColumnsForPage("perfil")}
                       </div>
                     </div>
-                 </div>
-                 <div className="grid grid-cols-1 2xl:grid-cols-2 gap-8 min-h-0 shrink-0 mt-8 border-t-4 border-dashed border-zinc-200 pt-8">
-                    <div className="flex flex-col gap-2 min-w-0 w-full overflow-hidden">
-                      <h3 className="text-xl font-black uppercase text-rose-500 tracking-widest border-l-4 border-rose-500 pl-4 bg-zinc-50 border-y border-r border-zinc-200 py-1 pr-4 rounded-r-xl max-w-max shadow-sm mb-4 select-none">Qualificação</h3>
-                      <div className="flex xl:flex-row gap-6 items-start overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-zinc-800 select-none transition-all w-full duration-300">
+                    <div className="flex flex-col gap-2 min-w-0 w-full h-[350px] xl:h-full overflow-hidden border-2 border-zinc-200 dark:border-zinc-800 p-3 rounded-2xl bg-zinc-50/40 dark:bg-zinc-950/20 shadow-inner">
+                      <h3 className="text-xs font-black uppercase text-rose-500 tracking-widest border-l-4 border-rose-500 pl-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 py-1 pr-3 rounded-r-lg max-w-max shadow-sm mb-2 select-none">
+                        Qualificação & Objeções
+                      </h3>
+                      <div className="flex-1 overflow-x-auto overflow-y-auto pb-1 flex flex-row gap-4 select-none transition-colors w-full custom-scrollbar min-h-0 items-start">
                         {renderKanbanColumnsForPage("qualificacao")}
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-2 min-w-0 w-full overflow-hidden">
-                      <h3 className="text-xl font-black uppercase text-amber-500 tracking-widest border-l-4 border-amber-500 pl-4 bg-zinc-50 border-y border-r border-zinc-200 py-1 pr-4 rounded-r-xl max-w-max shadow-sm mb-4 select-none">Objeções</h3>
-                      <div className="flex xl:flex-row gap-6 items-start overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-zinc-800 select-none transition-all w-full duration-300">
                         {renderKanbanColumnsForPage("objecoes")}
                       </div>
                     </div>
-                 </div>
+                  </div>
+                ) : hyperfocusActive === 2 ? (
+                  /* LEVEL 2 HYPERFOCUS - 4 BLOCKS with 1 visibility each, all on the same visible line on desktop */
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 w-full h-auto xl:h-[700px] overflow-hidden pb-4">
+                    <div className="flex flex-col gap-2 min-w-0 w-full h-[350px] xl:h-full overflow-hidden border-2 border-zinc-200 dark:border-zinc-800 p-3 rounded-2xl bg-zinc-50/40 dark:bg-zinc-950/20 shadow-inner">
+                      <h3 className="text-xs font-black uppercase text-indigo-500 tracking-widest border-l-4 border-indigo-500 pl-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 py-1 pr-3 rounded-r-lg max-w-max shadow-sm mb-2 select-none">
+                        Etapas
+                      </h3>
+                      <div className="flex-1 overflow-x-auto overflow-y-auto pb-1 flex flex-row gap-4 select-none transition-colors w-full custom-scrollbar min-h-0 items-start">
+                        {renderKanbanColumnsForPage("etapas")}
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2 min-w-0 w-full h-[350px] xl:h-full overflow-hidden border-2 border-zinc-200 dark:border-zinc-800 p-3 rounded-2xl bg-zinc-50/40 dark:bg-zinc-950/20 shadow-inner">
+                      <h3 className="text-xs font-black uppercase text-emerald-500 tracking-widest border-l-4 border-emerald-500 pl-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 py-1 pr-3 rounded-r-lg max-w-max shadow-sm mb-2 select-none">
+                        Perfil
+                      </h3>
+                      <div className="flex-1 overflow-x-auto overflow-y-auto pb-1 flex flex-row gap-4 select-none transition-colors w-full custom-scrollbar min-h-0 items-start">
+                        {renderKanbanColumnsForPage("perfil")}
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2 min-w-0 w-full h-[350px] xl:h-full overflow-hidden border-2 border-zinc-200 dark:border-zinc-800 p-3 rounded-2xl bg-zinc-50/40 dark:bg-zinc-950/20 shadow-inner">
+                      <h3 className="text-xs font-black uppercase text-rose-500 tracking-widest border-l-4 border-rose-500 pl-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 py-1 pr-3 rounded-r-lg max-w-max shadow-sm mb-2 select-none">
+                        Qualificação
+                      </h3>
+                      <div className="flex-1 overflow-x-auto overflow-y-auto pb-1 flex flex-row gap-4 select-none transition-colors w-full custom-scrollbar min-h-0 items-start">
+                        {renderKanbanColumnsForPage("qualificacao")}
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2 min-w-0 w-full h-[350px] xl:h-full overflow-hidden border-2 border-zinc-200 dark:border-zinc-800 p-3 rounded-2xl bg-zinc-50/40 dark:bg-zinc-950/20 shadow-inner">
+                      <h3 className="text-xs font-black uppercase text-amber-500 tracking-widest border-l-4 border-amber-500 pl-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 py-1 pr-3 rounded-r-lg max-w-max shadow-sm mb-2 select-none">
+                        Objeções
+                      </h3>
+                      <div className="flex-1 overflow-x-auto overflow-y-auto pb-1 flex flex-row gap-4 select-none transition-colors w-full custom-scrollbar min-h-0 items-start">
+                        {renderKanbanColumnsForPage("objecoes")}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* LEVEL 3 HYPERFOCUS - 5 BLOCKS with 1 visibility each, all on the same visible line on desktop */
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 w-full h-auto xl:h-[700px] overflow-hidden pb-4">
+                    <div className="flex flex-col gap-2 min-w-0 w-full h-[350px] xl:h-full overflow-hidden border-2 border-zinc-200 dark:border-zinc-800 p-3 rounded-2xl bg-zinc-50/40 dark:bg-zinc-950/20 shadow-inner">
+                      <h3 className="text-xs font-black uppercase text-blue-500 tracking-widest border-l-4 border-blue-500 pl-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 py-1 pr-3 rounded-r-lg max-w-max shadow-sm mb-2 select-none">
+                        Status
+                      </h3>
+                      <div className="flex-1 overflow-x-auto overflow-y-auto pb-1 flex flex-row gap-4 select-none transition-colors w-full custom-scrollbar min-h-0 items-start">
+                        {renderKanbanColumnsForPage("status")}
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2 min-w-0 w-full h-[350px] xl:h-full overflow-hidden border-2 border-zinc-200 dark:border-zinc-800 p-3 rounded-2xl bg-zinc-50/40 dark:bg-zinc-950/20 shadow-inner">
+                      <h3 className="text-xs font-black uppercase text-indigo-500 tracking-widest border-l-4 border-indigo-500 pl-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 py-1 pr-3 rounded-r-lg max-w-max shadow-sm mb-2 select-none">
+                        Etapas
+                      </h3>
+                      <div className="flex-1 overflow-x-auto overflow-y-auto pb-1 flex flex-row gap-4 select-none transition-colors w-full custom-scrollbar min-h-0 items-start">
+                        {renderKanbanColumnsForPage("etapas")}
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2 min-w-0 w-full h-[350px] xl:h-full overflow-hidden border-2 border-zinc-200 dark:border-zinc-800 p-3 rounded-2xl bg-zinc-50/40 dark:bg-zinc-950/20 shadow-inner">
+                      <h3 className="text-xs font-black uppercase text-emerald-500 tracking-widest border-l-4 border-emerald-500 pl-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 py-1 pr-3 rounded-r-lg max-w-max shadow-sm mb-2 select-none">
+                        Perfil
+                      </h3>
+                      <div className="flex-1 overflow-x-auto overflow-y-auto pb-1 flex flex-row gap-4 select-none transition-colors w-full custom-scrollbar min-h-0 items-start">
+                        {renderKanbanColumnsForPage("perfil")}
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2 min-w-0 w-full h-[350px] xl:h-full overflow-hidden border-2 border-zinc-200 dark:border-zinc-800 p-3 rounded-2xl bg-zinc-50/40 dark:bg-zinc-950/20 shadow-inner">
+                      <h3 className="text-xs font-black uppercase text-rose-500 tracking-widest border-l-4 border-rose-500 pl-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 py-1 pr-3 rounded-r-lg max-w-max shadow-sm mb-2 select-none">
+                        Qualificação
+                      </h3>
+                      <div className="flex-1 overflow-x-auto overflow-y-auto pb-1 flex flex-row gap-4 select-none transition-colors w-full custom-scrollbar min-h-0 items-start">
+                        {renderKanbanColumnsForPage("qualificacao")}
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2 min-w-0 w-full h-[350px] xl:h-full overflow-hidden border-2 border-zinc-200 dark:border-zinc-800 p-3 rounded-2xl bg-zinc-50/40 dark:bg-zinc-950/20 shadow-inner">
+                      <h3 className="text-xs font-black uppercase text-amber-500 tracking-widest border-l-4 border-amber-500 pl-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 py-1 pr-3 rounded-r-lg max-w-max shadow-sm mb-2 select-none">
+                        Objeções
+                      </h3>
+                      <div className="flex-1 overflow-x-auto overflow-y-auto pb-1 flex flex-row gap-4 select-none transition-colors w-full custom-scrollbar min-h-0 items-start">
+                        {renderKanbanColumnsForPage("objecoes")}
+                      </div>
+                    </div>
+                  </div>
+                )
+              ) : (
+                <div className="flex flex-col gap-4 w-full">
+                  <div
+                    id="kanban-columns-grid"
+                    style={{ zoom: `${layoutZoom}%` }}
+                    className={`grid grid-cols-1 md:grid-cols-2 xl:flex xl:flex-row gap-6 items-start overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-zinc-800 select-none transition-colors ${
+                      zoomMode === "overview"
+                        ? "scale-[0.80] xl:scale-[0.74] origin-top-left w-[135%] h-[125%]"
+                        : ""
+                    }`}
+                  >
+                    {renderKanbanColumnsForPage(activeFunnelsPage as any)}
+                  </div>
+                </div>
+              )}
+            </div>
+            {/* cicloCRED Sidebar Drawer: "Gerador & Organizador Premium de Status" */}
+            {showAbaOrganizerState && (
+              <div className="w-full xl:w-80 shrink-0 bg-white border-4 border-zinc-950 p-5 rounded-2xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] space-y-4  sticky top-4 z-10 self-start">
+                {/* Sidebar Header */}
+                <div className="flex items-center justify-between border-b-2 border-zinc-950 pb-2.5">
+                  <span className="text-xs font-black font-mono text-zinc-950 uppercase flex items-center gap-1.5">
+                    <Sliders className="w-4 h-4 text-indigo-600" />
+                    <span>Ordem dos Blocos ({columns.length}/10)</span>
+                  </span>
+                  <button
+                    onClick={() => setShowAbaOrganizerState(false)}
+                    className="p-1 px-2.5 bg-zinc-950 text-white rounded-md text-xs font-bold hover:bg-zinc-800 transition"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <p className="text-[10px] text-zinc-500 font-bold leading-tight">
+                  Puxe ou empurre os blocos clicando nas setas organizadoras.
+                  Qualquer modificação atualizará a esteira de CRM em tempo
+                  real.
+                </p>
+
+                {/* List of current Abas with ordering triggers */}
+                <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1">
+                  {columns.map((col, idx) => (
+                    <div
+                      key={col.id}
+                      className="p-2.5 bg-zinc-50 border-2 border-zinc-950 rounded-xl flex items-center justify-between gap-2 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[9px] font-mono text-indigo-500 font-bold block">
+                          Fase {idx + 1} de {columns.length}
+                        </span>
+                        <strong className="text-xs text-zinc-900 font-black tracking-tight truncate block uppercase">
+                          {col.label}
+                        </strong>
+                      </div>
+
+                      {/* Push / Pull Order controllers */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          disabled={idx === 0}
+                          onClick={() => handleMoveAbaBackward(idx)}
+                          className="p-1 bg-white border-2 border-zinc-950 rounded-lg hover:bg-indigo-50 text-zinc-900 disabled:opacity-20 disabled:cursor-not-allowed transition"
+                          title="Empurrar para trás (Fase Anterior)"
+                        >
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          disabled={idx === columns.length - 1}
+                          onClick={() => handleMoveAbaForward(idx)}
+                          className="p-1 bg-white border-2 border-zinc-950 rounded-lg hover:bg-indigo-50 text-zinc-900 disabled:opacity-20 disabled:cursor-not-allowed transition"
+                          title="Empurrar para frente (Próxima Fase)"
+                        >
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="bg-[#fcf8e3] border border-[#faebcc] text-[#8a6d3b] p-3 rounded-xl text-[10px] leading-relaxed font-semibold">
+                  💡 Dica: O cicloCRED CRM foi otimizado para comportar de forma
+                  premium até 10 blocos ativos simultaneamente.
+                </div>
               </div>
-            )
-          ) : (
-            <div className="flex flex-col gap-4 w-full">
-              <div
-                id="kanban-columns-grid"
-                className={`grid grid-cols-1 md:grid-cols-2 xl:flex xl:flex-row gap-6 items-start overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-zinc-800 select-none transition-all duration-300 ${
-                  zoomMode === "overview"
-                    ? "scale-[0.80] xl:scale-[0.74] origin-top-left w-[135%] h-[125%]"
-                    : ""
-                }`}
-              >
-                {renderKanbanColumnsForPage(activeFunnelsPage as any)}
+            )}
+          </div>
+
+          {/* 🌌 PORTAL DE HIPERFOCO 3: AMBIENTE DE CONEXÃO DE NÓS (Renders stably below the row, independent bandwidth) */}
+          {false && <div className="hidden"></div>}
+
+          {/* CUSTOM MODAL FOR PAGE DELETION */}
+          {funnelPageToDelete && (
+            <div className="fixed inset-0 z-50 bg-black/60   flex items-center justify-center p-4">
+              <div className="bg-white border-4 border-zinc-950 p-6 rounded-3xl max-w-md w-full shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] text-zinc-950 space-y-4 ">
+                <div className="flex items-center gap-3 text-red-650">
+                  <span className="text-3xl">⚠️</span>
+                  <h3 className="text-md font-black uppercase font-mono tracking-tight leading-tight">
+                    Confirmar Exclusão de Funil
+                  </h3>
+                </div>
+                <p className="text-xs text-zinc-650 leading-relaxed font-bold">
+                  Tem certeza que deseja excluir permanentemente o funil{" "}
+                  <span className="bg-red-50 text-red-800 px-1.5 py-0.5 rounded font-black italic">
+                    "{funnelPageToDelete.name}"
+                  </span>
+                  ?
+                </p>
+                <p className="text-[10px] text-zinc-400 font-medium">
+                  Esta ação removerá a pasta do fluxo de trabalho e atribuirá
+                  seus leads de volta ao funil Principal padrão.
+                </p>
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    onClick={() => setFunnelPageToDelete(null)}
+                    className="px-4 py-2 bg-zinc-200 hover:bg-zinc-300 text-zinc-800 text-[11px] font-black uppercase tracking-wider rounded-xl border border-zinc-450 transition"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() =>
+                      confirmDeleteFunnelPage(funnelPageToDelete.id)
+                    }
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-[11px] font-black uppercase tracking-wider rounded-xl border border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition"
+                  >
+                    Sim, Excluir permanentemente
+                  </button>
+                </div>
               </div>
             </div>
           )}
-        </div>
-            {/* cicloCRED Sidebar Drawer: "Gerador & Organizador Premium de Status" */}
-        {showAbaOrganizerState && (
-          <div className="w-full xl:w-80 shrink-0 bg-white border-4 border-zinc-950 p-5 rounded-2xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] space-y-4  sticky top-4 z-10 self-start">
-            {/* Sidebar Header */}
-            <div className="flex items-center justify-between border-b-2 border-zinc-950 pb-2.5">
-               <span className="text-xs font-black font-mono text-zinc-950 uppercase flex items-center gap-1.5">
-                 <Sliders className="w-4 h-4 text-indigo-600" />
-                 <span>Ordem dos Blocos ({columns.length}/10)</span>
-               </span>
-               <button
-                 onClick={() => setShowAbaOrganizerState(false)}
-                 className="p-1 px-2.5 bg-zinc-950 text-white rounded-md text-xs font-bold hover:bg-zinc-800 transition"
-               >
-                ✕
-              </button>
-            </div>
 
-            <p className="text-[10px] text-zinc-500 font-bold leading-tight">
-              Puxe ou empurre os blocos clicando nas setas organizadoras.
-              Qualquer modificação atualizará a esteira de CRM em tempo real.
-            </p>
-
-            {/* List of current Abas with ordering triggers */}
-            <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1">
-              {columns.map((col, idx) => (
-                <div
-                  key={col.id}
-                  className="p-2.5 bg-zinc-50 border-2 border-zinc-950 rounded-xl flex items-center justify-between gap-2 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-                >
-                  <div className="min-w-0 flex-1">
-                    <span className="text-[9px] font-mono text-indigo-500 font-bold block">
-                      Fase {idx + 1} de {columns.length}
-                    </span>
-                    <strong className="text-xs text-zinc-900 font-black tracking-tight truncate block uppercase">
-                      {col.label}
-                    </strong>
-                  </div>
-
-                  {/* Push / Pull Order controllers */}
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      disabled={idx === 0}
-                      onClick={() => handleMoveAbaBackward(idx)}
-                      className="p-1 bg-white border-2 border-zinc-950 rounded-lg hover:bg-indigo-50 text-zinc-900 disabled:opacity-20 disabled:cursor-not-allowed transition"
-                      title="Empurrar para trás (Fase Anterior)"
-                    >
-                      <ChevronLeft className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      disabled={idx === columns.length - 1}
-                      onClick={() => handleMoveAbaForward(idx)}
-                      className="p-1 bg-white border-2 border-zinc-950 rounded-lg hover:bg-indigo-50 text-zinc-900 disabled:opacity-20 disabled:cursor-not-allowed transition"
-                      title="Empurrar para frente (Próxima Fase)"
-                    >
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="bg-[#fcf8e3] border border-[#faebcc] text-[#8a6d3b] p-3 rounded-xl text-[10px] leading-relaxed font-semibold">
-              💡 Dica: O cicloCRED CRM foi otimizado para comportar de forma
-              premium até 10 blocos ativos simultaneamente.
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* 🌌 PORTAL DE HIPERFOCO 3: AMBIENTE DE CONEXÃO DE NÓS (Renders stably below the row, independent bandwidth) */}
-      {(isDraggingColumn || hiperfoco3Columns.length > 0 || hyperfocusActive === 3) && (
-        <div className="mt-8 bg-zinc-950/20 rounded-3xl p-0 w-full relative transition-all duration-300">
-          <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.dataTransfer.dropEffect = "move";
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              const rawData = e.dataTransfer.getData("text/plain");
-              if (rawData && rawData.startsWith("col-header:")) {
-                const parts = rawData.split(":");
-                const colId = parts[1];
-                const pageId = parts[2];
-                if (colId && pageId) {
-                  if (setHyperfocusActive) {
-                    setHyperfocusActive(3);
-                  }
-                  if (!hiperfoco3Columns.some(item => item.colId === colId && item.pageId === pageId)) {
-                    setHiperfoco3Columns(prev => {
-                      if (prev.length >= 10) return prev; // Limit to level 10 of true CRM hyperfocus
-                      return [...prev, { colId, pageId }];
-                    });
-                  }
-                }
-              }
-            }}
-            id="h3-canvas-area"
-            className="w-full h-[650px] bg-zinc-950/30 rounded-3xl relative overflow-hidden p-6 shadow-2xl border-0"
-          >
-            {/* Grid overlay background */}
-            <div className="absolute inset-0 opacity-10 bg-[linear-gradient(to_right,#808080_1px,transparent_1px),linear-gradient(to_bottom,#808080_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
-
-            {/* FLOATING ACTION HUD CONTROLLER */}
-            <div className="absolute top-4 right-4 z-40 bg-zinc-950/85 backdrop-blur-md rounded-2xl p-4 border border-purple-500/15 shadow-2xl w-64 select-none flex flex-col gap-3">
-              <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2">
-                <span className="text-[10px] font-mono font-black text-purple-400 uppercase tracking-widest flex items-center gap-1.5 animate-pulse">
-                  <span className="w-2 h-2 rounded-full bg-purple-500" />
-                  <span>Hiperfoco {h3Level}/10</span>
-                </span>
-                <span className="text-[9px] font-mono text-zinc-500 uppercase font-black">ACTIVE</span>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <div className="flex justify-between items-center text-[9px] font-mono text-zinc-400 uppercase">
-                  <span>Colunas:</span>
-                  <span className="text-white font-bold">{h3ColCount}</span>
-                </div>
-                <div className="flex justify-between items-center text-[9px] font-mono text-zinc-400 uppercase">
-                  <span>Leads:</span>
-                  <span className="text-white font-bold">{h3LeadsCount}</span>
-                </div>
-                <div className="flex justify-between items-center text-[9px] font-mono text-zinc-400 uppercase">
-                  <span>Escala Zoom:</span>
-                  <span className="text-white font-mono font-bold">{(dynamicZoom * 100).toFixed(0)}%</span>
-                </div>
-              </div>
-              {hiperfoco3Columns.length > 0 && (
-                <div className="flex flex-col gap-1.5 border-t border-zinc-800/80 pt-2.5">
-                  <p className="text-[8px] tracking-widest text-zinc-500 uppercase font-black mb-1">Canais Conectados</p>
-                  <div className="max-h-[140px] overflow-y-auto space-y-1.5 pr-1 scrollbar-thin scrollbar-thumb-zinc-800">
-                    {hiperfoco3Columns.map((item, idx) => {
-                      const colObj = getKanbanColumns(item.pageId).find(c => c.id === item.colId);
-                      return (
-                        <div key={idx} className="flex items-center justify-between gap-2 p-1.5 py-1 bg-zinc-900/60 rounded-xl border border-zinc-800/40 text-[10px]">
-                          <span className="text-zinc-300 font-bold max-w-[150px] truncate uppercase">
-                            {colObj?.label || item.colId}
-                          </span>
-                          <button
-                            onClick={() => {
-                              setHiperfoco3Columns(prev => prev.filter((_, i) => i !== idx));
-                            }}
-                            className="w-5 h-5 rounded-md bg-zinc-900 hover:bg-red-500/15 border border-zinc-800 hover:border-red-500/20 text-rose-400 hover:text-white transition flex items-center justify-center text-[8px] font-bold"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Inner responsive scaled canvas region */}
-            <div 
-              className="w-full h-full relative origin-top-left transition-transform duration-300"
-              style={{ 
-                transform: `scale(${dynamicZoom})`, 
-                width: `${100 / dynamicZoom}%`, 
-                height: `${100 / dynamicZoom}%` 
-              }}
-            >
-              {hiperfoco3Columns.length === 0 ? (
-                <div className="absolute inset-0 flex flex-col justify-center items-center text-center p-8 select-none pointer-events-none">
-                  <span className="text-4xl filter drop-shadow-[0_0_15px_rgba(168,85,247,0.4)] animate-pulse">🌌</span>
-                  <h3 className="text-xs font-black uppercase tracking-widest text-purple-400 mt-4">
-                    Ambiente de Hiperfoco 10
+          {/* CUSTOM MODAL FOR STATUS ABA DELETION WITH ASSOCIATED LEADS */}
+          {abaToDelete && (
+            <div className="fixed inset-0 z-50 bg-black/60   flex items-center justify-center p-4">
+              <div className="bg-white border-4 border-zinc-950 p-6 rounded-3xl max-w-md w-full shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] text-zinc-950 space-y-4 ">
+                <div className="flex items-center gap-3 text-amber-600">
+                  <span className="text-3xl">⚠️</span>
+                  <h3 className="text-md font-black uppercase font-mono tracking-tight leading-tight">
+                    Bloco com Leads Associados
                   </h3>
-                  <p className="text-[10px] text-zinc-650 uppercase font-mono mt-2 leading-relaxed max-w-md">
-                    Arraste cabeçalhos de colunas do CRM para soltar dentro deste espaço infinito paralelo! Cada coluna aumenta seu nível de foco real (Até Nível 10).
-                  </p>
                 </div>
-              ) : (
-                <>
-
-            {/* Connection Cables layer */}
-            <svg className="absolute inset-0 pointer-events-none w-full h-full z-0 overflow-visible">
-              <defs>
-                <linearGradient id="cable-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#c084fc" stopOpacity="0.8" />
-                  <stop offset="100%" stopColor="#6366f1" stopOpacity="0.8" />
-                </linearGradient>
-                <filter id="neon-glow" x="-20%" y="-20%" width="140%" height="140%">
-                  <feGaussianBlur stdDeviation="3" result="blur" />
-                  <feMerge>
-                    <feMergeNode in="blur" />
-                    <feMergeNode in="SourceGraphic" />
-                  </feMerge>
-                </filter>
-              </defs>
-              {hiperfoco3Columns.map((item, colIdx) => {
-                const colNodeId = `col-${item.colId}-${item.pageId}`;
-                const colPos = getHiperfocoPos(colNodeId, true, colIdx);
-                const colLeads = leads.filter(l => getLeadStatusForPage(l, item.pageId) === item.colId);
-                
-                return colLeads.map((lead, leadIdx) => {
-                  const leadNodeId = `lead-${lead.id}-${item.pageId}`;
-                  const leadPos = getHiperfocoPos(leadNodeId, false, colIdx, leadIdx);
-                  
-                  // Anchor coordinates
-                  const startX = colPos.x + 88; // Card center
-                  const startY = colPos.y + 40;
-                  const endX = leadPos.x + 96;
-                  const endY = leadPos.y + 35;
-                  
-                  const midY = (startY + endY) / 2;
-                  
-                  return (
-                    <g key={`cable-${colNodeId}-${lead.id}`}>
-                      {/* Outer glowing path */}
-                      <path
-                        d={`M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`}
-                        fill="none"
-                        stroke="#a855f7"
-                        strokeWidth="4"
-                        strokeOpacity="0.25"
-                        filter="url(#neon-glow)"
-                      />
-                      {/* Inner path */}
-                      <path
-                        d={`M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`}
-                        fill="none"
-                        stroke="url(#cable-grad)"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeDasharray="4 2"
-                        className="animate-[dash_10s_linear_infinite]"
-                      />
-                    </g>
-                  );
-                });
-              })}
-            </svg>
-
-            {/* The Column header blocks */}
-            {hiperfoco3Columns.map((item, colIdx) => {
-              const colNodeId = `col-${item.colId}-${item.pageId}`;
-              const pos = getHiperfocoPos(colNodeId, true, colIdx);
-              const colObj = getKanbanColumns(item.pageId).find(c => c.id === item.colId);
-              if (!colObj) return null;
-
-              return (
-                <div
-                  key={colNodeId}
-                  style={{ left: pos.x, top: pos.y }}
-                  onMouseDown={(e) => handleNodeMouseDown(colNodeId, pos, e)}
-                  className="absolute z-10 w-44 bg-zinc-900 border-2 border-purple-500 rounded-xl p-3 shadow-[0_0_15px_rgba(168,85,247,0.3)] cursor-move select-none transition-shadow hover:shadow-[0_0_20px_rgba(168,85,247,0.55)] border-t-[5px]"
-                >
-                  <p className="text-[8px] font-mono font-black uppercase text-purple-400 tracking-wider">
-                    {item.pageId} • col-nó
-                  </p>
-                  <div className="flex items-center justify-between gap-1.5 mt-1">
-                    <h4 className="text-xs font-black uppercase tracking-tight text-white truncate max-w-[100px]">
-                      {colObj.label}
-                    </h4>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setHiperfoco3Columns(prev => prev.filter(i => !(i.colId === item.colId && i.pageId === item.pageId)));
-                      }}
-                      className="p-1 px-1.5 text-[9px] font-black rounded bg-purple-950 text-purple-400 hover:text-white hover:bg-purple-900 transition"
-                      title="Recolher e desativar Hiperfoco 3"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                  <div className="mt-2 text-[9px] text-zinc-400 uppercase font-mono">
-                    LEADS CONECTADOS: {leads.filter(l => getLeadStatusForPage(l, item.pageId) === item.colId).length}
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* The disconnected Leads node cloud */}
-            {hiperfoco3Columns.map((item, colIdx) => {
-              const colLeads = leads.filter(l => getLeadStatusForPage(l, item.pageId) === item.colId);
-              
-              return colLeads.map((lead, leadIdx) => {
-                const leadNodeId = `lead-${lead.id}-${item.pageId}`;
-                const pos = getHiperfocoPos(leadNodeId, false, colIdx, leadIdx);
-                
-                return (
-                  <div
-                    key={leadNodeId}
-                    style={{ left: pos.x, top: pos.y }}
-                    onMouseDown={(e) => handleNodeMouseDown(leadNodeId, pos, e)}
-                    onClick={() => {
-                      onOpenLeadDetails(lead);
-                    }}
-                    className="absolute z-10 w-48 bg-zinc-950/95 border-2 border-zinc-800 hover:border-indigo-500/80 rounded-xl p-2.5 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.5)] cursor-pointer select-none transition-all duration-200 group/node hover:scale-105"
+                <p className="text-xs text-zinc-650 leading-relaxed font-bold">
+                  Atenção: O bloco{" "}
+                  <span className="bg-amber-50 text-amber-800 px-1.5 py-0.5 rounded font-black italic">
+                    "{abaToDelete.label}"
+                  </span>{" "}
+                  possui leads de fomento ativos associados.
+                </p>
+                <p className="text-[10px] text-zinc-500 leading-relaxed font-semibold">
+                  Ao excluí-lo, o bloco será removido do funil Kanban e você
+                  precisará realocar/mover os leads deste bloco. Deseja
+                  prosseguir com a exclusão do bloco mesmo assim?
+                </p>
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    onClick={() => setAbaToDelete(null)}
+                    className="px-4 py-2 bg-zinc-200 hover:bg-zinc-300 text-zinc-800 text-[11px] font-black uppercase tracking-wider rounded-xl border border-zinc-450 transition"
                   >
-                    <div className="flex items-start justify-between gap-1">
-                      <div>
-                        <p className="text-[8px] font-mono font-black uppercase text-indigo-400 leading-tight">
-                          {lead.origin || "Lead"}
-                        </p>
-                        <h5 className="text-[11px] font-black uppercase text-white tracking-widest leading-none mt-1 group-hover/node:text-indigo-300 transition-colors">
-                          {lead.name}
-                        </h5>
-                      </div>
-                      <span className="text-[8px] px-1 py-0.5 bg-zinc-900 text-purple-400 font-mono font-black uppercase rounded leading-none border border-zinc-800">
-                        nó-lead
-                      </span>
-                    </div>
-
-                    <div className="mt-2 space-y-0.5 text-[8px] font-mono uppercase text-zinc-500 border-t border-zinc-900 pt-1.5 leading-tight">
-                      {lead.value ? (
-                        <div className="flex justify-between">
-                          <span>VALOR:</span>
-                          <span className="text-emerald-450 font-black">
-                            R$ {lead.value.toLocaleString("pt-BR")}
-                          </span>
-                        </div>
-                      ) : null}
-                      {getLeadStatusForPage(lead, item.pageId) ? (
-                        <div className="flex justify-between">
-                          <span>FASE:</span>
-                          <span className="text-zinc-300 font-black">
-                            {getLeadStatusForPage(lead, item.pageId)}
-                          </span>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                );
-              });
-            })}
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-
-
-      {/* CUSTOM MODAL FOR PAGE DELETION */}
-      {funnelPageToDelete && (
-        <div className="fixed inset-0 z-50 bg-black/60 shadow-[0_0_50px_rgba(0,0,0,0.5)] backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border-4 border-zinc-950 p-6 rounded-3xl max-w-md w-full shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] text-zinc-950 space-y-4 ">
-            <div className="flex items-center gap-3 text-red-650">
-              <span className="text-3xl">⚠️</span>
-              <h3 className="text-md font-black uppercase font-mono tracking-tight leading-tight">
-                Confirmar Exclusão de Funil
-              </h3>
-            </div>
-            <p className="text-xs text-zinc-650 leading-relaxed font-bold">
-              Tem certeza que deseja excluir permanentemente o funil{" "}
-              <span className="bg-red-50 text-red-800 px-1.5 py-0.5 rounded font-black italic">
-                "{funnelPageToDelete.name}"
-              </span>
-              ?
-            </p>
-            <p className="text-[10px] text-zinc-400 font-medium">
-              Esta ação removerá a pasta do fluxo de trabalho e atribuirá seus
-              leads de volta ao funil Principal padrão.
-            </p>
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                onClick={() => setFunnelPageToDelete(null)}
-                className="px-4 py-2 bg-zinc-200 hover:bg-zinc-300 text-zinc-800 text-[11px] font-black uppercase tracking-wider rounded-xl border border-zinc-450 transition"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => confirmDeleteFunnelPage(funnelPageToDelete.id)}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-[11px] font-black uppercase tracking-wider rounded-xl border border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition"
-              >
-                Sim, Excluir permanentemente
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* CUSTOM MODAL FOR STATUS ABA DELETION WITH ASSOCIATED LEADS */}
-      {abaToDelete && (
-        <div className="fixed inset-0 z-50 bg-black/60 shadow-[0_0_50px_rgba(0,0,0,0.5)] backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border-4 border-zinc-950 p-6 rounded-3xl max-w-md w-full shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] text-zinc-950 space-y-4 ">
-            <div className="flex items-center gap-3 text-amber-600">
-              <span className="text-3xl">⚠️</span>
-              <h3 className="text-md font-black uppercase font-mono tracking-tight leading-tight">
-                Bloco com Leads Associados
-              </h3>
-            </div>
-            <p className="text-xs text-zinc-650 leading-relaxed font-bold">
-              Atenção: O bloco{" "}
-              <span className="bg-amber-50 text-amber-800 px-1.5 py-0.5 rounded font-black italic">
-                "{abaToDelete.label}"
-              </span>{" "}
-              possui leads de fomento ativos associados.
-            </p>
-            <p className="text-[10px] text-zinc-500 leading-relaxed font-semibold">
-              Ao excluí-lo, o bloco será removido do funil Kanban e você precisará
-              realocar/mover os leads deste bloco. Deseja prosseguir com a
-              exclusão do bloco mesmo assim?
-            </p>
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                onClick={() => setAbaToDelete(null)}
-                className="px-4 py-2 bg-zinc-200 hover:bg-zinc-300 text-zinc-800 text-[11px] font-black uppercase tracking-wider rounded-xl border border-zinc-450 transition"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => confirmDeleteAba(abaToDelete.id)}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-black uppercase tracking-wider rounded-xl border border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition"
-              >
-                Prosseguir e Excluir
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* OVERLAY MODAL FOR CREATE PAGE DIRECT */}
-      {showPageCreatorDirect && (
-        <div className="fixed inset-0 z-[100] bg-black/60 shadow-[0_0_50px_rgba(0,0,0,0.5)] backdrop-blur-xs flex items-center justify-center p-4 ">
-          <div className="bg-zinc-900 border-4 border-zinc-950 p-6 rounded-3xl max-w-sm w-full shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] text-white space-y-4 font-mono">
-            <div className="flex items-center gap-3 text-indigo-400">
-              <span className="text-2xl">➕</span>
-              <h3 className="text-sm font-black uppercase tracking-tight leading-tight">
-                Nova Página de Funil
-              </h3>
-            </div>
-            <p className="text-[10px] text-zinc-400 font-bold uppercase">
-              Crie uma nova visibilidade de fluxo de trabalho no CRM.
-            </p>
-            <input
-              type="text"
-              placeholder="Nome do Funil (ex: Funil de Consórcios)..."
-              value={newFunnelPageName}
-              onChange={(e) => setNewFunnelPageName(e.target.value)}
-              className="w-full bg-zinc-950 border-2 border-zinc-800 rounded-xl p-2.5 text-xs text-white placeholder-zinc-500 font-bold tracking-wide outline-none focus:border-indigo-500"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  handleCreateFunnelPage();
-                  setShowPageCreatorDirect(false);
-                  setTriggerCreatePage?.(false);
-                }
-              }}
-            />
-            <div className="flex items-center justify-between gap-2 border-t border-zinc-800 pt-3">
-              <button
-                onClick={() => {
-                  setShowPageCreatorDirect(false);
-                  setTriggerCreatePage?.(false);
-                }}
-                className="px-3.5 py-1.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 text-[10px] font-black uppercase tracking-wider rounded-lg border border-zinc-950 active:translate-y-0.5"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => {
-                  handleCreateFunnelPage();
-                  setShowPageCreatorDirect(false);
-                  setTriggerCreatePage?.(false);
-                }}
-                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-wider rounded-lg border border-zinc-950 shadow-[1.5px_1.5px_0px_0px_white] active:translate-y-0.5"
-              >
-                Criar Funil ➕
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* OVERLAY MODAL FOR EDIT PAGE DIRECT */}
-      {editingPageId && (
-        <div className="fixed inset-0 z-[100] bg-black/60 shadow-[0_0_50px_rgba(0,0,0,0.5)] backdrop-blur-xs flex items-center justify-center p-4 ">
-          <div className="bg-amber-50 border-4 border-zinc-950 p-6 rounded-3xl max-w-sm w-full shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] text-amber-950 space-y-4 font-mono">
-            <div className="flex items-center gap-3 text-amber-600">
-              <span className="text-2xl">✏️</span>
-              <h3 className="text-sm font-black uppercase tracking-tight leading-tight">
-                Editar Nome / Meta da Página
-              </h3>
-            </div>
-            <p className="text-[10px] text-amber-800 font-bold uppercase">
-              Renomeie o fluxo de trabalho {funnelPages.find(p => p.id === activeFunnelsPage)?.name}.
-            </p>
-            <input
-              type="text"
-              placeholder="Novo nome do Funil e valor estimado..."
-              value={editingPageName}
-              onChange={(e) => setEditingPageName(e.target.value)}
-              className="w-full bg-white border-2 border-zinc-950 rounded-xl p-2.5 text-xs text-zinc-900 placeholder-zinc-400 font-bold tracking-wide outline-none focus:border-amber-500 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  handleSavePageRename(editingPageId);
-                } else if (e.key === "Escape") {
-                  setEditingPageId(null);
-                }
-              }}
-            />
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => setEditingPageId(null)}
-                className="px-4 py-2 rounded-xl bg-zinc-200 hover:bg-zinc-300 text-zinc-800 transition text-[10px] font-black uppercase tracking-wider border border-zinc-400"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => handleSavePageRename(editingPageId)}
-                className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white transition text-[10px] font-black uppercase tracking-wider border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-              >
-                Atualizar Página
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* OVERLAY MODAL FOR CREATE STATUS DIRECT */}
-      {showStatusCreatorDirect && (
-        <div className="fixed inset-0 z-[100] bg-black/60 shadow-[0_0_50px_rgba(0,0,0,0.5)] backdrop-blur-xs flex items-center justify-center p-4 ">
-          <div className="bg-zinc-900 border-4 border-zinc-950 p-6 rounded-3xl max-w-sm w-full shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] text-white space-y-4 font-mono">
-            <div className="flex items-center gap-3 text-indigo-400">
-              <span className="text-2xl">➕</span>
-              <h3 className="text-sm font-black uppercase tracking-tight leading-tight">
-                Novo Bloco no Funil
-              </h3>
-            </div>
-            <p className="text-[10px] text-zinc-400 font-bold uppercase">
-              Insira um novo bloco no funil ativo.
-            </p>
-            <div className="space-y-3">
-              <input
-                type="text"
-                placeholder="Nome do Bloco (ex: Visita Agendada)..."
-                value={newAbaName}
-                onChange={(e) => setNewAbaName(e.target.value)}
-                className="w-full bg-zinc-950 border-2 border-zinc-800 rounded-xl p-2.5 text-xs text-white placeholder-zinc-500 font-bold tracking-wide outline-none focus:border-indigo-500"
-                autoFocus
-              />
-
-              <div className="flex flex-col gap-1">
-                <span className="text-[9px] text-zinc-500 uppercase">
-                  Cor do Bloco:
-                </span>
-                <select
-                  value={newAbaColor}
-                  onChange={(e) => setNewAbaColor(e.target.value)}
-                  className="w-full bg-zinc-950 border-2 border-zinc-800 rounded-xl p-2 text-xs text-white font-bold outline-none cursor-pointer"
-                >
-                  <option value="blue">🔵 Azul</option>
-                  <option value="amber">🟡 Amarelo</option>
-                  <option value="indigo">🟣 Roxo</option>
-                  <option value="emerald">🟢 Verde</option>
-                  <option value="red">🔴 Vermelho</option>
-                  <option value="pink">🌸 Rosa</option>
-                  <option value="teal">🔷 Ciano</option>
-                  <option value="orange">🟠 Laranja</option>
-                  <option value="zinc">⚙️ Cinza</option>
-                </select>
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => confirmDeleteAba(abaToDelete.id)}
+                    className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-black uppercase tracking-wider rounded-xl border border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition"
+                  >
+                    Prosseguir e Excluir
+                  </button>
+                </div>
               </div>
             </div>
+          )}
 
-            <div className="flex items-center justify-between gap-2 border-t border-zinc-800 pt-3">
-              <button
-                onClick={() => {
-                  setShowStatusCreatorDirect(false);
-                  setTriggerCreateStatus?.(false);
-                }}
-                className="px-3.5 py-1.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 text-[10px] font-black uppercase tracking-wider rounded-lg border border-zinc-950 active:translate-y-0.5"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => {
-                  handleCreateAba();
-                  setShowStatusCreatorDirect(false);
-                  setTriggerCreateStatus?.(false);
-                }}
-                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-wider rounded-lg border border-zinc-950 shadow-[1.5px_1.5px_0px_0px_white] active:translate-y-0.5"
-              >
-                Criar Status ➕
-              </button>
+          {/* OVERLAY MODAL FOR CREATE PAGE DIRECT */}
+          {showPageCreatorDirect && (
+            <div className="fixed inset-0 z-[100] bg-black/60   flex items-center justify-center p-4 ">
+              <div className="bg-zinc-900 border-4 border-zinc-950 p-6 rounded-3xl max-w-sm w-full shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] text-white space-y-4 font-mono">
+                <div className="flex items-center gap-3 text-indigo-400">
+                  <span className="text-2xl">➕</span>
+                  <h3 className="text-sm font-black uppercase tracking-tight leading-tight">
+                    Nova Página de Funil
+                  </h3>
+                </div>
+                <p className="text-[10px] text-zinc-400 font-bold uppercase">
+                  Crie uma nova visibilidade de fluxo de trabalho no CRM.
+                </p>
+                <input
+                  type="text"
+                  placeholder="Nome do Funil (ex: Funil de Consórcios)..."
+                  value={newFunnelPageName}
+                  onChange={(e) => setNewFunnelPageName(e.target.value)}
+                  className="w-full bg-zinc-950 border-2 border-zinc-800 rounded-xl p-2.5 text-xs text-white placeholder-zinc-500 font-bold tracking-wide outline-none focus:border-indigo-500"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleCreateFunnelPage();
+                      setShowPageCreatorDirect(false);
+                      setTriggerCreatePage?.(false);
+                    }
+                  }}
+                />
+                <div className="flex items-center justify-between gap-2 border-t border-zinc-800 pt-3">
+                  <button
+                    onClick={() => {
+                      setShowPageCreatorDirect(false);
+                      setTriggerCreatePage?.(false);
+                    }}
+                    className="px-3.5 py-1.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 text-[10px] font-black uppercase tracking-wider rounded-lg border border-zinc-950 active:translate-y-0.5"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleCreateFunnelPage();
+                      setShowPageCreatorDirect(false);
+                      setTriggerCreatePage?.(false);
+                    }}
+                    className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-wider rounded-lg border border-zinc-950 shadow-[1.5px_1.5px_0px_0px_white] active:translate-y-0.5"
+                  >
+                    Criar Funil ➕
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          )}
+
+          {/* OVERLAY MODAL FOR EDIT PAGE DIRECT */}
+          {editingPageId && (
+            <div className="fixed inset-0 z-[100] bg-black/60   flex items-center justify-center p-4 ">
+              <div className="bg-amber-50 border-4 border-zinc-950 p-6 rounded-3xl max-w-sm w-full shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] text-amber-950 space-y-4 font-mono">
+                <div className="flex items-center gap-3 text-amber-600">
+                  <span className="text-2xl">✏️</span>
+                  <h3 className="text-sm font-black uppercase tracking-tight leading-tight">
+                    Editar Nome / Meta da Página
+                  </h3>
+                </div>
+                <p className="text-[10px] text-amber-800 font-bold uppercase">
+                  Renomeie o fluxo de trabalho{" "}
+                  {funnelPages.find((p) => p.id === activeFunnelsPage)?.name}.
+                </p>
+                <input
+                  type="text"
+                  placeholder="Novo nome do Funil e valor estimado..."
+                  value={editingPageName}
+                  onChange={(e) => setEditingPageName(e.target.value)}
+                  className="w-full bg-white border-2 border-zinc-950 rounded-xl p-2.5 text-xs text-zinc-900 placeholder-zinc-400 font-bold tracking-wide outline-none focus:border-amber-500 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleSavePageRename(editingPageId);
+                    } else if (e.key === "Escape") {
+                      setEditingPageId(null);
+                    }
+                  }}
+                />
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    onClick={() => setEditingPageId(null)}
+                    className="px-4 py-2 rounded-xl bg-zinc-200 hover:bg-zinc-300 text-zinc-800 transition text-[10px] font-black uppercase tracking-wider border border-zinc-400"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => handleSavePageRename(editingPageId)}
+                    className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white transition text-[10px] font-black uppercase tracking-wider border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                  >
+                    Atualizar Página
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* OVERLAY MODAL FOR CREATE STATUS DIRECT */}
+          {showStatusCreatorDirect && (
+            <div className="fixed inset-0 z-[100] bg-black/60   flex items-center justify-center p-4 ">
+              <div className="bg-zinc-900 border-4 border-zinc-950 p-6 rounded-3xl max-w-sm w-full shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] text-white space-y-4 font-mono">
+                <div className="flex items-center gap-3 text-indigo-400">
+                  <span className="text-2xl">➕</span>
+                  <h3 className="text-sm font-black uppercase tracking-tight leading-tight">
+                    Novo Bloco no Funil
+                  </h3>
+                </div>
+                <p className="text-[10px] text-zinc-400 font-bold uppercase">
+                  Insira um novo bloco no funil ativo.
+                </p>
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    placeholder="Nome do Bloco (ex: Visita Agendada)..."
+                    value={newAbaName}
+                    onChange={(e) => setNewAbaName(e.target.value)}
+                    className="w-full bg-zinc-950 border-2 border-zinc-800 rounded-xl p-2.5 text-xs text-white placeholder-zinc-500 font-bold tracking-wide outline-none focus:border-indigo-500"
+                    autoFocus
+                  />
+
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[9px] text-zinc-500 uppercase">
+                      Cor do Bloco:
+                    </span>
+                    <select
+                      value={newAbaColor}
+                      onChange={(e) => setNewAbaColor(e.target.value)}
+                      className="w-full bg-zinc-950 border-2 border-zinc-800 rounded-xl p-2 text-xs text-white font-bold outline-none cursor-pointer"
+                    >
+                      <option value="blue">🔵 Azul</option>
+                      <option value="amber">🟡 Amarelo</option>
+                      <option value="indigo">🟣 Roxo</option>
+                      <option value="emerald">🟢 Verde</option>
+                      <option value="red">🔴 Vermelho</option>
+                      <option value="pink">🌸 Rosa</option>
+                      <option value="teal">🔷 Ciano</option>
+                      <option value="orange">🟠 Laranja</option>
+                      <option value="zinc">⚙️ Cinza</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 border-t border-zinc-800 pt-3">
+                  <button
+                    onClick={() => {
+                      setShowStatusCreatorDirect(false);
+                      setTriggerCreateStatus?.(false);
+                    }}
+                    className="px-3.5 py-1.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 text-[10px] font-black uppercase tracking-wider rounded-lg border border-zinc-950 active:translate-y-0.5"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleCreateAba();
+                      setShowStatusCreatorDirect(false);
+                      setTriggerCreateStatus?.(false);
+                    }}
+                    className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-wider rounded-lg border border-zinc-950 shadow-[1.5px_1.5px_0px_0px_white] active:translate-y-0.5"
+                  >
+                    Criar Status ➕
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

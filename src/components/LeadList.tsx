@@ -4,7 +4,8 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Lead, LeadStatus } from '../types';
+import { Lead, LeadStatus, Appointment } from '../types';
+import ScheduleFollowUpModal from './ScheduleFollowUpModal';
 import { getKanbanColumns } from '../utils/kanban';
 import { triggerSensoryFeedback, AccessibilitySettings, INITIAL_ACCESSIBILITY_SETTINGS } from '../utils/sensory';
 import { auth } from '../firebase';
@@ -40,14 +41,15 @@ import {
   Bot, 
   FileText,
   ListTree,
-  ChevronDown
+  ChevronDown,
+  Loader2
 } from 'lucide-react';
 import { handleWhatsAppAction, autoGenerateScript as advancedAutoGenerateScript } from '../utils/whatsapp';
 import { cn } from '../lib/utils';
 
 interface LeadListProps {
   leads: Lead[];
-  tableHeaderComponent?: React.ReactNode | ((selectedLeadIds: string[], actions: { openCampaignModal: () => void }) => React.ReactNode);
+  tableHeaderComponent?: React.ReactNode | ((selectedLeadIds: string[], actions: { openCampaignModal: () => void; openBulkScheduleModal: () => void }) => React.ReactNode);
   onOpenLeadDetails: (lead: Lead) => void;
   onOpenEditModal: (lead: Lead) => void;
   onDeleteLead: (leadId: string) => void;
@@ -676,6 +678,8 @@ export default function LeadList({
 }: LeadListProps) {
   const localSearchState = useState('');
   const [hideFictitiousWarning, setHideFictitiousWarning] = useState(false);
+  const [isBulkScheduleModalOpen, setIsBulkScheduleModalOpen] = useState(false);
+  const [scheduleSingleLead, setScheduleSingleLead] = useState<Lead | null>(null);
   const searchTerm = propsSearchTerm !== undefined ? propsSearchTerm : localSearchState[0];
   const setSearchTerm = propsSetSearchTerm || localSearchState[1];
 
@@ -694,7 +698,12 @@ export default function LeadList({
   const [accSettings] = useState<AccessibilitySettings>(() => {
     const saved = localStorage.getItem('crm_accessibility_settings');
     try {
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === "object") {
+          return { ...INITIAL_ACCESSIBILITY_SETTINGS, ...parsed };
+        }
+      }
     } catch (_) {}
     return INITIAL_ACCESSIBILITY_SETTINGS;
   });
@@ -780,7 +789,7 @@ export default function LeadList({
     resolved = resolved.replace(/\{\{nome\}\}/gi, lead.name);
     resolved = resolved.replace(/\{\{email\}\}/gi, lead.email || 'não informado');
     resolved = resolved.replace(/\{\{telefone\}\}/gi, lead.phone || 'não informado');
-    resolved = resolved.replace(/\{\{valor\}\}/gi, lead.value ? lead.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }) : 'sob consulta');
+    resolved = resolved.replace(/\{\{valor\}\}/gi, lead.value ? (lead.value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }) : 'sob consulta');
     resolved = resolved.replace(/\{\{empresa\}\}/gi, lead.company || 'Assessoria');
     resolved = resolved.replace(/\{\{origem\}\}/gi, lead.origin || 'Portal Digital');
     return resolved;
@@ -820,11 +829,30 @@ export default function LeadList({
     const cleanPhone = (leadItem.phone || '').replace(/[^0-9]/g, '');
     const defaultPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
     
-    const waLink = `whatsapp://send?phone=${defaultPhone}&text=${encodeURIComponent(resolvedText)}`;
+    // For Web, we must use https://web.whatsapp.com/send
+    // For App, we use whatsapp://send
+    const waLink = campaignWhatsappChannel === 'web' 
+      ? `https://web.whatsapp.com/send?phone=${defaultPhone}&text=${encodeURIComponent(resolvedText)}`
+      : `whatsapp://send?phone=${defaultPhone}&text=${encodeURIComponent(resolvedText)}`;
 
     if (leadItem.phone) {
       try {
-        window.location.href = waLink;
+        if (campaignWhatsappChannel === 'web') {
+           const a = document.createElement('a');
+           a.href = waLink;
+           a.target = '_blank';
+           a.click();
+        } else {
+           // Use iframe for protocol handler to avoid navigation cancellation
+           let iframe = document.getElementById('wa-dispatch-iframe') as HTMLIFrameElement;
+           if (!iframe) {
+             iframe = document.createElement('iframe');
+             iframe.id = 'wa-dispatch-iframe';
+             iframe.style.display = 'none';
+             document.body.appendChild(iframe);
+           }
+           iframe.src = waLink;
+        }
         
         setBatchLog(prev => [
           `[${new Date().toLocaleTimeString()}] ✅ Disparado para ${leadItem.name} (${leadItem.phone}) ✔️`,
@@ -902,17 +930,7 @@ export default function LeadList({
 
     if (batchCountdownSeconds > 0) {
       const timer = setTimeout(() => {
-        if (document.visibilityState === 'visible') {
-          setBatchCountdownSeconds(prev => prev - 1);
-        } else {
-          setBatchLog(prev => {
-            if (prev[0]?.includes('⏳ Aguardando retorno ao CRM')) return prev;
-            return [
-              `[${new Date().toLocaleTimeString()}] ⏳ Aguardando retorno ao CRM para retomar contagem...`,
-              ...prev
-            ];
-          });
-        }
+        setBatchCountdownSeconds(prev => prev - 1);
       }, 1000);
       return () => clearTimeout(timer);
     } else {
@@ -969,6 +987,7 @@ export default function LeadList({
   const [isLoadingGSheets, setIsLoadingGSheets] = useState(false);
   const [selectedGSheetId, setSelectedGSheetId] = useState('');
   const [gSheetUrlInput, setGSheetUrlInput] = useState('');
+  const [isOrganizingAI, setIsOrganizingAI] = useState(false);
 
   // Proclaim and look up Google Workspace token changes
   useEffect(() => {
@@ -1056,7 +1075,7 @@ export default function LeadList({
 
             const { parsedItems, errors } = processFileOrPasteContent(tsvLines, 'Google Sheets Privado');
             if (parsedItems.length > 0) {
-              setImportPreview(parsedItems);
+              autoOrganizeWithAI(parsedItems);
               setImportErrors(errors);
               if (addNotification) {
                 addNotification(
@@ -1095,7 +1114,7 @@ export default function LeadList({
 
       const { parsedItems, errors } = processFileOrPasteContent(text, 'Google Sheets Público');
       if (parsedItems.length > 0) {
-        setImportPreview(parsedItems);
+        autoOrganizeWithAI(parsedItems);
         setImportErrors(errors);
         if (addNotification) {
           addNotification(
@@ -1172,7 +1191,7 @@ export default function LeadList({
           }).filter(line => line.trim() !== '').join('\n');
 
           const { parsedItems, errors } = processFileOrPasteContent(tsvLines, 'Planilha Excel Local');
-          setImportPreview(parsedItems);
+          autoOrganizeWithAI(parsedItems);
           setImportErrors(errors);
         } catch (excelErr: any) {
           setImportErrors([`Erro na leitura do arquivo Excel: ${excelErr.message || excelErr}`]);
@@ -1184,7 +1203,7 @@ export default function LeadList({
         const text = e.target?.result as string;
         if (text) {
           const { parsedItems, errors } = processFileOrPasteContent(text, 'Planilha Importada');
-          setImportPreview(parsedItems);
+          autoOrganizeWithAI(parsedItems);
           setImportErrors(errors);
         }
       };
@@ -1199,7 +1218,7 @@ export default function LeadList({
     setImportErrors([]);
 
     const { parsedItems, errors } = processFileOrPasteContent(rawPasteData, 'Planilha Comercial');
-    setImportPreview(parsedItems);
+    autoOrganizeWithAI(parsedItems);
     setImportErrors(errors);
   };
 
@@ -1249,54 +1268,55 @@ export default function LeadList({
     }, 450);
   };
 
-  const handleOrganizeImportPreview = () => {
-    let correctedCount = 0;
-    const cleanedPreview = importPreview.map(item => {
-      const cleanPhone = (item.phone || '').trim();
-      const isDummy = isFictitiousPhone(cleanPhone);
-      if (isDummy) {
-        let { extractedPhone, cleanedText: cleanedEmail } = extractPhoneFromString(item.email || '');
-        let cleanedName = item.name;
-        
-        if (!extractedPhone && item.name) {
-          const res = extractPhoneFromString(item.name);
-          if (res.extractedPhone) {
-            extractedPhone = res.extractedPhone;
-            cleanedName = res.cleanedText; // Name without the phone number
-          }
-        }
-        
-        if (extractedPhone) {
-          correctedCount++;
-          return {
-            ...item,
-            phone: extractedPhone,
-            email: cleanedEmail || item.email,
-            name: cleanedName || item.name
-          };
-        }
+  const autoOrganizeWithAI = async (parsedItems: Partial<Lead>[]) => {
+    if (parsedItems.length === 0) return;
+    setIsOrganizingAI(true);
+    // Show preview immediately while organizing
+    setImportPreview(parsedItems as Lead[]);
+    
+    try {
+      const response = await fetch('/api/ai/organize-leads', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ leads: parsedItems })
+      });
+      
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || 'Erro na requisição para organizar leads');
       }
-      return item;
-    });
-
-    if (correctedCount > 0) {
-      setImportPreview(cleanedPreview);
+      
+      const data = await response.json();
+      if (data.leads && Array.isArray(data.leads)) {
+        setImportPreview(data.leads);
+        if (addNotification) {
+          addNotification(
+            '🤖 DADOS ESTRUTURADOS COM IA',
+            `A Inteligência Artificial filtrou e corrigiu a formatação de ${data.leads.length} contatos automaticamente!`,
+            'success'
+          );
+        }
+      } else {
+        throw new Error('Formato de resposta inválido retornado pela IA');
+      }
+    } catch (err: any) {
+      console.error(err);
       if (addNotification) {
         addNotification(
-          '🧹 MARCADORES CORRIGIDOS',
-          `Separados telefone e e-mail de ${correctedCount} contatos da sua planilha com sucesso!`,
-          'success'
+          '⚠️ ERRO NA IA',
+          `Não foi possível organizar os leads automaticamente: ${err.message}`,
+          'error'
         );
       }
-    } else {
-      if (addNotification) {
-        addNotification(
-          '✨ DADOS CONFORMES',
-          'Não foram encontrados telefones fictícios com números embutidos nos e-mails desta planilha.',
-          'info'
-        );
-      }
+    } finally {
+      setIsOrganizingAI(false);
     }
+  };
+
+  const handleOrganizeImportPreview = async () => {
+    autoOrganizeWithAI(importPreview);
   };
 
   const handleApplyBulkImport = () => {
@@ -1756,7 +1776,7 @@ export default function LeadList({
 
       {/* Collapsible Importer/Exporter Panel */}
       {showImporter && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-4 backdrop-blur-md overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-4  overflow-y-auto">
           <div className="bg-white border-4 border-zinc-950 p-6 rounded-3xl w-full max-w-4xl shadow-[8px_8px_0px_0px_rgba(24,24,27,1)] space-y-5  max-h-[90vh] overflow-y-auto relative text-zinc-900">
             {/* Close button */}
             <div className="flex items-center justify-between pb-3 border-b border-zinc-200">
@@ -1778,7 +1798,7 @@ export default function LeadList({
               <button
                 type="button"
                 onClick={() => setImporterTab('classic')}
-                className={`px-4 py-2 border-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 flex items-center gap-1.5 ${
+                className={`px-4 py-2 border-2 text-xs font-black uppercase tracking-wider rounded-xl transition-colors shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 flex items-center gap-1.5 ${
                   importerTab === 'classic'
                     ? 'bg-zinc-900 text-white border-zinc-950'
                     : 'bg-white text-zinc-700 hover:text-zinc-950 border-zinc-350'
@@ -1791,7 +1811,7 @@ export default function LeadList({
               <button
                 type="button"
                 onClick={() => setImporterTab('export')}
-                className={`px-4 py-2 border-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 flex items-center gap-1.5 ${
+                className={`px-4 py-2 border-2 text-xs font-black uppercase tracking-wider rounded-xl transition-colors shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 flex items-center gap-1.5 ${
                   importerTab === 'export'
                     ? 'bg-zinc-900 text-white border-zinc-950'
                     : 'bg-white text-zinc-700 hover:text-zinc-950 border-zinc-350'
@@ -1804,7 +1824,7 @@ export default function LeadList({
               <button
                 type="button"
                 onClick={() => setImporterTab('simulation')}
-                className={`px-4 py-2 border-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 flex items-center gap-1.5 ${
+                className={`px-4 py-2 border-2 text-xs font-black uppercase tracking-wider rounded-xl transition-colors shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 flex items-center gap-1.5 ${
                   importerTab === 'simulation'
                     ? 'bg-zinc-900 text-white border-zinc-950'
                     : 'bg-zinc-50 text-indigo-700 hover:text-indigo-950 border-indigo-400'
@@ -1824,7 +1844,7 @@ export default function LeadList({
                   <button
                     type="button"
                     onClick={() => { setImportSource('local'); setImportErrors([]); }}
-                    className={`px-3 py-1.5 border-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all flex items-center gap-1.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 ${
+                    className={`px-3 py-1.5 border-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-colors flex items-center gap-1.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 ${
                       importSource === 'local'
                         ? 'bg-zinc-900 text-white border-zinc-950'
                         : 'bg-white text-zinc-700 hover:text-zinc-950 border-zinc-350'
@@ -1837,7 +1857,7 @@ export default function LeadList({
                   <button
                     type="button"
                     onClick={() => { setImportSource('paste'); setImportErrors([]); }}
-                    className={`px-3 py-1.5 border-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all flex items-center gap-1.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 ${
+                    className={`px-3 py-1.5 border-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-colors flex items-center gap-1.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 ${
                       importSource === 'paste'
                         ? 'bg-zinc-900 text-white border-zinc-950'
                         : 'bg-white text-zinc-700 hover:text-zinc-950 border-zinc-350'
@@ -1850,7 +1870,7 @@ export default function LeadList({
                   <button
                     type="button"
                     onClick={() => { setImportSource('g_sheets'); setImportErrors([]); }}
-                    className={`px-3 py-1.5 border-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all flex items-center gap-1.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 ${
+                    className={`px-3 py-1.5 border-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-colors flex items-center gap-1.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 ${
                       importSource === 'g_sheets'
                         ? 'bg-zinc-900 text-white border-zinc-950'
                         : 'bg-white text-zinc-700 hover:text-zinc-950 border-zinc-350'
@@ -1877,7 +1897,7 @@ export default function LeadList({
                           handleFileImport(file);
                         }
                       }}
-                      className={`border-4 border-dashed rounded-2xl p-7 text-center transition-all select-none flex flex-col items-center justify-center gap-2 ${
+                      className={`border-4 border-dashed rounded-2xl p-7 text-center transition-colors select-none flex flex-col items-center justify-center gap-2 ${
                         isDraggingFile 
                           ? 'border-indigo-600 bg-indigo-50/50 scale-[1.01]' 
                           : 'border-zinc-350 bg-zinc-50 hover:bg-zinc-100/60'
@@ -1935,7 +1955,7 @@ export default function LeadList({
                         type="button"
                         onClick={handleParsePaste}
                         disabled={!rawPasteData.trim()}
-                        className="px-4 py-2 bg-zinc-900 hover:bg-zinc-950 text-white font-black uppercase font-mono text-[10px] rounded-lg border-2 border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] disabled:opacity-50 active:translate-y-0.5 transition-all"
+                        className="px-4 py-2 bg-zinc-900 hover:bg-zinc-950 text-white font-black uppercase font-mono text-[10px] rounded-lg border-2 border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] disabled:opacity-50 active:translate-y-0.5 transition-colors"
                       >
                         Analisar dados colados
                       </button>
@@ -1973,7 +1993,7 @@ export default function LeadList({
                             type="button"
                             onClick={handleLoadGoogleSheetByUrl}
                             disabled={isLoadingGSheets || !gSheetUrlInput.trim()}
-                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[11px] rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] disabled:opacity-50 cursor-pointer active:translate-y-0.5 transition-all"
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[11px] rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] disabled:opacity-50 cursor-pointer active:translate-y-0.5 transition-colors"
                           >
                             {isLoadingGSheets ? 'Processando...' : 'Carregar Planilha'}
                           </button>
@@ -2017,7 +2037,7 @@ export default function LeadList({
                                   key={item.id}
                                   type="button"
                                   onClick={() => handleLoadLeadsFromGoogleSheet(item.id)}
-                                  className={`w-full text-left p-2 text-[10.5px] rounded transition-all font-mono uppercase flex justify-between items-center ${
+                                  className={`w-full text-left p-2 text-[10.5px] rounded transition-colors font-mono uppercase flex justify-between items-center ${
                                     selectedGSheetId === item.id 
                                       ? 'bg-green-900 text-white font-black border border-green-800' 
                                       : 'bg-white hover:bg-zinc-50 text-zinc-800 border border-zinc-200'
@@ -2105,7 +2125,7 @@ export default function LeadList({
                           runSimulationPortability(file.name);
                         }
                       }}
-                      className={`border-4 border-dashed rounded-2xl p-6 text-center transition-all select-none flex flex-col items-center justify-center gap-2 ${
+                      className={`border-4 border-dashed rounded-2xl p-6 text-center transition-colors select-none flex flex-col items-center justify-center gap-2 ${
                         isDraggingFile 
                           ? 'border-indigo-600 bg-indigo-50/50 scale-[1.01]' 
                           : 'border-zinc-350 bg-zinc-50 hover:bg-zinc-100/60'
@@ -2217,7 +2237,7 @@ export default function LeadList({
                     {simulationProgress > 0 && (
                       <div className="w-full bg-zinc-800 rounded-full h-1 mt-3">
                         <div 
-                          className="bg-indigo-500 h-1 rounded-full transition-all duration-300" 
+                          className="bg-indigo-500 h-1 rounded-full transition-colors" 
                           style={{ width: `${simulationProgress}%` }}
                         />
                       </div>
@@ -2319,10 +2339,20 @@ export default function LeadList({
                     <button
                       type="button"
                       onClick={handleOrganizeImportPreview}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase rounded-lg border-2 border-zinc-950 shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] flex items-center gap-1.5 cursor-pointer hover:-translate-y-0.5 transition-all"
+                      disabled={isOrganizingAI}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-black uppercase rounded-lg border-2 border-zinc-950 shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] flex items-center gap-1.5 cursor-pointer hover:-translate-y-0.5 transition-colors"
                     >
-                      <Wand2 className="w-4 h-4 text-emerald-200" />
-                      <span>🧹 Organizar Planilha</span>
+                      {isOrganizingAI ? (
+                        <>
+                          <Loader2 className="w-4 h-4 text-emerald-200 " />
+                          <span>🤖 Organizando com IA...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Wand2 className="w-4 h-4 text-emerald-200" />
+                          <span>🤖 Organizar Planilha com IA</span>
+                        </>
+                      )}
                     </button>
                     <button
                       onClick={handleApplyBulkImport}
@@ -2430,7 +2460,7 @@ export default function LeadList({
               <button
                 type="button"
                 onClick={() => setSelectedLeadIds(processedLeads.map(l => l.id))}
-                className="px-2.5 py-1 bg-white hover:bg-zinc-100 text-zinc-900 font-bold border-2 border-zinc-950 rounded-lg text-[9px] uppercase shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] cursor-pointer transition-all"
+                className="px-2.5 py-1 bg-white hover:bg-zinc-100 text-zinc-900 font-bold border-2 border-zinc-950 rounded-lg text-[9px] uppercase shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] cursor-pointer transition-colors"
               >
                 Selecionar todos os {processedLeads.length} leads
               </button>
@@ -2464,6 +2494,14 @@ export default function LeadList({
               Exportar Leads
             </button>
 
+            {/* Agendar Follow-ups Action */}
+            <button
+              onClick={() => setIsBulkScheduleModalOpen(true)}
+              className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white border-2 border-zinc-950 rounded-lg shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition font-bold cursor-pointer"
+            >
+              Follow-ups 🚨
+            </button>
+
             {/* Excluir Leads Action */}
             <button
               onClick={handleBulkDelete}
@@ -2484,29 +2522,29 @@ export default function LeadList({
       )}
 
       {/* Leads Table Card */}
-      <div className="bg-white border-4 border-zinc-950 rounded-2xl shadow-[6px_6px_0px_0px_rgba(24,24,27,1)] flex flex-col flex-1 relative min-h-[500px]">
-        <div id="lead-table-scroll-container" className="flex-1 bg-zinc-50 relative overflow-auto max-h-[600px]">
-          <table className="w-full border-separate border-spacing-0 text-left text-zinc-800 relative z-10">
-            <thead className="sticky top-0 z-50 bg-zinc-50 shadow-sm">
-              {tableHeaderComponent && (
-                <tr className="bg-zinc-50 m-0 p-0 border-0">
-                  <th colSpan={24} className="p-0 font-normal m-0 bg-zinc-50 border-none">
-                    {typeof tableHeaderComponent === 'function' ? tableHeaderComponent(selectedLeadIds, { openCampaignModal: () => setShowCampaignModal(true) }) : tableHeaderComponent}
-                  </th>
-                </tr>
-              )}
+      <div className="bg-white border-4 border-zinc-950 rounded-2xl shadow-[6px_6px_0px_0px_rgba(24,24,27,1)] flex flex-col flex-1 relative min-h-[500px] overflow-hidden">
+        {tableHeaderComponent && (
+          <div className="border-b-4 border-zinc-950 shrink-0">
+            {typeof tableHeaderComponent === 'function' ? tableHeaderComponent(selectedLeadIds, { openCampaignModal: () => setShowCampaignModal(true), openBulkScheduleModal: () => setIsBulkScheduleModalOpen(true) }) : tableHeaderComponent}
+          </div>
+        )}
+        <div id="lead-table-scroll-container" className="flex-1 bg-white relative overflow-auto max-h-[600px] custom-scrollbar">
+          <div className={`${isActiveLeadsView ? 'min-w-[1650px]' : isTodosView ? 'min-w-[1250px]' : 'min-w-[1100px]'} w-full`}>
+            <table className="w-full table-fixed border-separate border-spacing-0 text-left text-zinc-800 relative z-10">
+            <thead className="sticky top-0 z-50 bg-zinc-100 shadow-[0_2px_10px_rgba(0,0,0,0.05)] border-b-2 border-zinc-200">
               {isActiveLeadsView ? (
                 <>
                   <tr className="bg-zinc-100 text-zinc-600 font-mono text-[10px] select-none text-center border-b border-zinc-200">
                     <th className="px-1.5 py-1 bg-zinc-150 border-r border-b border-zinc-300 w-10 text-center font-bold text-zinc-500"></th>
-                    <th className="px-3 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[15%]">A</th>
-                    <th className="px-3 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[20%]">B</th>
-                    <th className="px-3 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[15%]">C</th>
-                    <th className="px-3 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[15%]">D</th>
-                    <th className="px-3 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[15%]">E</th>
-                    <th className="px-3 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[10%]">F</th>
-                    <th className="px-2 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[5%]">G</th>
-                    <th className="px-3 py-1 bg-zinc-100 border-b border-zinc-300 text-center font-bold text-zinc-500 w-[5%]">H</th>
+                    <th className="px-3 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[14%]">A</th>
+                    <th className="px-3 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[18%]">B</th>
+                    <th className="px-3 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[12%]">C</th>
+                    <th className="px-3 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[14%]">D</th>
+                    <th className="px-3 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[14%]">E</th>
+                    <th className="px-3 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[12%]">F</th>
+                    <th className="px-3 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[14%]">G</th>
+                    <th className="px-2 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[8%]">H</th>
+                    <th className="px-3 py-1 bg-zinc-100 border-b border-zinc-300 text-center font-bold text-zinc-500 w-[6%]">I</th>
                   </tr>
                   <tr className="bg-zinc-200 border-b-2 border-zinc-400 select-none whitespace-nowrap text-zinc-800">
                     <th className="px-1.5 py-2 bg-zinc-150 border-r border-zinc-300 text-center text-[10px] font-mono font-bold text-zinc-600">1</th>
@@ -2516,6 +2554,7 @@ export default function LeadList({
                     <th className="px-3 py-2 border-r border-zinc-300 font-black text-xs text-zinc-950 uppercase tracking-wider text-left">Qualificação</th>
                     <th className="px-3 py-2 border-r border-zinc-300 font-black text-xs text-zinc-950 uppercase tracking-wider text-left">Preferências</th>
                     <th className="px-3 py-2 border-r border-zinc-300 font-black text-xs text-zinc-950 uppercase tracking-wider text-left">Financeiro</th>
+                    <th className="px-3 py-2 border-r border-zinc-300 font-black text-xs text-zinc-950 uppercase tracking-wider text-left text-indigo-700">Simulação e Propostas</th>
                     <th className="px-2 py-2 border-r border-zinc-300 font-black text-xs text-zinc-950 text-center uppercase tracking-wider">ações</th>
                     <th className="px-3 py-2 font-black text-xs text-zinc-950 text-center uppercase tracking-wider text-left">atividades</th>
                   </tr>
@@ -2531,14 +2570,17 @@ export default function LeadList({
                       title="Selecionar todos visíveis"
                     />
                   </th>
-                  <th className={`px-2 py-2 text-[10px] font-black uppercase tracking-widest whitespace-nowrap text-center border-b-4 ${theme === "claro" ? "text-zinc-600 border-zinc-200" : "text-zinc-300 border-zinc-950"}`}>ID</th>
-                  <th className={`px-2 py-2 text-[10px] font-black uppercase tracking-widest whitespace-nowrap border-b-4 ${theme === "claro" ? "text-zinc-600 border-zinc-200" : "text-zinc-300 border-zinc-950"}`} style={{ width: isTodosView ? '30%' : '20%' }}>Nome / Região</th>
+                  <th className={`px-2 py-2 text-[10px] font-black uppercase tracking-widest whitespace-nowrap text-center border-b-4 ${theme === "claro" ? "text-zinc-600 border-zinc-200" : "text-zinc-300 border-zinc-950"}`} style={{ width: '5%' }}>ID</th>
+                  <th className={`px-2 py-2 text-[10px] font-black uppercase tracking-widest whitespace-nowrap border-b-4 ${theme === "claro" ? "text-zinc-600 border-zinc-200" : "text-zinc-300 border-zinc-950"}`} style={{ width: isTodosView ? '20%' : '20%' }}>Nome / Região</th>
                   {isTodosView ? (
                     <>
-                      <th className={`px-2 py-2 text-[10px] font-black uppercase tracking-widest whitespace-nowrap border-b-4 ${theme === "claro" ? "text-zinc-600 border-zinc-200" : "text-zinc-300 border-zinc-950"}`} style={{ width: '20%' }}>Telefone</th>
-                      <th className={`px-2 py-2 text-[10px] font-black uppercase tracking-widest whitespace-nowrap border-b-4 ${theme === "claro" ? "text-zinc-600 border-zinc-200" : "text-zinc-300 border-zinc-950"}`} style={{ width: '25%' }}>E-mail</th>
-                      <th className={`px-2 py-2 text-[10px] font-black uppercase tracking-widest whitespace-nowrap border-b-4 text-center ${theme === "claro" ? "text-zinc-600 border-zinc-200" : "text-zinc-300 border-zinc-950"}`} style={{ width: '15%' }}>Data de Entrada</th>
-                      <th className={`px-2 py-2 text-[10px] font-black uppercase tracking-widest whitespace-nowrap border-b-4 text-center ${theme === "claro" ? "text-zinc-600 border-zinc-200" : "text-zinc-300 border-zinc-950"}`} style={{ width: '10%' }}>Ações</th>
+                      <th className={`px-2 py-2 text-[9px] font-black uppercase tracking-widest whitespace-nowrap border-b-4 ${theme === "claro" ? "text-zinc-600 border-zinc-200" : "text-zinc-300 border-zinc-950"}`} style={{ width: '12%' }}>Contato</th>
+                      <th className={`px-2 py-2 text-[9px] font-black uppercase tracking-widest whitespace-nowrap border-b-4 ${theme === "claro" ? "text-zinc-600 border-zinc-200" : "text-zinc-300 border-zinc-950"}`} style={{ width: '12%' }}>Status/Etapa</th>
+                      <th className={`px-2 py-2 text-[9px] font-black uppercase tracking-widest whitespace-nowrap border-b-4 ${theme === "claro" ? "text-zinc-600 border-zinc-200" : "text-zinc-300 border-zinc-950"}`} style={{ width: '12%' }}>Perfil/Objeção</th>
+                      <th className={`px-2 py-2 text-[9px] font-black uppercase tracking-widest whitespace-nowrap border-b-4 ${theme === "claro" ? "text-zinc-600 border-zinc-200" : "text-zinc-300 border-zinc-950"}`} style={{ width: '12%' }}>Qualificação/Pref.</th>
+                      <th className={`px-2 py-2 text-[9px] font-black uppercase tracking-widest whitespace-nowrap border-b-4 text-center ${theme === "claro" ? "text-zinc-600 border-zinc-200" : "text-zinc-300 border-zinc-950"}`} style={{ width: '10%' }}>Data</th>
+                      <th className={`px-2 py-2 text-[9px] font-black uppercase tracking-widest whitespace-nowrap border-b-4 text-center ${theme === "claro" ? "text-zinc-600 border-zinc-200" : "text-zinc-300 border-zinc-950"}`} style={{ width: '8%' }}>Ações</th>
+                      <th className={`px-2 py-2 text-[9px] font-black uppercase tracking-widest whitespace-nowrap border-b-4 text-center ${theme === "claro" ? "text-zinc-600 border-zinc-200" : "text-zinc-300 border-zinc-950"}`} style={{ width: '12%' }}>Atividades</th>
                     </>
                   ) : (
                     <>
@@ -2556,7 +2598,7 @@ export default function LeadList({
             <tbody className="divide-y-2 divide-zinc-100 bg-white">
               {processedLeads.length === 0 ? (
                 <tr>
-                  <td colSpan={isTodosView ? 7 : 9} className="p-16 text-center text-zinc-400 font-mono font-bold uppercase tracking-widest bg-zinc-50">
+                  <td colSpan={10} className="p-16 text-center text-zinc-400 font-mono font-bold uppercase tracking-widest bg-zinc-50">
                     Nenhum lead correspondente encontrado.
                   </td>
                 </tr>
@@ -2565,7 +2607,7 @@ export default function LeadList({
                   if (isActiveLeadsView) {
                     const startRowIdx = 2 + (idx * 4);
                     const calculatedAge = lead.birthDate ? (new Date().getFullYear() - new Date(lead.birthDate).getFullYear()) : 35;
-                    const formattedValue = lead.value ? lead.value.toLocaleString('pt-BR') : '500.000';
+                    const formattedValue = lead.value ? (lead.value || 0).toLocaleString('pt-BR') : '500.000';
                     const financedValue = (lead.value ? lead.value * 0.8 : 400000).toLocaleString('pt-BR');
                     const installmentValue = (lead.value ? lead.value * 0.005 : 2500).toLocaleString('pt-BR');
                     const familyIncomeFormatted = lead.familyIncome ? lead.familyIncome.toLocaleString('pt-BR') : '15.000';
@@ -2577,30 +2619,40 @@ export default function LeadList({
                           <td className="px-1.5 py-2 bg-zinc-150 border-r border-zinc-300 text-center text-[10px] font-mono font-black text-zinc-500 w-10">
                             {startRowIdx}
                           </td>
-                          <td className="px-3 py-2 border-r border-zinc-200 font-sans text-xs w-[15%]">
+                          <td className="px-3 py-2 border-r border-zinc-200 font-sans text-xs w-[14%]">
                             <input 
                               defaultValue={lead.name}
                               onBlur={(e) => { if (e.target.value !== lead.name) onUpdateLeadField?.(lead.id, { name: e.target.value }) }}
                               className="font-extrabold text-zinc-950 text-xs tracking-tight bg-transparent border-b border-transparent focus:border-indigo-500 focus:outline-none w-full"
                             />
                           </td>
-                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[20%]">
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[18%]">
                             CPF: {lead.cpf || '123.456.789-00'}, Atuação: {lead.company || 'Eng.'}, Dep: 2
                           </td>
-                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[15%]">
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[12%]">
                             etapas: {lead.status || 'Prospecção'} | status: {lead.status === 'novo' ? 'Novo' : 'Negociação'}
                           </td>
-                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[15%]">
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[14%]">
                             Tem imóvel: {lead.possuiImovel || 'Não'}, Entrada: {lead.fgtsSaldo > 0 ? 'FGTS' : '20%'}, Restrição: {lead.restricaoBacen || 'Não'}
                           </td>
-                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[15%]">
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[14%]">
                             Região: {lead.region || 'Sul'}, Metragem: {lead.propertyInterest || '80m²'}, Dorm: {lead.preferenciasUnidade?.includes('3 dorm.') ? '3' : '3'}
                           </td>
-                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[10%]">
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[12%]">
                             Valor imóvel: R$ {formattedValue}
                           </td>
-                          {/* Column G - Ações (rowSpan=3) */}
-                          <td className="px-2 py-4 border-r border-zinc-200 text-center w-[5%] bg-zinc-50/30" rowSpan={3}>
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[14%] flex items-center gap-1">
+                            <span>V. Imóvel: R$</span>
+                            <input 
+                              type="number"
+                              defaultValue={lead.valorImovel || ''}
+                              onBlur={(e) => { if (Number(e.target.value) !== lead.valorImovel) onUpdateLeadField?.(lead.id, { valorImovel: Number(e.target.value) }) }}
+                              className="font-black text-zinc-950 bg-transparent border-b border-transparent focus:border-indigo-500 focus:bg-white focus:outline-none w-full"
+                              placeholder="250000"
+                            />
+                          </td>
+                          {/* Column H - Ações (rowSpan=3) */}
+                          <td className="px-2 py-4 border-r border-zinc-200 text-center w-[8%] bg-zinc-50/30" rowSpan={3}>
                             <div className="flex flex-col gap-1.5 items-center justify-center">
                               <div className="flex items-center gap-1">
                                 <button
@@ -2646,7 +2698,7 @@ export default function LeadList({
                             </div>
                           </td>
                           {/* Column H - Atividades (rowSpan=3) */}
-                          <td className="px-3 py-4 text-center w-[5%] bg-zinc-50/30" rowSpan={3}>
+                          <td className="px-3 py-4 text-center w-[8%] bg-zinc-50/30" rowSpan={3}>
                             <div className="flex flex-col gap-2 items-center justify-center">
                               <span className="inline-block bg-teal-50 border border-teal-300 text-teal-800 font-mono text-[9px] font-black uppercase px-2 py-0.5 rounded shadow-xs select-none">
                                 impressão
@@ -2663,27 +2715,37 @@ export default function LeadList({
                           <td className="px-1.5 py-2 bg-zinc-150 border-r border-zinc-300 text-center text-[10px] font-mono font-black text-zinc-500 w-10">
                             {startRowIdx + 1}
                           </td>
-                          <td className="px-3 py-2 border-r border-zinc-200 font-sans text-xs w-[15%]">
+                          <td className="px-3 py-2 border-r border-zinc-200 font-sans text-xs w-[14%]">
                             <input 
                               defaultValue={lead.phone}
                               onBlur={(e) => { if (e.target.value !== lead.phone) onUpdateLeadField?.(lead.id, { phone: e.target.value }) }}
                               className="font-mono text-xs font-bold text-zinc-900 bg-transparent focus:bg-white focus:outline-none w-full border-b border-transparent focus:border-indigo-500"
                             />
                           </td>
-                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[20%]">
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[18%]">
                             Bairro: {lead.bairroEspecifico || 'Vila Mariana'}
                           </td>
-                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[15%]">
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[12%]">
                             perfil: {lead.mainProfile || 'Médio'} | entrada: {lead.createdAt ? new Date(lead.createdAt).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}) : '30/04'}
                           </td>
-                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[15%]">
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[14%]">
                             Aprovado: Sim
                           </td>
-                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[15%]">
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[14%]">
                             Estágio: {lead.stage || 'Saída'}
                           </td>
-                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[10%]">
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[12%]">
                             Valor financiado: R$ {financedValue}
+                          </td>
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[14%] flex items-center gap-1">
+                            <span>Sinal: R$</span>
+                            <input 
+                              type="number"
+                              defaultValue={lead.valorAto || ''}
+                              onBlur={(e) => { if (Number(e.target.value) !== lead.valorAto) onUpdateLeadField?.(lead.id, { valorAto: Number(e.target.value) }) }}
+                              className="font-black text-zinc-950 bg-transparent border-b border-transparent focus:border-indigo-500 focus:bg-white focus:outline-none w-full"
+                              placeholder="5000"
+                            />
                           </td>
                         </tr>
 
@@ -2692,7 +2754,7 @@ export default function LeadList({
                           <td className="px-1.5 py-2 bg-zinc-150 border-r border-zinc-300 text-center text-[10px] font-mono font-black text-zinc-500 w-10">
                             {startRowIdx + 2}
                           </td>
-                          <td className="px-3 py-2 border-r border-zinc-200 font-sans text-xs w-[15%]">
+                          <td className="px-3 py-2 border-r border-zinc-200 font-sans text-xs w-[14%]">
                             <input 
                               defaultValue={lead.email || ''}
                               onBlur={(e) => { if (e.target.value !== lead.email) onUpdateLeadField?.(lead.id, { email: e.target.value }) }}
@@ -2700,20 +2762,30 @@ export default function LeadList({
                               className="text-xs font-medium text-zinc-700 bg-transparent focus:bg-white focus:outline-none w-full border-b border-transparent focus:border-indigo-500"
                             />
                           </td>
-                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[20%]">
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[18%]">
                             Gênero: {lead.gender || 'M'}, Idade: {calculatedAge}, EC: {lead.maritalStatus || 'Casado'}
                           </td>
-                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[15%]">
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[12%]">
                             objetivos: {lead.company || 'Preço'} | Alt. int.: {lead.lastContactAt ? new Date(lead.lastContactAt).toLocaleDateString('pt-BR', {day:'2-digit', month: '2-digit'}) : '15/06'}
                           </td>
-                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[15%]">
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[14%]">
                             Renda: R$ {familyIncomeFormatted}, Programa: {lead.programaDesejado || 'MCMV'}, Redutor: 5%
                           </td>
-                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[15%]">
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[14%]">
                             Suíte: {lead.preferenciasUnidade?.includes('Suíte') ? 'Sim' : 'Sim'}, Varanda: {lead.preferenciasUnidade?.includes('Varanda') ? 'Sim' : 'Sim'}, Vaga: 2
                           </td>
-                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[10%]">
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[12%]">
                             Parcelas: R$ {installmentValue}
+                          </td>
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[14%] flex items-center gap-1">
+                            <span>Mensal: R$</span>
+                            <input 
+                              type="number"
+                              defaultValue={lead.valorParcela || ''}
+                              onBlur={(e) => { if (Number(e.target.value) !== lead.valorParcela) onUpdateLeadField?.(lead.id, { valorParcela: Number(e.target.value) }) }}
+                              className="font-black text-zinc-950 bg-transparent border-b border-transparent focus:border-indigo-500 focus:bg-white focus:outline-none w-full"
+                              placeholder="1200"
+                            />
                           </td>
                         </tr>
 
@@ -2722,7 +2794,7 @@ export default function LeadList({
                           <td className="px-1.5 py-1.5 bg-zinc-200 border-r border-zinc-300 text-center text-[10px] font-mono font-bold text-zinc-500 w-10 select-none">
                             {startRowIdx + 3}
                           </td>
-                          <td colSpan={8} className="bg-zinc-150 h-3 border-y border-zinc-250 select-none"></td>
+                          <td colSpan={9} className="bg-zinc-150 h-3 border-y border-zinc-250 select-none"></td>
                         </tr>
                       </React.Fragment>
                     );
@@ -2783,14 +2855,14 @@ export default function LeadList({
                       </td>
 
                       {/* Nome completo e Gênero */}
-                      <td className="px-2 py-2 text-[10px] font-sans min-w-[170px] md:min-w-[225px]">
+                      <td className="px-2 py-2 text-[10px] font-sans w-[20%] break-words">
                         <div className="flex items-start gap-2.5">
                           <div className="space-y-1 w-full">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <input 
                                 defaultValue={lead.name}
                                 onBlur={(e) => { if (e.target.value !== lead.name) onUpdateLeadField?.(lead.id, { name: e.target.value }) }}
-                                className="font-extrabold text-zinc-950 text-sm tracking-tight bg-transparent border-b-2 border-transparent focus:border-indigo-500 focus:outline-none w-full max-w-[145px] md:max-w-[210px] truncate"
+                                className="font-extrabold text-zinc-950 text-sm tracking-tight bg-transparent border-b-2 border-transparent focus:border-indigo-500 focus:outline-none w-full w-full max-w-[180px] truncate"
                                 title={lead.name}
                               />
                               {isOverdue && (
@@ -2809,7 +2881,7 @@ export default function LeadList({
                               <select
                                 value={lead.gender || 'Não Informado'}
                                 onChange={(e) => onUpdateLeadField?.(lead.id, { gender: e.target.value })}
-                                className={`inline-flex items-center gap-1 text-[9px] font-black px-1.5 py-0.5 rounded border uppercase tracking-wide font-mono focus:outline-none cursor-pointer w-[120px] truncate ${
+                                className={`inline-flex items-center gap-1 text-[9px] font-black px-1.5 py-0.5 rounded border uppercase tracking-wide font-mono focus:outline-none cursor-pointer w-full max-w-[120px] truncate ${
                                   lead.gender === 'Homem' ? 'bg-sky-50 text-sky-850 border-sky-350' :
                                   lead.gender === 'Mulher' ? 'bg-pink-50 text-pink-850 border-pink-350' :
                                   'bg-zinc-50 text-zinc-800 border-zinc-200'
@@ -2844,37 +2916,57 @@ export default function LeadList({
 
                       {isTodosView ? (
                         <>
-                          {/* Telefone (com DDD) */}
-                          <td className="px-2 py-2 text-[10px] text-zinc-800 text-sm whitespace-nowrap max-w-[140px]">
-                            <input 
-                              defaultValue={lead.phone}
-                              onBlur={(e) => { if (e.target.value !== lead.phone) onUpdateLeadField?.(lead.id, { phone: e.target.value }) }}
-                              className="block font-extrabold text-xs tracking-tight text-zinc-950 bg-transparent border-b border-transparent focus:border-indigo-500 focus:outline-none w-full max-w-[130px] truncate"
-                            />
+                          {/* Contato (Tel/Email) */}
+                          <td className="px-2 py-2 text-[10px] text-zinc-800 text-sm whitespace-nowrap max-w-full max-w-[120px]">
+                            <div className="flex flex-col gap-1">
+                              <input 
+                                defaultValue={lead.phone}
+                                onBlur={(e) => { if (e.target.value !== lead.phone) onUpdateLeadField?.(lead.id, { phone: e.target.value }) }}
+                                className="block font-extrabold text-[10px] tracking-tight text-zinc-950 bg-transparent border-b border-transparent focus:border-indigo-500 focus:outline-none w-full truncate"
+                              />
+                              <input 
+                                defaultValue={lead.email}
+                                onBlur={(e) => { if (e.target.value !== lead.email) onUpdateLeadField?.(lead.id, { email: e.target.value }) }}
+                                className="block text-[9px] text-zinc-500 font-mono font-medium tracking-tight bg-transparent border-b border-transparent focus:border-indigo-500 focus:outline-none w-full truncate"
+                              />
+                            </div>
                           </td>
 
-                          {/* E-mail column in todos view */}
-                          <td className="px-2 py-2 text-[10px] font-sans">
-                            <input 
-                              defaultValue={lead.email || ''}
-                              placeholder="E-mail"
-                              onBlur={(e) => { if (e.target.value !== lead.email) onUpdateLeadField?.(lead.id, { email: e.target.value }) }}
-                              className="block text-xs font-bold text-zinc-950 bg-transparent border-b border-zinc-200 focus:border-indigo-500 focus:outline-none w-full max-w-[220px] truncate"
-                              title={lead.email || ''}
-                            />
+                          {/* Status/Etapa */}
+                          <td className="px-2 py-2 text-[10px] text-zinc-800 text-sm whitespace-nowrap max-w-full max-w-[120px]">
+                             <div className="flex flex-col gap-1 text-[9px] font-bold uppercase truncate">
+                                <span>{lead.status || '-'}</span>
+                                <span className="text-indigo-600">{lead.stage || '-'}</span>
+                             </div>
                           </td>
 
-                          {/* Data de entrada column in todos view */}
+                          {/* Perfil/Objeção */}
+                          <td className="px-2 py-2 text-[10px] text-zinc-800 text-sm whitespace-nowrap max-w-full max-w-[120px]">
+                            <div className="flex flex-col gap-1 text-[9px] font-bold uppercase truncate">
+                                <span className="text-zinc-700">{lead.mainProfile || '-'}</span>
+                                <span className="text-red-600">{lead.objection || '-'}</span>
+                             </div>
+                          </td>
+
+                          {/* Qualificação/Preferência */}
+                          <td className="px-2 py-2 text-[10px] text-zinc-800 text-sm whitespace-nowrap max-w-full max-w-[120px]">
+                             <div className="flex flex-col gap-1 text-[9px] font-bold uppercase truncate">
+                                <span className="text-zinc-700">{lead.qualificacao || '-'}</span>
+                                <span className="text-emerald-600">{lead.propertyInterest || lead.programaDesejado || '-'}</span>
+                             </div>
+                          </td>
+
+                          {/* Data de Entrada */}
                           <td className="px-2 py-2 text-[10px] font-mono text-xs text-zinc-650 whitespace-nowrap">
                             <div className="bg-indigo-50 border border-indigo-200 rounded px-1.5 py-1 inline-block shadow-sm">
                               <span className="text-[8px] text-indigo-500 font-black uppercase block leading-none mb-0.5">🗓️ ENTRADA</span>
-                              <span className="text-[10px] font-black text-indigo-800">
-                                {lead.createdAt ? new Date(lead.createdAt).toLocaleDateString("pt-BR") + " " + new Date(lead.createdAt).toLocaleTimeString("pt-BR", {hour: '2-digit', minute:'2-digit'}) : "-"}
+                              <span className="text-[9px] font-black text-indigo-800">
+                                {lead.createdAt ? new Date(lead.createdAt).toLocaleDateString("pt-BR") : "-"}
                               </span>
                             </div>
                           </td>
 
-                          {/* Ações column in todos view */}
+                          {/* Ações Rápidas */}
                           <td className="px-2 py-2 text-[10px] font-sans whitespace-nowrap">
                             <div className="flex items-center gap-1">
                               {/* Whatsapp Action with AI generation */}
@@ -2885,7 +2977,7 @@ export default function LeadList({
                                 title={generatingScriptLeadId === lead.id ? "Gerando..." : "WhatsApp"}
                               >
                                 {generatingScriptLeadId === lead.id ? (
-                                  <span className="animate-spin text-[8px]">⏳</span>
+                                  <span className=" text-[8px]">⏳</span>
                                 ) : (
                                   <span>💬</span>
                                 )}
@@ -2905,11 +2997,7 @@ export default function LeadList({
                               <button
                                 onClick={() => {
                                   onUpdateLeadField?.(lead.id, { lastInteractionAt: new Date().toISOString() });
-                                  if (onNavigateToFollowUp) {
-                                    onNavigateToFollowUp(lead);
-                                  } else {
-                                    onOpenEditModal(lead);
-                                  }
+                                  setScheduleSingleLead(lead);
                                 }}
                                 className="p-1 px-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 border border-zinc-950 rounded text-[10px] font-mono font-black uppercase flex items-center gap-0.5 transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)]"
                                 title="Agendar Follow-up"
@@ -2927,6 +3015,75 @@ export default function LeadList({
                               </button>
                             </div>
                           </td>
+
+                          {/* Atividades Column for Todos os Leads */}
+                          <td className="px-2 py-2 text-center border-l border-zinc-100">
+                            <div className="flex flex-col gap-1 items-center justify-center">
+                              <div className="flex items-center gap-1">
+                                {/* Ficha */}
+                                <button 
+                                  type="button"
+                                  onClick={() => onOpenLeadDetails(lead)}
+                                  className="w-7 h-7 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 text-xs rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] text-zinc-850 cursor-pointer"
+                                  title="Ver Ficha Cadastral"
+                                >
+                                  📑
+                                </button>
+
+                                {/* Funil Status */}
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    const dev = document.getElementById("integrated-kanban-board-scroll");
+                                    if (dev) {
+                                      dev.scrollIntoView({ behavior: "smooth" });
+                                    }
+                                  }}
+                                  className="w-7 h-7 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 text-xs rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] text-zinc-850 cursor-pointer"
+                                  title="Rolar para o Funil Kanban Integrado"
+                                >
+                                  🔽
+                                </button>
+
+                                {/* Simulador */}
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    if ((window as any).setActiveTab) {
+                                      (window as any).setActiveTab("simulador");
+                                    }
+                                  }}
+                                  className="w-7 h-7 flex items-center justify-center bg-indigo-50 hover:bg-indigo-100 text-xs rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] text-indigo-800 cursor-pointer"
+                                  title="Abrir Simulador de Crédito"
+                                >
+                                  🧮
+                                </button>
+                              </div>
+
+                              <div className="flex items-center gap-1">
+                                {/* Regras */}
+                                <button 
+                                  type="button"
+                                  onClick={() => onOpenRuleEngine && onOpenRuleEngine(lead)}
+                                  className="w-7 h-7 flex items-center justify-center bg-indigo-50 hover:bg-indigo-100 text-xs rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] text-indigo-850 cursor-pointer"
+                                  title="Ações Automáticas (Regras)"
+                                >
+                                  🤖
+                                </button>
+
+                                {/* Assistente */}
+                                <button 
+                                  type="button"
+                                  onClick={() => onOpenAIAssistant && onOpenAIAssistant(lead)}
+                                  className="w-7 h-7 flex items-center justify-center bg-purple-50 hover:bg-purple-100 text-xs rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] text-purple-850 cursor-pointer"
+                                  title="Assistente AI & Objeções"
+                                >
+                                  ✨
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                        
                         </>
                       ) : (
                         <>
@@ -2956,7 +3113,7 @@ export default function LeadList({
 
                           {/* Entrada / Interação */}
                           <td className="px-2 py-2 text-[10px] text-zinc-805 whitespace-nowrap">
-                            <div className="space-y-2 max-w-[120px]">
+                            <div className="space-y-2 max-w-full max-w-[120px]">
                               <div className="bg-zinc-150 border border-zinc-300 rounded px-1.5 py-1 shadow-sm">
                                 <span className="text-[8px] text-zinc-500 font-mono font-bold block leading-none mb-0.5">🗓️ ENTRADA</span>
                                 <div className="text-[10px] font-mono font-black text-indigo-700">
@@ -2984,7 +3141,7 @@ export default function LeadList({
                                   title={generatingScriptLeadId === lead.id ? "Gerando roteiro inteligente..." : "Conversar no WhatsApp"}
                                 >
                                   {generatingScriptLeadId === lead.id ? (
-                                    <span className="animate-spin text-[8px]">⏳</span>
+                                    <span className=" text-[8px]">⏳</span>
                                   ) : (
                                     <span>💬</span>
                                   )}
@@ -3005,11 +3162,7 @@ export default function LeadList({
                                 <button
                                   onClick={() => {
                                     onUpdateLeadField?.(lead.id, { lastInteractionAt: new Date().toISOString() });
-                                    if (onNavigateToFollowUp) {
-                                      onNavigateToFollowUp(lead);
-                                    } else {
-                                      onOpenEditModal(lead);
-                                    }
+                                    setScheduleSingleLead(lead);
                                   }}
                                   className="p-1 px-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 border border-zinc-950 rounded text-[10px] font-mono font-black uppercase flex items-center gap-0.5 transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)]"
                                   title="Agendar Follow-up"
@@ -3254,13 +3407,13 @@ export default function LeadList({
               )}
               {/* Infinite Scroll sentinel tracker element */}
               <tr id="infinite-scroll-sentinel" className="h-4">
-                <td colSpan={isTodosView ? 7 : 9} className="p-0 border-0"></td>
+                <td colSpan={isTodosView ? 9 : 9} className="p-0 border-0"></td>
               </tr>
               
               {/* Manual Load more backup button */}
               {visibleCount < processedLeads.length && (
                 <tr>
-                  <td colSpan={isTodosView ? 7 : 9} className="p-4 text-center bg-zinc-50 border-t">
+                  <td colSpan={isTodosView ? 9 : 9} className="p-4 text-center bg-zinc-50 border-t">
                     <button
                       onClick={() => setVisibleCount(prev => Math.min(prev + 15, processedLeads.length))}
                       className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-400 text-indigo-800 font-mono text-[9px] font-black uppercase rounded-lg shadow-sm"
@@ -3272,12 +3425,13 @@ export default function LeadList({
               )}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 
       {/* Campaign and marketing script dispatching modal suite */}
       {showCampaignModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-zinc-950/70 backdrop-blur-sm flex items-center justify-center p-4 ">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-zinc-950/70  flex items-center justify-center p-4 ">
           <div className="bg-white border-4 border-zinc-950 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] text-zinc-800">
             {/* Modal Header */}
             <div className="bg-zinc-950 text-white p-5 flex items-center justify-between border-b-4 border-zinc-950">
@@ -3535,7 +3689,7 @@ export default function LeadList({
                     </div>
                     <div className="w-full bg-zinc-900 h-4 border-2 border-zinc-700 rounded-full overflow-hidden p-0.5">
                       <div 
-                        className="bg-gradient-to-r from-indigo-500 via-purple-500 to-amber-400 h-full rounded-full transition-all duration-300"
+                        className="bg-gradient-to-r from-indigo-500 via-purple-500 to-amber-400 h-full rounded-full transition-colors"
                         style={{ width: `${batchProgress}%` }}
                       />
                     </div>
@@ -3831,7 +3985,7 @@ export default function LeadList({
         };
 
         return (
-          <div className="fixed inset-0 z-[110] overflow-y-auto bg-zinc-950/70 backdrop-blur-sm flex items-center justify-center p-4 ">
+          <div className="fixed inset-0 z-[110] overflow-y-auto bg-zinc-950/70  flex items-center justify-center p-4 ">
             <div className="bg-white border-4 border-zinc-950 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] text-zinc-800">
               {/* Header */}
               <div className="bg-emerald-600 text-white p-5 flex items-center justify-between border-b-4 border-zinc-950">
@@ -4017,7 +4171,7 @@ export default function LeadList({
                       type="button"
                       disabled={inactiveCandidates.length === 0}
                       onClick={handleExecute30DayCleanup}
-                      className="px-5 py-3 bg-zinc-900 hover:bg-zinc-950 disabled:opacity-40 disabled:cursor-not-allowed text-white border-2 border-zinc-950 rounded-xl font-black uppercase text-xs tracking-wider transition-all shadow-[2.5px_2.5px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 cursor-pointer shrink-0 text-center"
+                      className="px-5 py-3 bg-zinc-900 hover:bg-zinc-950 disabled:opacity-40 disabled:cursor-not-allowed text-white border-2 border-zinc-950 rounded-xl font-black uppercase text-xs tracking-wider transition-colors shadow-[2.5px_2.5px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 cursor-pointer shrink-0 text-center"
                     >
                       🚀 Arquivar & Adiantar Tudo
                     </button>
@@ -4038,7 +4192,7 @@ export default function LeadList({
                   <button
                     type="button"
                     onClick={handleWipeAllLeads}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 border-2 border-zinc-950 text-white font-black uppercase text-[10px] rounded-lg tracking-wider transition-all shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 cursor-pointer shrink-0"
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 border-2 border-zinc-950 text-white font-black uppercase text-[10px] rounded-lg tracking-wider transition-colors shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 cursor-pointer shrink-0"
                   >
                     🗑️ Zerar Base ({leads.length})
                   </button>
@@ -4077,7 +4231,7 @@ export default function LeadList({
 
       {/* GEMINI-POWERED Campaign active planner modal */}
       {showCampaignPlanner && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-zinc-950/70 backdrop-blur-sm flex items-center justify-center p-4 ">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-zinc-950/70  flex items-center justify-center p-4 ">
           <div className="bg-white border-4 border-zinc-950 rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] text-zinc-850">
             {/* Header */}
             <div className="bg-zinc-900 border-b-4 border-zinc-950 p-5 flex items-center justify-between text-white">
@@ -4203,7 +4357,7 @@ export default function LeadList({
                 <button
                   onClick={handleGenerateCampaignPlan}
                   disabled={isGeneratingPlan || plannerLeadCount <= 0}
-                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-mono font-black uppercase text-xs rounded-xl border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition-all active:translate-y-0.5 disabled:opacity-50 text-center cursor-pointer"
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-mono font-black uppercase text-xs rounded-xl border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition-colors active:translate-y-0.5 disabled:opacity-50 text-center cursor-pointer"
                 >
                   {isGeneratingPlan ? '⏳ Consultando Inteligência do Gemini AI...' : '⚡ Roteirizar Base de Leads & Copys com Gemini'}
                 </button>
@@ -4330,6 +4484,48 @@ export default function LeadList({
         </div>
       )}
       {/* End Campaign Planner modal */}
+
+      {isBulkScheduleModalOpen && (
+        <ScheduleFollowUpModal
+          isOpen={isBulkScheduleModalOpen}
+          onClose={() => setIsBulkScheduleModalOpen(false)}
+          leads={leads}
+          initialLead={null}
+          initialLeads={leads.filter(l => selectedLeadIds.includes(l.id))}
+          onAddAppointment={(newAppt) => {
+            if (setAppointments) {
+              setAppointments((prev: any) => {
+                const updated = [newAppt, ...prev];
+                localStorage.setItem("ciclocred_crm_appointments", JSON.stringify(updated));
+                return updated;
+              });
+            }
+          }}
+          awardXP={awardXP}
+          addNotification={addNotification}
+        />
+      )}
+
+      {scheduleSingleLead && (
+        <ScheduleFollowUpModal
+          isOpen={!!scheduleSingleLead}
+          onClose={() => setScheduleSingleLead(null)}
+          leads={leads}
+          initialLead={scheduleSingleLead}
+          initialLeads={null}
+          onAddAppointment={(newAppt) => {
+            if (setAppointments) {
+              setAppointments((prev: any) => {
+                const updated = [newAppt, ...prev];
+                localStorage.setItem("ciclocred_crm_appointments", JSON.stringify(updated));
+                return updated;
+              });
+            }
+          }}
+          awardXP={awardXP}
+          addNotification={addNotification}
+        />
+      )}
         </>
       )}
     </div>

@@ -354,7 +354,7 @@ export default function PublicPortal({
 
               <button
                 type="submit"
-                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-wider rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition duration-150 flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-wider rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition  flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Send className="w-4 h-4 shrink-0" />
                 <span>Enviar Proposta e Cadastrar</span>

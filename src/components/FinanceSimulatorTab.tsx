@@ -708,7 +708,7 @@ Simulado via CRM Inteligente em ${new Date().toLocaleDateString('pt-BR')}.
                 placeholder="PESQUISAR CLIENTE: TEXTO UNIVERSAL (EX: ZONA SUL RENDA 4000)"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-white/70 border border-zinc-300 rounded-xl pl-4 pr-10 py-2 text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 font-extrabold placeholder-zinc-500 tracking-wider uppercase font-mono shadow-sm backdrop-blur-sm transition-all"
+                className="w-full bg-white/70 border border-zinc-300 rounded-xl pl-4 pr-10 py-2 text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 font-extrabold placeholder-zinc-500 tracking-wider uppercase font-mono shadow-sm  transition-colors"
               />
               {searchTerm && (
                 <button
@@ -731,7 +731,7 @@ Simulado via CRM Inteligente em ${new Date().toLocaleDateString('pt-BR')}.
                 setInitialLetterFilter(e.target.value);
                 triggerSensoryFeedback('click', accSettings);
               }}
-              className="bg-white/70 border border-zinc-300 rounded-xl px-3 py-2 text-[10px] font-black text-zinc-900 focus:outline-none focus:border-indigo-600 uppercase font-mono cursor-pointer shadow-sm hover:bg-white backdrop-blur-sm transition-all"
+              className="bg-white/70 border border-zinc-300 rounded-xl px-3 py-2 text-[10px] font-black text-zinc-900 focus:outline-none focus:border-indigo-600 uppercase font-mono cursor-pointer shadow-sm hover:bg-white  transition-colors"
             >
               <option value="todos">Letra: Todas</option>
               {Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)).map(letter => (
@@ -762,7 +762,7 @@ Simulado via CRM Inteligente em ${new Date().toLocaleDateString('pt-BR')}.
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* RECENTES */}
               <div className="flex flex-col gap-2 max-h-[180px] overflow-y-auto pr-1">
-                <span className="text-[10px] font-black text-zinc-500 border-b border-zinc-300/50 pb-1 mb-1 font-mono uppercase tracking-widest pl-1 sticky top-0 bg-zinc-50/80 backdrop-blur-md z-10">Recentes / Novos</span>
+                <span className="text-[10px] font-black text-zinc-500 border-b border-zinc-300/50 pb-1 mb-1 font-mono uppercase tracking-widest pl-1 sticky top-0 bg-zinc-50/80  z-10">Recentes / Novos</span>
                 {filteredLeadsForLink.filter(l => l.status === 'novo').length === 0 && (
                   <span className="text-[9px] text-zinc-400 font-bold p-1 italic select-none">Lista Zerada do Sistema</span>
                 )}
@@ -774,7 +774,7 @@ Simulado via CRM Inteligente em ${new Date().toLocaleDateString('pt-BR')}.
                         triggerSensoryFeedback('click', accSettings);
                         setSelectedLeadId(lead.id);
                       }}
-                      className={`px-3 py-1.5 rounded-lg border text-[10.5px] font-black font-mono transition-none cursor-pointer flex items-center justify-between h-auto select-none backdrop-blur-sm ${
+                      className={`px-3 py-1.5 rounded-lg border text-[10.5px] font-black font-mono transition-none cursor-pointer flex items-center justify-between h-auto select-none  ${
                       selectedLeadId === lead.id
                           ? 'bg-emerald-600 text-white border-emerald-700 shadow-md'
                           : 'bg-white/60 border-zinc-200 text-zinc-700 hover:text-zinc-950 hover:bg-white'
@@ -787,7 +787,7 @@ Simulado via CRM Inteligente em ${new Date().toLocaleDateString('pt-BR')}.
 
               {/* ATIVOS */}
               <div className="flex flex-col gap-2 max-h-[180px] overflow-y-auto pr-1">
-                <span className="text-[10px] font-black text-indigo-500 border-b border-indigo-200/50 pb-1 mb-1 font-mono uppercase tracking-widest pl-1 sticky top-0 bg-zinc-50/80 backdrop-blur-md z-10">Ativos / Em Progresso</span>
+                <span className="text-[10px] font-black text-indigo-500 border-b border-indigo-200/50 pb-1 mb-1 font-mono uppercase tracking-widest pl-1 sticky top-0 bg-zinc-50/80  z-10">Ativos / Em Progresso</span>
                 {filteredLeadsForLink.filter(l => l.status !== 'novo' && l.status !== 'arquivado' && l.status !== 'perdi' && l.status !== 'reprovado_credito').length === 0 && (
                   <span className="text-[9px] text-zinc-400 font-bold p-1 italic select-none">Lista Zerada do Sistema</span>
                 )}
@@ -799,7 +799,7 @@ Simulado via CRM Inteligente em ${new Date().toLocaleDateString('pt-BR')}.
                         triggerSensoryFeedback('click', accSettings);
                         setSelectedLeadId(lead.id);
                       }}
-                      className={`px-3 py-1.5 rounded-lg border text-[10.5px] font-black font-mono transition-none cursor-pointer flex items-center justify-between h-auto select-none backdrop-blur-sm ${
+                      className={`px-3 py-1.5 rounded-lg border text-[10.5px] font-black font-mono transition-none cursor-pointer flex items-center justify-between h-auto select-none  ${
                       selectedLeadId === lead.id
                           ? 'bg-emerald-600 text-white border-emerald-700 shadow-md'
                           : 'bg-white/60 border-zinc-200 text-zinc-700 hover:text-zinc-950 hover:bg-white'
@@ -813,7 +813,7 @@ Simulado via CRM Inteligente em ${new Date().toLocaleDateString('pt-BR')}.
 
               {/* ARQUIVADOS */}
               <div className="flex flex-col gap-2 max-h-[180px] overflow-y-auto pr-1">
-                <span className="text-[10px] font-black text-rose-500 border-b border-rose-200/50 pb-1 mb-1 font-mono uppercase tracking-widest pl-1 sticky top-0 bg-zinc-50/80 backdrop-blur-md z-10">Arquivados / Perdidos</span>
+                <span className="text-[10px] font-black text-rose-500 border-b border-rose-200/50 pb-1 mb-1 font-mono uppercase tracking-widest pl-1 sticky top-0 bg-zinc-50/80  z-10">Arquivados / Perdidos</span>
                 {filteredLeadsForLink.filter(l => l.status === 'arquivado' || l.status === 'perdi' || l.status === 'reprovado_credito').length === 0 && (
                   <span className="text-[9px] text-zinc-400 font-bold p-1 italic select-none">Lista Zerada do Sistema</span>
                 )}
@@ -825,7 +825,7 @@ Simulado via CRM Inteligente em ${new Date().toLocaleDateString('pt-BR')}.
                         triggerSensoryFeedback('click', accSettings);
                         setSelectedLeadId(lead.id);
                       }}
-                      className={`px-3 py-1.5 rounded-lg border text-[10.5px] font-black font-mono transition-none cursor-pointer flex items-center justify-between h-auto select-none backdrop-blur-sm ${
+                      className={`px-3 py-1.5 rounded-lg border text-[10.5px] font-black font-mono transition-none cursor-pointer flex items-center justify-between h-auto select-none  ${
                       selectedLeadId === lead.id
                           ? 'bg-emerald-600 text-white border-emerald-700 shadow-md'
                           : 'bg-white/60 border-zinc-200 text-zinc-700 hover:text-zinc-950 hover:bg-white'
@@ -888,7 +888,7 @@ Simulado via CRM Inteligente em ${new Date().toLocaleDateString('pt-BR')}.
                     triggerSensoryFeedback('click', accSettings);
                     setProfessionType('CLT');
                   }}
-                  className={`py-2 px-3 border-2 text-xs font-black uppercase rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  className={`py-2 px-3 border-2 text-xs font-black uppercase rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
                     professionType === 'CLT'
                       ? 'bg-zinc-950 text-white border-zinc-950 shadow-[1.5px_1.5px_0px_0px_rgba(99,102,241,1)]'
                       : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-300 text-zinc-500'
@@ -902,7 +902,7 @@ Simulado via CRM Inteligente em ${new Date().toLocaleDateString('pt-BR')}.
                     triggerSensoryFeedback('click', accSettings);
                     setProfessionType('AUTONOMO');
                   }}
-                  className={`py-2 px-3 border-2 text-xs font-black uppercase rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  className={`py-2 px-3 border-2 text-xs font-black uppercase rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
                     professionType === 'AUTONOMO'
                       ? 'bg-zinc-950 text-white border-zinc-950 shadow-[1.5px_1.5px_0px_0px_rgba(99,102,241,1)]'
                       : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-300 text-zinc-500'
@@ -1146,7 +1146,7 @@ Simulado via CRM Inteligente em ${new Date().toLocaleDateString('pt-BR')}.
                       triggerSensoryFeedback('click', accSettings);
                       setAmortizationSystem(sys as any);
                     }}
-                    className={`py-2 border-2 text-[10px] font-black uppercase rounded-xl transition-all cursor-pointer ${
+                    className={`py-2 border-2 text-[10px] font-black uppercase rounded-xl transition-colors cursor-pointer ${
                       amortizationSystem === sys 
                         ? 'bg-zinc-950 text-white border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]' 
                         : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-350 text-zinc-500'
@@ -1249,7 +1249,7 @@ Simulado via CRM Inteligente em ${new Date().toLocaleDateString('pt-BR')}.
 
                   {firstPayment > maxMonthlyPayment && (
                     <div className="flex items-start gap-1 pb-1 text-[9.5px] text-red-800 leading-tight">
-                      <AlertTriangle className="w-3.5 h-3.5 text-red-650 shrink-0 mt-0.5 animate-pulse" />
+                      <AlertTriangle className="w-3.5 h-3.5 text-red-650 shrink-0 mt-0.5 " />
                       <span><strong>⚠️ Parcela excede 30% da renda:</strong> Necessita <strong className="text-indigo-800">agregar renda</strong> com co-adquirentes ou apresentar fiador/avalista!</span>
                     </div>
                   )}
@@ -1459,7 +1459,7 @@ Simulado via CRM Inteligente em ${new Date().toLocaleDateString('pt-BR')}.
                       
                       {/* 1. CPF/CNH */}
                       <label 
-                        className={`flex items-start gap-3 p-2 border-2 rounded-xl cursor-pointer transition-all ${
+                        className={`flex items-start gap-3 p-2 border-2 rounded-xl cursor-pointer transition-colors ${
                           docCpfCnh ? 'bg-emerald-50 border-emerald-400' : 'bg-zinc-50 hover:bg-zinc-100/70 border-zinc-200'
                         }`}
                       >
@@ -1482,7 +1482,7 @@ Simulado via CRM Inteligente em ${new Date().toLocaleDateString('pt-BR')}.
 
                       {/* 2. COMPROVANTE DE ENDEREÇO */}
                       <label 
-                        className={`flex items-start gap-3 p-2 border-2 rounded-xl cursor-pointer transition-all ${
+                        className={`flex items-start gap-3 p-2 border-2 rounded-xl cursor-pointer transition-colors ${
                           docEndereco ? 'bg-emerald-50 border-emerald-400' : 'bg-zinc-50 hover:bg-zinc-100/70 border-zinc-200'
                         }`}
                       >
@@ -1505,7 +1505,7 @@ Simulado via CRM Inteligente em ${new Date().toLocaleDateString('pt-BR')}.
 
                       {/* 3. COMPROVANTE DE RENDA */}
                       <label 
-                        className={`flex items-start gap-3 p-2 border-2 rounded-xl cursor-pointer transition-all ${
+                        className={`flex items-start gap-3 p-2 border-2 rounded-xl cursor-pointer transition-colors ${
                           docRenda ? 'bg-emerald-50 border-emerald-400' : 'bg-zinc-50 hover:bg-zinc-100/70 border-zinc-200'
                         }`}
                       >
@@ -1533,7 +1533,7 @@ Simulado via CRM Inteligente em ${new Date().toLocaleDateString('pt-BR')}.
 
                       {/* 4. EXTRATOS */}
                       <label 
-                        className={`flex items-start gap-3 p-2 border-2 rounded-xl cursor-pointer transition-all ${
+                        className={`flex items-start gap-3 p-2 border-2 rounded-xl cursor-pointer transition-colors ${
                           docExtratos ? 'bg-emerald-50 border-emerald-400' : 'bg-zinc-50 hover:bg-zinc-100/70 border-zinc-200'
                         }`}
                       >
@@ -1993,8 +1993,9 @@ Simulado via CRM Inteligente em ${new Date().toLocaleDateString('pt-BR')}.
             )}
 
             {/* Detailed month-by-month payment schedule layout matching simulator 1 */}
-            <div className="border border-zinc-250 rounded-2xl overflow-visible bg-zinc-50 overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse font-sans">
+            <div className="border border-zinc-250 rounded-2xl bg-zinc-50 overflow-x-auto custom-scrollbar">
+              <div className="min-w-[650px] w-full">
+                <table className="w-full text-left text-xs border-collapse font-sans">
                 <thead className="bg-zinc-950 text-white font-mono text-[9px] uppercase font-black tracking-wider sticky top-0 z-10">
                   <tr>
                     <th className="p-2.5 pl-4">Mês Obra</th>
@@ -2053,6 +2054,7 @@ Simulado via CRM Inteligente em ${new Date().toLocaleDateString('pt-BR')}.
                   </tr>
                 </tbody>
               </table>
+              </div>
             </div>
 
           </div>
@@ -2066,7 +2068,7 @@ Simulado via CRM Inteligente em ${new Date().toLocaleDateString('pt-BR')}.
       {/* PREVIEW MODAL & PRINT CONTROLS (A4 PREVIEW) */}
       {/* ========================================== */}
       {showPrintModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-zinc-950/75 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 print:hidden animate-fadeIn">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-zinc-950/75  flex items-center justify-center p-2 sm:p-4 print:hidden animate-fadeIn">
           <div className="bg-zinc-100 border-4 border-zinc-950 rounded-3xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden text-zinc-900">
             
             {/* Header Toolbar */}
@@ -2206,47 +2208,52 @@ Simulado via CRM Inteligente em ${new Date().toLocaleDateString('pt-BR')}.
                     {/* CAIXA FINANCING SIMULATOR */}
                     <div className="space-y-1.5">
                       <h4 className="text-[9.5px] font-black uppercase text-indigo-900 font-mono bg-zinc-100 px-2 py-1 rounded">3. Resultado de Crédito Caixa Econômica Federal</h4>
-                      <table className="w-full text-left font-mono border border-zinc-200 rounded-lg overflow-hidden text-[10px]">
-                        <tbody className="divide-y divide-zinc-200">
-                          <tr className="bg-zinc-50">
-                            <td className="p-2 pl-3">Faixa MCMV</td>
-                            <td className="p-2 font-bold text-zinc-900">{mcmvBracketName}</td>
-                            <td className="p-2">Regime Amortização</td>
-                            <td className="p-2 font-bold text-zinc-900">{amortizationSystem}</td>
-                          </tr>
-                          <tr>
-                            <td className="p-2 pl-3">Avaliação Imóvel (R$)</td>
-                            <td className="p-2 text-zinc-800 font-bold">R$ {simulatedPropertyPrice.toLocaleString('pt-BR')}</td>
-                            <td className="p-2">Prazo Caixa Contratado</td>
-                            <td className="p-2 text-zinc-805 font-bold">{loanMonths} meses ({loanMonths / 12} anos)</td>
-                          </tr>
-                          <tr>
-                            <td className="p-2 pl-3 text-emerald-800 font-bold">Subsídio MCMV Concedido</td>
-                            <td className="p-2 text-emerald-700 font-black">R$ {calculatedSubsidy.toLocaleString('pt-BR')}</td>
-                            <td className="p-2 text-zinc-650">Taxa Juros Nominal</td>
-                            <td className="p-2 font-black text-zinc-900">{applicableInterestRate}% a.a.</td>
-                          </tr>
-                          <tr className="bg-indigo-50 font-black">
-                            <td className="p-2.5 pl-3 text-indigo-905 uppercase text-[9px]">Aprovado Financiamento Caixa</td>
-                            <td className="p-2.5 text-indigo-900 text-xs">R$ {financedAmount.toLocaleString('pt-BR')}</td>
-                            <td className="p-2.5 text-zinc-700 uppercase text-[9px]">Entrada Necessária Própria</td>
-                            <td className="p-2.5 text-indigo-950 text-xs">R$ {requiredDownpayment.toLocaleString('pt-BR')}</td>
-                          </tr>
-                          <tr>
-                            <td className="p-2 pl-3">1ª Prestação Estimada Caixa</td>
-                            <td className="p-2 font-bold text-zinc-800">R$ {firstPayment.toLocaleString('pt-BR')}</td>
-                            <td className="p-2">Última Prestação Estimada Caixa</td>
-                            <td className="p-2 text-zinc-700">R$ {lastPayment.toLocaleString('pt-BR')}</td>
-                          </tr>
-                        </tbody>
-                      </table>
+                      <div className="overflow-x-auto border border-zinc-200 rounded-lg custom-scrollbar">
+                        <div className="min-w-[600px] w-full">
+                          <table className="w-full text-left font-mono text-[10px]">
+                          <tbody className="divide-y divide-zinc-200">
+                            <tr className="bg-zinc-50">
+                              <td className="p-2 pl-3">Faixa MCMV</td>
+                              <td className="p-2 font-bold text-zinc-900">{mcmvBracketName}</td>
+                              <td className="p-2">Regime Amortização</td>
+                              <td className="p-2 font-bold text-zinc-900">{amortizationSystem}</td>
+                            </tr>
+                            <tr>
+                              <td className="p-2 pl-3">Avaliação Imóvel (R$)</td>
+                              <td className="p-2 text-zinc-800 font-bold">R$ {simulatedPropertyPrice.toLocaleString('pt-BR')}</td>
+                              <td className="p-2">Prazo Caixa Contratado</td>
+                              <td className="p-2 text-zinc-805 font-bold">{loanMonths} meses ({loanMonths / 12} anos)</td>
+                            </tr>
+                            <tr>
+                              <td className="p-2 pl-3 text-emerald-800 font-bold">Subsídio MCMV Concedido</td>
+                              <td className="p-2 text-emerald-700 font-black">R$ {calculatedSubsidy.toLocaleString('pt-BR')}</td>
+                              <td className="p-2 text-zinc-650">Taxa Juros Nominal</td>
+                              <td className="p-2 font-black text-zinc-900">{applicableInterestRate}% a.a.</td>
+                            </tr>
+                            <tr className="bg-indigo-50 font-black">
+                              <td className="p-2.5 pl-3 text-indigo-905 uppercase text-[9px]">Aprovado Financiamento Caixa</td>
+                              <td className="p-2.5 text-indigo-900 text-xs">R$ {financedAmount.toLocaleString('pt-BR')}</td>
+                              <td className="p-2.5 text-zinc-700 uppercase text-[9px]">Entrada Necessária Própria</td>
+                              <td className="p-2.5 text-indigo-950 text-xs">R$ {requiredDownpayment.toLocaleString('pt-BR')}</td>
+                            </tr>
+                            <tr>
+                              <td className="p-2 pl-3">1ª Prestação Estimada Caixa</td>
+                              <td className="p-2 font-bold text-zinc-800">R$ {firstPayment.toLocaleString('pt-BR')}</td>
+                              <td className="p-2">Última Prestação Estimada Caixa</td>
+                              <td className="p-2 text-zinc-700">R$ {lastPayment.toLocaleString('pt-BR')}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                        </div>
+                      </div>
                     </div>
 
                     {/* DOWNPAYMENT FACILITADO SCENARIO */}
                     <div className="space-y-1.5">
                       <h4 className="text-[9.5px] font-black uppercase text-indigo-900 font-mono bg-zinc-100 px-2 py-1 rounded">4. Parcelamento de Entrada Facilitada com a Construtora</h4>
-                      <div className="border border-zinc-200 rounded-lg overflow-hidden">
-                        <table className="w-full text-left font-mono text-[10px] border-collapse">
+                      <div className="overflow-x-auto border border-zinc-200 rounded-lg custom-scrollbar">
+                        <div className="min-w-[600px] w-full">
+                          <table className="w-full text-left font-mono text-[10px] border-collapse">
                           <thead>
                             <tr className="bg-zinc-100 font-bold border-b border-zinc-200 text-zinc-600">
                               <th className="p-2 pl-3">Fase do Plano</th>
@@ -2295,6 +2302,7 @@ Simulado via CRM Inteligente em ${new Date().toLocaleDateString('pt-BR')}.
                             })()}
                           </tbody>
                         </table>
+                        </div>
                       </div>
                     </div>
 

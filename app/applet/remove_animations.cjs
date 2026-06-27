@@ -1,47 +1,15 @@
 const fs = require('fs');
+const file = 'src/components/KanbanBoard.tsx';
+let content = fs.readFileSync(file, 'utf8');
 
-function removeAnimations(filePath) {
-  let content = fs.readFileSync(filePath, 'utf-8');
-  
-  // Remove framer-motion imports
-  content = content.replace(/import\s*\{[^}]*(?:motion|AnimatePresence)[^}]*\}\s*from\s+['"]motion\/react['"];/gi, '');
-  
-  // Replace <motion.div with <div
-  content = content.replace(/<motion\.([a-zA-Z0-9]+)/g, '<$1');
-  content = content.replace(/<\/motion\.([a-zA-Z0-9]+)>/g, '</$1>');
-  
-  // Remove <AnimatePresence> wrappers
-  content = content.replace(/<\/?AnimatePresence(?:[^>]*)>/g, '');
-  
-  // Regex to match initial={{...}} and similar. 
-  // We can just use a simple regex to remove initial=... animate=... exit=... transition=...
-  // if they are on the same line.
-  content = content.replace(/\b(?:initial|animate|exit|transition|whileHover|whileTap|layoutId|layout|variants|custom)=\{{1,2}[^}]+\}{1,2}/g, '');
+content = content.replace(/transition-all duration-300/g, 'transition-colors');
+content = content.replace(/transition-all/g, 'transition-colors');
+content = content.replace(/transition-transform duration-300/g, '');
+content = content.replace(/animate-pulse/g, '');
+content = content.replace(/animate-bounce/g, '');
+content = content.replace(/animate-spin/g, '');
+content = content.replace(/transition-shadow/g, '');
+content = content.replace(/transition-\[border-color,box-shadow,transform,background-color\] duration-200/g, 'transition-colors');
 
-  content = content.replace(/\banimate-[a-zA-Z0-9A-Z_]+/g, ''); // Tailwind custom animations
-
-  fs.writeFileSync(filePath, content);
-}
-
-const files = [
-  'src/App.tsx',
-  'src/components/KanbanBoard.tsx',
-  'src/components/LeadList.tsx',
-  'src/components/GoogleWorkspace.tsx',
-  'src/components/FollowUpManager.tsx',
-  'src/components/LeadDetailsModal.tsx',
-  'src/components/CreateLeadModal.tsx',
-  'src/components/RealEstateInventory.tsx',
-  'src/components/ToolsServices.tsx',
-  'src/components/Simulators.tsx',
-  'src/components/Gamification.tsx'
-];
-
-files.forEach(f => {
-  try {
-    removeAnimations(f);
-    console.log('Processed', f);
-  } catch(e){
-    console.log('Skipped or failed', f, e.message);
-  }
-});
+fs.writeFileSync(file, content);
+console.log('Done cleaning animations!');

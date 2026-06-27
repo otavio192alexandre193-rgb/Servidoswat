@@ -81,15 +81,15 @@ export default function UserCentralModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto bg-zinc-950/80 backdrop-blur-xs animate-fadeIn">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto bg-zinc-950/80  animate-fadeIn">
       
       {/* Modal Dialog container frame */}
-      <div className={`relative w-full max-w-4xl rounded-3xl text-zinc-900 border-4 border-zinc-950 shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] max-h-[92vh] overflow-y-auto bg-white transition-all animate-scaleIn`}>
+      <div className={`relative w-full max-w-4xl rounded-3xl text-zinc-900 border-4 border-zinc-950 shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] max-h-[92vh] overflow-y-auto bg-white transition-colors animate-scaleIn`}>
         
         {/* Header decoration bar */}
         <div className="bg-zinc-950 text-white p-5 flex items-center justify-between border-b-4 border-zinc-950">
           <div className="flex items-center gap-2.5">
-            <Trophy className="w-6 h-6 text-amber-500 fill-amber-500 animate-bounce" />
+            <Trophy className="w-6 h-6 text-amber-500 fill-amber-500 " />
             <div>
               <h2 className="text-base md:text-lg font-black uppercase italic tracking-tight font-sans">
                 Central do Usuário: Perfil, Metas & Preferências
@@ -211,7 +211,7 @@ export default function UserCentralModal({
               </div>
               <div className="w-full h-3 bg-zinc-850 rounded-full overflow-hidden border border-zinc-700">
                 <div 
-                  className="h-full bg-gradient-to-r from-indigo-500 to-cyan-400 transition-all duration-500"
+                  className="h-full bg-gradient-to-r from-indigo-500 to-cyan-400 transition-colors"
                   style={{ width: `${(userXP % 500) / 5}%` }}
                 />
               </div>

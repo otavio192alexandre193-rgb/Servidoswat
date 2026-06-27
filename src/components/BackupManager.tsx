@@ -335,7 +335,7 @@ export default function BackupManager({
       <header class="h-16 border-b-4 border-zinc-950 bg-zinc-900 flex items-center justify-between px-6 shrink-0 z-10">
         <div class="flex items-center gap-4">
           <div class="flex items-center gap-2">
-            <span class="inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500 border border-zinc-950 animate-pulse"></span>
+            <span class="inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500 border border-zinc-950 "></span>
             <span class="text-[10px] font-black uppercase tracking-wider font-mono text-zinc-300">Workspace 100% Offline Local</span>
           </div>
         </div>
@@ -706,7 +706,7 @@ export default function BackupManager({
         const div = document.createElement('div');
         div.draggable = true;
         div.ondragstart = (e) => handleDragStart(e, l.id);
-        div.className = 'bg-zinc-850 p-3 rounded-lg border-2 border-zinc-950 custom-shadow-sm cursor-grab active:cursor-grabbing text-xs hover:border-indigo-500 transition-all group';
+        div.className = 'bg-zinc-850 p-3 rounded-lg border-2 border-zinc-950 custom-shadow-sm cursor-grab active:cursor-grabbing text-xs hover:border-indigo-500 transition-colors group';
         
         div.innerHTML = \`
           <div class="flex justify-between items-start font-bold">
@@ -795,20 +795,22 @@ export default function BackupManager({
           </div>
 
           <div class="overflow-x-auto">
-            <table class="w-full text-left font-mono text-[11px] border-collapse">
-              <thead>
-                <tr class="border-b-2 border-zinc-950 text-zinc-400 uppercase text-[9px] tracking-wider">
-                  <th class="py-3 px-2">Comprador</th>
-                  <th class="py-3 px-2">WhatsApp Fone</th>
-                  <th class="py-3 px-2">Origem</th>
-                  <th class="py-3 px-2">Budget Máx</th>
-                  <th class="py-3 px-2">Renda Mensal</th>
-                  <th class="py-3 px-2">Estágio Funil</th>
-                  <th class="py-3 px-2 text-right">Ficha</th>
-                </tr>
-              </thead>
-              <tbody id="table-leads-body" class="divide-y divide-zinc-800 text-zinc-100"></tbody>
-            </table>
+            <div class="min-w-[850px] w-full">
+              <table class="w-full text-left font-mono text-[11px] border-collapse">
+                <thead>
+                  <tr class="border-b-2 border-zinc-950 text-zinc-400 uppercase text-[9px] tracking-wider">
+                    <th class="py-3 px-2">Comprador</th>
+                    <th class="py-3 px-2">WhatsApp Fone</th>
+                    <th class="py-3 px-2">Origem</th>
+                    <th class="py-3 px-2">Budget Máx</th>
+                    <th class="py-3 px-2">Renda Mensal</th>
+                    <th class="py-3 px-2">Estágio Funil</th>
+                    <th class="py-3 px-2 text-right">Ficha</th>
+                  </tr>
+                </thead>
+                <tbody id="table-leads-body" class="divide-y divide-zinc-800 text-zinc-100"></tbody>
+              </table>
+            </div>
           </div>
         </div>
       \`;
@@ -964,18 +966,20 @@ export default function BackupManager({
             <div class="bg-zinc-900 border-4 border-zinc-950 p-6 rounded-2xl">
               <h3 class="font-bold text-sm mb-4 uppercase text-indigo-400">Cronograma Completo de Amortização Mensal</h3>
               <div class="overflow-y-auto max-h-[300px]">
-                <table class="w-full text-left font-mono text-[10px]">
-                  <thead>
-                    <tr class="border-b border-zinc-805 uppercase text-[9px] text-zinc-400">
-                      <th class="py-2">Mês</th>
-                      <th class="py-2">Prestação</th>
-                      <th class="py-2">Amortização</th>
-                      <th class="py-2">Juros Cobrados</th>
-                      <th class="py-2 text-right">Saldo Devedor</th>
-                    </tr>
-                  </thead>
-                  <tbody id="sim-amort-rows"></tbody>
-                </table>
+                <div class="min-w-[500px] w-full">
+                  <table class="w-full text-left font-mono text-[10px]">
+                    <thead>
+                      <tr class="border-b border-zinc-805 uppercase text-[9px] text-zinc-400">
+                        <th class="py-2">Mês</th>
+                        <th class="py-2">Prestação</th>
+                        <th class="py-2">Amortização</th>
+                        <th class="py-2">Juros Cobrados</th>
+                        <th class="py-2 text-right">Saldo Devedor</th>
+                      </tr>
+                    </thead>
+                    <tbody id="sim-amort-rows"></tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
@@ -1708,7 +1712,7 @@ export default function BackupManager({
           </p>
         </div>
         <div className="flex items-center gap-3 bg-zinc-950 p-1.5 rounded-xl border border-zinc-800 shrink-0">
-          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <div className="w-2 h-2 rounded-full bg-emerald-500 " />
           <span className="text-[10px] font-black text-zinc-450 uppercase tracking-widest font-mono">Status: Sincronizado</span>
         </div>
       </div>
@@ -1720,7 +1724,7 @@ export default function BackupManager({
             setActiveTab('backup-list');
             triggerSensoryFeedback('click', accSettings);
           }}
-          className={`flex-1 px-5 py-3 font-black text-xs uppercase tracking-widest transition-all rounded-xl border-2 text-center ${
+          className={`flex-1 px-5 py-3 font-black text-xs uppercase tracking-widest transition-colors rounded-xl border-2 text-center ${
             activeTab === 'backup-list' ? 'bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] font-black' : 'border-transparent hover:text-indigo-400 transition ' + (theme === 'claro' ? 'text-zinc-600' : 'text-zinc-400')
           }`}
         >
@@ -1731,7 +1735,7 @@ export default function BackupManager({
             setActiveTab('custom-import-export');
             triggerSensoryFeedback('click', accSettings);
           }}
-          className={`flex-1 px-5 py-3 font-black text-xs uppercase tracking-widest transition-all rounded-xl border-2 text-center ${
+          className={`flex-1 px-5 py-3 font-black text-xs uppercase tracking-widest transition-colors rounded-xl border-2 text-center ${
             activeTab === 'custom-import-export' ? 'bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] font-black' : 'border-transparent hover:text-indigo-400 transition ' + (theme === 'claro' ? 'text-zinc-600' : 'text-zinc-400')
           }`}
         >
@@ -1742,7 +1746,7 @@ export default function BackupManager({
             setActiveTab('automation');
             triggerSensoryFeedback('click', accSettings);
           }}
-          className={`flex-1 px-5 py-3 font-black text-xs uppercase tracking-widest transition-all rounded-xl border-2 text-center ${
+          className={`flex-1 px-5 py-3 font-black text-xs uppercase tracking-widest transition-colors rounded-xl border-2 text-center ${
             activeTab === 'automation' ? 'bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] font-black' : 'border-transparent hover:text-indigo-400 transition ' + (theme === 'claro' ? 'text-zinc-600' : 'text-zinc-400')
           }`}
         >

@@ -114,7 +114,7 @@ export default function SmartNextSteps({
         <div className={`flex items-center rounded-xl border-2 shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] overflow-hidden ${isDark ? "border-zinc-700" : "border-zinc-950"}`}>
           <button 
             onClick={() => setFilterMode("pendentes")}
-            className={`px-4 py-2 text-[10px] font-black uppercase transition-all flex items-center gap-1.5 ${filterMode === "pendentes" ? "bg-indigo-600 text-white" : isDark ? "bg-zinc-900 text-zinc-400 hover:bg-zinc-800" : "bg-white text-zinc-700 hover:bg-zinc-100"}`}
+            className={`px-4 py-2 text-[10px] font-black uppercase transition-colors flex items-center gap-1.5 ${filterMode === "pendentes" ? "bg-indigo-600 text-white" : isDark ? "bg-zinc-900 text-zinc-400 hover:bg-zinc-800" : "bg-white text-zinc-700 hover:bg-zinc-100"}`}
           >
             <Filter className="w-3 h-3" />
             Pendentes <span className="bg-zinc-950 text-white px-1.5 rounded-md ml-1">{extractTasks().filter(t => t.urgency === 'alta' || t.urgency === 'media').length}</span>
@@ -122,14 +122,14 @@ export default function SmartNextSteps({
           <div className={`w-0.5 h-full ${isDark ? "bg-zinc-700" : "bg-zinc-950"}`}></div>
           <button 
             onClick={() => setFilterMode("hoje")}
-            className={`px-4 py-2 text-[10px] font-black uppercase transition-all ${filterMode === "hoje" ? "bg-indigo-600 text-white" : isDark ? "bg-zinc-900 text-zinc-400 hover:bg-zinc-800" : "bg-white text-zinc-700 hover:bg-zinc-100"}`}
+            className={`px-4 py-2 text-[10px] font-black uppercase transition-colors ${filterMode === "hoje" ? "bg-indigo-600 text-white" : isDark ? "bg-zinc-900 text-zinc-400 hover:bg-zinc-800" : "bg-white text-zinc-700 hover:bg-zinc-100"}`}
           >
             Apenas Hoje
           </button>
           <div className={`w-0.5 h-full ${isDark ? "bg-zinc-700" : "bg-zinc-950"}`}></div>
           <button 
             onClick={() => setFilterMode("todos")}
-            className={`px-4 py-2 text-[10px] font-black uppercase transition-all ${filterMode === "todos" ? "bg-indigo-600 text-white" : isDark ? "bg-zinc-900 text-zinc-400 hover:bg-zinc-800" : "bg-white text-zinc-700 hover:bg-zinc-100"}`}
+            className={`px-4 py-2 text-[10px] font-black uppercase transition-colors ${filterMode === "todos" ? "bg-indigo-600 text-white" : isDark ? "bg-zinc-900 text-zinc-400 hover:bg-zinc-800" : "bg-white text-zinc-700 hover:bg-zinc-100"}`}
           >
             Todos
           </button>
@@ -149,7 +149,7 @@ export default function SmartNextSteps({
             <div 
               key={task.id} 
               onClick={() => onNavigateToFollowUp && onNavigateToFollowUp(task.leadRef)}
-              className={`flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-2xl border-2 transition-all cursor-pointer hover:border-indigo-500 hover:-translate-y-1 ${
+              className={`flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-2xl border-2 transition-colors cursor-pointer hover:border-indigo-500 hover:-translate-y-1 ${
                 isDark ? "bg-zinc-900 border-zinc-700 shadow-[3px_3px_0px_0px_rgba(24,24,27,0.5)]" : "bg-white border-zinc-950 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)]"
               }`}
             >

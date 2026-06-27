@@ -439,7 +439,7 @@ export default function GamificationView({
             </div>
             <div className="w-full h-4 bg-zinc-900 border-2 border-zinc-950 rounded-full overflow-hidden p-0.5">
               <div 
-                className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full shadow-[0px_0px_10px_2px_rgba(129,140,248,0.5)] transition-all duration-700"
+                className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full shadow-[0px_0px_10px_2px_rgba(129,140,248,0.5)] transition-colors"
                 style={{ width: `${(userXP / xpNeededForNextLevel) * 100}%` }}
               />
             </div>
@@ -692,7 +692,7 @@ export default function GamificationView({
               {goals.map(goal => (
                 <div 
                   key={goal.id}
-                  className={`border-2 rounded-2xl p-4 transition-all relative ${
+                  className={`border-2 rounded-2xl p-4 transition-colors relative ${
                     editingGoalId === goal.id ? 'border-primary ring-2 ring-indigo-400 bg-zinc-50/50' :
                     goal.completed ? 'bg-emerald-50/30 border-emerald-400' : 'bg-zinc-50 border-zinc-950'
                   }`}
@@ -832,7 +832,7 @@ export default function GamificationView({
                           type="button"
                           disabled={goal.completed}
                           onClick={() => incrementGoalProgress(goal.id)}
-                          className={`text-[9px] font-mono font-black uppercase tracking-wider p-2 rounded-xl transition-all border flex items-center gap-1 ${
+                          className={`text-[9px] font-mono font-black uppercase tracking-wider p-2 rounded-xl transition-colors border flex items-center gap-1 ${
                             goal.completed 
                               ? 'bg-emerald-100 text-emerald-700 border-transparent cursor-not-allowed' 
                               : 'bg-white hover:bg-zinc-100 border-zinc-950 text-indigo-700 hover:translate-y-[-1px] shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'

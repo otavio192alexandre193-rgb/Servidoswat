@@ -179,7 +179,7 @@ const LeadEditorForm: React.FC<LeadEditorFormProps> = ({ lead, onSave, onCancel 
       <div className="pt-4 flex gap-3">
         <button
           type="submit"
-          className="flex-1 bg-indigo-600 text-white border-4 border-zinc-950 p-4 rounded-2xl font-black uppercase italic tracking-tighter flex items-center justify-center gap-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-y-0.5 hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all"
+          className="flex-1 bg-indigo-600 text-white border-4 border-zinc-950 p-4 rounded-2xl font-black uppercase italic tracking-tighter flex items-center justify-center gap-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-y-0.5 hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-colors"
         >
           <Save className="w-5 h-5" />
           {lead ? "Atualizar Ficha" : "Cadastrar Lead"}

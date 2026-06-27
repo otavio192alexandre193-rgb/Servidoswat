@@ -298,7 +298,8 @@ Diretrizes de resposta:
     const saved = localStorage.getItem('ciclocred_copywriting_scripts');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
       } catch (e) {
         // fallback
       }
@@ -582,7 +583,7 @@ Diretrizes de resposta:
             <div className="bg-zinc-950 border-4 border-zinc-950 p-5 rounded-2xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] text-white space-y-4 animate-fadeIn">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <span className="flex items-center justify-center px-2 py-0.5 rounded bg-indigo-600 text-white font-mono text-xs font-black animate-pulse">
+                  <span className="flex items-center justify-center px-2 py-0.5 rounded bg-indigo-600 text-white font-mono text-xs font-black ">
                     {selectedLeadIds.length} LEAD(S)
                   </span>
                   <span className="text-xs font-black uppercase tracking-wider font-mono text-zinc-300">
@@ -596,11 +597,11 @@ Diretrizes de resposta:
                     type="button"
                     disabled={isBatchGenerating}
                     onClick={handleBatchGenerateWithGemini}
-                    className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-zinc-800 text-white border-2 border-zinc-700 hover:border-zinc-950 rounded-xl text-[10px] font-mono font-black uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-px transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                    className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-zinc-800 text-white border-2 border-zinc-700 hover:border-zinc-950 rounded-xl text-[10px] font-mono font-black uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-px transition-colors cursor-pointer flex items-center gap-1.5 shrink-0"
                   >
                     {isBatchGenerating ? (
                       <>
-                        <span className="animate-spin inline-block">⏳</span>
+                        <span className=" inline-block">⏳</span>
                         <span>IA Gerando {batchProgress}/{selectedLeadIds.length}...</span>
                       </>
                     ) : (
@@ -614,7 +615,7 @@ Diretrizes de resposta:
                   <button
                     type="button"
                     onClick={handleBatchCopyTexts}
-                    className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-zinc-950 border-2 border-zinc-950 rounded-xl text-[10px] font-mono font-black uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-px transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                    className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-zinc-950 border-2 border-zinc-950 rounded-xl text-[10px] font-mono font-black uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-px transition-colors cursor-pointer flex items-center gap-1.5 shrink-0"
                   >
                     📋 Copiar Roteiros
                   </button>
@@ -623,7 +624,7 @@ Diretrizes de resposta:
                   <button
                     type="button"
                     onClick={handleBatchSaveToCRM}
-                    className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white border-2 border-zinc-950 rounded-xl text-[10px] font-mono font-black uppercase shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] active:translate-y-px transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                    className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white border-2 border-zinc-950 rounded-xl text-[10px] font-mono font-black uppercase shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] active:translate-y-px transition-colors cursor-pointer flex items-center gap-1.5 shrink-0"
                   >
                     💾 Salvar no CRM
                   </button>
@@ -632,7 +633,7 @@ Diretrizes de resposta:
                   <button
                     type="button"
                     onClick={handleBatchDeleteScripts}
-                    className="px-3.5 py-2 bg-rose-900/40 hover:bg-rose-900/80 text-rose-200 hover:text-white border-2 border-rose-800 rounded-xl text-[10px] font-mono font-black uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-px transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                    className="px-3.5 py-2 bg-rose-900/40 hover:bg-rose-900/80 text-rose-200 hover:text-white border-2 border-rose-800 rounded-xl text-[10px] font-mono font-black uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-px transition-colors cursor-pointer flex items-center gap-1.5 shrink-0"
                   >
                     🗑️ Excluir Roteiros
                   </button>
@@ -641,7 +642,7 @@ Diretrizes de resposta:
                   <button
                     type="button"
                     onClick={handleBatchDeleteLeads}
-                    className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white border-2 border-zinc-950 rounded-xl text-[10px] font-mono font-black uppercase shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] active:translate-y-px transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                    className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white border-2 border-zinc-950 rounded-xl text-[10px] font-mono font-black uppercase shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] active:translate-y-px transition-colors cursor-pointer flex items-center gap-1.5 shrink-0"
                   >
                     ❌ Excluir Leads
                   </button>
@@ -650,7 +651,7 @@ Diretrizes de resposta:
                   <button
                     type="button"
                     onClick={() => setSelectedLeadIds([])}
-                    className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white border-2 border-zinc-700 rounded-xl text-[10px] font-mono font-black uppercase shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-px transition-all cursor-pointer shrink-0"
+                    className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white border-2 border-zinc-700 rounded-xl text-[10px] font-mono font-black uppercase shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-px transition-colors cursor-pointer shrink-0"
                   >
                     ✕ Cancelar
                   </button>
@@ -686,7 +687,7 @@ Diretrizes de resposta:
               {isBatchGenerating && (
                 <div className="w-full bg-zinc-805 h-2.5 rounded-full overflow-hidden border-2 border-zinc-900">
                   <div
-                    className="bg-purple-500 h-full transition-all duration-300"
+                    className="bg-purple-500 h-full transition-colors"
                     style={{ width: `${(batchProgress / selectedLeadIds.length) * 100}%` }}
                   />
                 </div>
@@ -763,11 +764,11 @@ Diretrizes de resposta:
                             type="button"
                             disabled={generatingIds[lead.id]}
                             onClick={() => handleGenerateWithGemini(lead)}
-                            className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:bg-zinc-400 text-white border-2 border-zinc-950 rounded-xl text-[9px] font-mono font-black uppercase shadow-[1.5px_1.5px_0px_0px_rgba(24,24,27,1)] active:translate-y-px active:shadow-none transition-all cursor-pointer whitespace-nowrap"
+                            className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:bg-zinc-400 text-white border-2 border-zinc-950 rounded-xl text-[9px] font-mono font-black uppercase shadow-[1.5px_1.5px_0px_0px_rgba(24,24,27,1)] active:translate-y-px active:shadow-none transition-colors cursor-pointer whitespace-nowrap"
                           >
                             {generatingIds[lead.id] ? (
                               <>
-                                <span className="animate-spin inline-block">⏳</span>
+                                <span className=" inline-block">⏳</span>
                                 <span>IA Criando...</span>
                               </>
                             ) : (
@@ -812,7 +813,7 @@ Diretrizes de resposta:
                               }
                             }}
                             href={`whatsapp://send?phone=${lead.phone ? lead.phone.replace(/[^0-9]/g, '') : ''}&text=${encodeURIComponent(editableScripts[lead.id] || lead.currentScript || "")}`}
-                            className="bg-emerald-500 hover:bg-emerald-600 text-white font-mono font-black uppercase text-[10.1px] px-3 py-2.5 rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] active:translate-y-px active:shadow-none transition-all flex items-center gap-1.5 w-full justify-center cursor-pointer"
+                            className="bg-emerald-500 hover:bg-emerald-600 text-white font-mono font-black uppercase text-[10.1px] px-3 py-2.5 rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] active:translate-y-px active:shadow-none transition-colors flex items-center gap-1.5 w-full justify-center cursor-pointer"
                           >
                             💬 Enviar & Salvar 💾
                           </a>
@@ -979,7 +980,7 @@ Diretrizes de resposta:
                     <button
                       type="button"
                       onClick={handleCreateScript}
-                      className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white border-2 border-zinc-950 rounded-xl text-[9px] uppercase font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] animate-pulse"
+                      className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white border-2 border-zinc-950 rounded-xl text-[9px] uppercase font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] "
                     >
                       Salvar Roteiro
                     </button>

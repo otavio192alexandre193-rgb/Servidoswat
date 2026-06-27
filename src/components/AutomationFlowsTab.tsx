@@ -327,7 +327,7 @@ export default function AutomationFlowsTab({
           <div className="flex justify-between items-start border-b border-zinc-200 pb-3">
             <div className="space-y-1">
               <h2 className="text-lg font-black text-zinc-900 uppercase italic tracking-tighter flex items-center gap-2">
-                <Cpu className="w-5 h-5 text-indigo-600 animate-pulse" />
+                <Cpu className="w-5 h-5 text-indigo-600 " />
                 Criador de Fluxos de Automação Cósmica 🤖
               </h2>
               <p className="text-xs text-zinc-500 font-sans">
@@ -477,7 +477,7 @@ export default function AutomationFlowsTab({
             {rules.map((rule) => (
               <div 
                 key={rule.id} 
-                className={`border-4 border-zinc-950 rounded-2xl p-4.5 transition-all shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden ${
+                className={`border-4 border-zinc-950 rounded-2xl p-4.5 transition-colors shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden ${
                   rule.active ? 'bg-zinc-50' : 'bg-zinc-100 opacity-60'
                 }`}
               >
@@ -488,7 +488,7 @@ export default function AutomationFlowsTab({
                   <div className={`p-2.5 border-2 border-zinc-950 rounded-xl shrink-0 ${
                     rule.active ? 'bg-indigo-100 text-indigo-950' : 'bg-zinc-200 text-zinc-500'
                   }`}>
-                    <Activity className={`w-4 h-4 ${rule.active ? 'animate-pulse' : ''}`} />
+                    <Activity className={`w-4 h-4 ${rule.active ? '' : ''}`} />
                   </div>
                   
                   <div className="min-w-0">
@@ -736,7 +736,7 @@ export default function AutomationFlowsTab({
               >
                 {isSaving ? (
                   <>
-                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full  shrink-0" />
                     <span>Salvando Alterações...</span>
                   </>
                 ) : (

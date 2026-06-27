@@ -1,0 +1,817 @@
+1771-  return (
+1772-    <div className="space-y-6">
+1773-
+1774-      {/* Collapsible Importer/Exporter Panel */}
+1775-      {showImporter && (
+1776:        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-4  overflow-y-auto">
+1777-          <div className="bg-white border-4 border-zinc-950 p-6 rounded-3xl w-full max-w-4xl shadow-[8px_8px_0px_0px_rgba(24,24,27,1)] space-y-5  max-h-[90vh] overflow-y-auto relative text-zinc-900">
+1778-            {/* Close button */}
+1779:            <div className="flex items-center justify-between pb-3 border-b border-zinc-200">
+1780:              <div className="flex items-center gap-2 text-zinc-950">
+1781-                <FileSpreadsheet className="w-5 h-5 text-indigo-600 " />
+1782-                <h3 className="font-sans font-black text-sm uppercase italic tracking-tight">📥 Central de Fomento & Importação</h3>
+1783-              </div>
+1784-              <button 
+1785-                type="button"
+--
+1793-            {/* Embedded Subsistem Tab Bar Selector */}
+1794-            <div className="flex border-b-2 border-zinc-200 gap-1 overflow-x-auto pb-1.5 select-none">
+1795-              <button
+1796-                type="button"
+1797-                onClick={() => setImporterTab('classic')}
+1798:                className={`px-4 py-2 border-2 text-xs font-black uppercase tracking-wider rounded-xl transition-colors shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 flex items-center gap-1.5 ${
+1799-                  importerTab === 'classic'
+1800-                    ? 'bg-zinc-900 text-white border-zinc-950'
+1801-                    : 'bg-white text-zinc-700 hover:text-zinc-950 border-zinc-350'
+1802-                }`}
+1803-              >
+--
+1806-              </button>
+1807-
+1808-              <button
+1809-                type="button"
+1810-                onClick={() => setImporterTab('export')}
+1811:                className={`px-4 py-2 border-2 text-xs font-black uppercase tracking-wider rounded-xl transition-colors shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 flex items-center gap-1.5 ${
+1812-                  importerTab === 'export'
+1813-                    ? 'bg-zinc-900 text-white border-zinc-950'
+1814-                    : 'bg-white text-zinc-700 hover:text-zinc-950 border-zinc-350'
+1815-                }`}
+1816-              >
+--
+1819-              </button>
+1820-
+1821-              <button
+1822-                type="button"
+1823-                onClick={() => setImporterTab('simulation')}
+1824:                className={`px-4 py-2 border-2 text-xs font-black uppercase tracking-wider rounded-xl transition-colors shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 flex items-center gap-1.5 ${
+1825-                  importerTab === 'simulation'
+1826-                    ? 'bg-zinc-900 text-white border-zinc-950'
+1827-                    : 'bg-zinc-50 text-indigo-700 hover:text-indigo-950 border-indigo-400'
+1828-                }`}
+1829-              >
+--
+1839-                  <span className="text-[10px] text-zinc-500 font-black uppercase font-mono mr-2">Origem da Importação:</span>
+1840-                  
+1841-                  <button
+1842-                    type="button"
+1843-                    onClick={() => { setImportSource('local'); setImportErrors([]); }}
+1844:                    className={`px-3 py-1.5 border-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-colors flex items-center gap-1.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 ${
+1845-                      importSource === 'local'
+1846-                        ? 'bg-zinc-900 text-white border-zinc-950'
+1847-                        : 'bg-white text-zinc-700 hover:text-zinc-950 border-zinc-350'
+1848-                    }`}
+1849-                  >
+--
+1852-                  </button>
+1853-
+1854-                  <button
+1855-                    type="button"
+1856-                    onClick={() => { setImportSource('paste'); setImportErrors([]); }}
+1857:                    className={`px-3 py-1.5 border-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-colors flex items-center gap-1.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 ${
+1858-                      importSource === 'paste'
+1859-                        ? 'bg-zinc-900 text-white border-zinc-950'
+1860-                        : 'bg-white text-zinc-700 hover:text-zinc-950 border-zinc-350'
+1861-                    }`}
+1862-                  >
+--
+1865-                  </button>
+1866-
+1867-                  <button
+1868-                    type="button"
+1869-                    onClick={() => { setImportSource('g_sheets'); setImportErrors([]); }}
+1870:                    className={`px-3 py-1.5 border-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-colors flex items-center gap-1.5 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 ${
+1871-                      importSource === 'g_sheets'
+1872-                        ? 'bg-zinc-900 text-white border-zinc-950'
+1873-                        : 'bg-white text-zinc-700 hover:text-zinc-950 border-zinc-350'
+1874-                    }`}
+1875-                  >
+--
+1934-                  </div>
+1935-                )}
+1936-
+1937-                {importSource === 'paste' && (
+1938-                  <div className="space-y-3 ">
+1939:                    <div className="flex items-center justify-between text-xs font-black text-zinc-700 uppercase font-mono">
+1940-                      <span>Cole dados copiados do Excel/Sheets</span>
+1941-                      <span className="text-[9px] text-zinc-400 normal-case font-bold">Separados por Tabulação</span>
+1942-                    </div>
+1943-                    <textarea
+1944-                      rows={4}
+--
+1960-                  </div>
+1961-                )}
+1962-
+1963-                {importSource === 'g_sheets' && (
+1964-                  <div className="space-y-4  bg-zinc-50 border-2 border-zinc-250 p-4.5 rounded-2xl">
+1965:                    <div className="flex items-center gap-2 mb-1">
+1966-                      <svg className="w-5 h-5 text-emerald-600 fill-current shrink-0" viewBox="0 0 24 24">
+1967-                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10H7v-2h10v2z"/>
+1968-                      </svg>
+1969-                      <div>
+1970-                        <h4 className="text-xs font-black uppercase text-zinc-950 font-mono">Planilhas do Google Drive</h4>
+--
+2018-                              <span>Escolha uma item da sua conta integrada:</span>
+2019-                              <button
+2020-                                type="button"
+2021-                                onClick={handleFetchGoogleSheets}
+2022-                                disabled={isLoadingGSheets}
+2023:                                className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-950 text-white font-mono text-[8px] font-black uppercase rounded-md border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] flex items-center gap-1 active:translate-y-0.5 transition"
+2024-                              >
+2025-                                <RotateCw className={`w-2.5 h-2.5 ${isLoadingGSheets ? '' : ''}`} />
+2026-                                <span>Listar Meus Arquivos</span>
+2027-                              </button>
+2028-                            </div>
+--
+2057-            </div>
+2058-          )}
+2059-
+2060-            {importerTab === 'export' && (
+2061-              <div className="space-y-4  bg-zinc-50 border-2 border-zinc-950 p-5 rounded-2xl">
+2062:                <div className="flex items-center gap-2">
+2063-                  <Download className="w-5 h-5 text-emerald-600 shrink-0" />
+2064-                  <h4 className="text-sm font-black uppercase text-zinc-950 font-mono">Exportar Tudo e Baixar Planilha</h4>
+2065-                </div>
+2066-                <p className="text-xs text-zinc-650 font-bold leading-relaxed max-w-2xl">
+2067-                  Gere e faça o download instantâneo de um arquivo compactado <code className="bg-zinc-200 px-1 py-0.5 rounded text-zinc-800">.csv</code> contendo todos os contatos e propostas cadastrados na sua esteira de CRM. Ideal para importar no Google Sheets, Excel ou realizar backups de segurança periódicos.
+2068-                </p>
+2069-                <div className="flex flex-wrap items-center gap-3 pt-2">
+2070-                  <button
+2071-                    type="button"
+2072-                    onClick={handleExportLeadsCSV}
+2073:                    className="flex items-center gap-2 px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black font-mono text-xs rounded-xl border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition cursor-pointer"
+2074-                  >
+2075-                    <Download className="w-4 h-4 shrink-0 stroke-[2.5]" />
+2076-                    <span>Baixar Planilha Completa (.csv)</span>
+2077-                  </button>
+2078-                  {selectedLeadIds.length > 0 && (
+2079-                    <button
+2080-                      type="button"
+2081-                      onClick={handleBulkExportSelected}
+2082:                      className="flex items-center gap-2 px-4 py-3 bg-zinc-900 hover:bg-zinc-950 text-white font-black font-mono text-xs rounded-xl border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition cursor-pointer"
+2083-                    >
+2084-                      <CheckCircle className="w-4 h-4 shrink-0 text-emerald-400 stroke-[2.5]" />
+2085-                      <span>Baixar Selecionados ({selectedLeadIds.length}) (.csv)</span>
+2086-                    </button>
+2087-                  )}
+--
+2091-
+2092-            {importerTab === 'simulation' && (
+2093-              <div className="space-y-5 ">
+2094-                {/* Visual Tutorial Box explains the exact purpose clearly */}
+2095-                <div className="bg-gradient-to-r from-indigo-50 to-zinc-50 border-2 border-indigo-400 p-4 rounded-xl text-xs text-zinc-800 font-sans space-y-1.5 shadow-[2px_2px_0px_0px_rgba(99,102,241,0.1)]">
+2096:                  <p className="font-mono font-black uppercase text-[10.5px] text-indigo-950 flex items-center gap-1.5">
+2097-                    💡 O QUE É O GATEWAY DE PORTABILIDADE DE SIMULAÇÕES?
+2098-                  </p>
+2099-                  <p className="font-bold text-[11px] leading-relaxed text-zinc-600">
+2100-                    Trabalhar com faturas ou PDFs da Caixa/Cury exige copiar e colar dezenas de campos manualmente. Com este Gateway, você <strong>arrasta um PDF ou Excel de simulação residencial</strong> emitido no banco e o sistema lê instantaneamente a Renda Bruta do cliente, o Valor de Compra e Contato. Em segundos, ele <strong>cria o Lead correspondente</strong> no CRM, poupando tempo na análise de crédito imediato!
+2101-                  </p>
+2102:                  <div className="p-2 bg-indigo-100/30 rounded border border-indigo-200 text-[10px] text-indigo-850 font-bold italic font-mono flex items-center gap-1">
+2103-                    👉 Dica Operacional: Clique em qualquer um dos botões de exemplo rápido ("MCMV_Carmo.pdf", "Guarulhos.xlsx", etc.) para simular o processo em tempo real!
+2104-                  </div>
+2105-                </div>
+2106-
+2107-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+--
+2223-                            {log}
+2224-                          </div>
+2225-                        ))
+2226-                      )}
+2227-                      {isSimulatingExtraction && (
+2228:                        <div className="flex items-center gap-1.5 text-indigo-400  mt-1.5">
+2229-                          <span>⚙️ Mapemanento Inteligente... {simulationProgress}%</span>
+2230-                        </div>
+2231-                      )}
+2232-                    </div>
+2233-
+--
+2312-            )}
+2313-
+2314-            {/* Error Indicators */}
+2315-            {importErrors.length > 0 && (
+2316-              <div className="p-3.5 bg-rose-50 border-2 border-rose-300 rounded-xl space-y-1 text-xs text-rose-800 font-mono">
+2317:                <p className="font-black uppercase flex items-center gap-1.5"><AlertCircle className="w-4 h-4 text-rose-600" /> Erros de formatação:</p>
+2318-                <ul className="list-disc pl-5">
+2319-                  {importErrors.map((err, i) => <li key={i}>{err}</li>)}
+2320-                </ul>
+2321-              </div>
+2322-            )}
+--
+2324-            {/* Preview Sheet items block */}
+2325-            {importPreview.length > 0 && (
+2326-              <div className="bg-indigo-50/50 border-2 border-indigo-400 p-4 rounded-xl space-y-3.5">
+2327-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+2328-                  <div>
+2329:                    <h5 className="text-xs font-black uppercase text-indigo-950 font-mono flex items-center gap-1">
+2330-                      <CheckCircle className="w-4 h-4 text-indigo-600" />
+2331-                      <span>Dados prontos para processar ({importPreview.length} registros detectados)</span>
+2332-                    </h5>
+2333-                    <p className="text-[10px] text-indigo-700">Verifique os dados abaixo antes de efetivar o acoplamento no CRM.</p>
+2334-                  </div>
+2335-                  <div className="flex flex-wrap gap-2">
+2336-                    <button
+2337-                      type="button"
+2338-                      onClick={handleOrganizeImportPreview}
+2339-                      disabled={isOrganizingAI}
+2340:                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-black uppercase rounded-lg border-2 border-zinc-950 shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] flex items-center gap-1.5 cursor-pointer hover:-translate-y-0.5 transition-colors"
+2341-                    >
+2342-                      {isOrganizingAI ? (
+2343-                        <>
+2344-                          <Loader2 className="w-4 h-4 text-emerald-200 " />
+2345-                          <span>🤖 Organizando com IA...</span>
+--
+2386-                </div>
+2387-              </div>
+2388-            )}
+2389-
+2390-            {isImportSuccess && (
+2391:              <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center gap-3 text-xs text-emerald-800 font-black ">
+2392-                <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+2393-                <p>Importação de Leads concluída! Os contatos foram inseridos como "Novos" na carteira do CRM.</p>
+2394-              </div>
+2395-            )}
+2396-            
+--
+2413-          {(() => {
+2414-            const fictitiousCount = leads.filter(l => isFictitiousPhone(l.phone)).length;
+2415-            if (fictitiousCount > 0 && !hideFictitiousWarning) {
+2416-              return (
+2417-                <div className="bg-amber-50 border-4 border-amber-950 p-4 rounded-xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4 font-mono text-xs mb-4">
+2418:                  <div className="flex items-center gap-3 text-amber-900 font-bold uppercase">
+2419-                    <AlertTriangle className="w-5 h-5 text-amber-700" />
+2420-                    <span>Aviso: Seu banco possui {fictitiousCount} leads com telefones inválidos/fictícios gerados durante importações.</span>
+2421-                  </div>
+2422-                  <div className="flex gap-2">
+2423-                    <button
+--
+2426-                    >
+2427-                      Corriga em Lote
+2428-                    </button>
+2429-                    <button
+2430-                      onClick={() => setHideFictitiousWarning(true)}
+2431:                      className="px-3 py-2 bg-amber-100 hover:bg-amber-200 text-amber-900 font-black rounded-lg border-2 border-amber-950 shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition text-lg leading-none flex items-center justify-center"
+2432-                      title="Fechar Aviso"
+2433-                    >
+2434-                      ×
+2435-                    </button>
+2436-                  </div>
+--
+2441-          })()}
+2442-
+2443-          {selectedLeadIds.length > 0 && (
+2444-        <div className="bg-indigo-50 border-4 border-zinc-950 p-4 rounded-xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4  font-mono text-xs mb-4">
+2445-          <div className="flex flex-wrap items-center gap-3">
+2446:            <div className="flex items-center gap-2">
+2447-              <span className="relative flex h-3 w-3">
+2448-                <span className=" absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+2449-                <span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-600"></span>
+2450-              </span>
+2451-              <span className="font-extrabold text-indigo-950 uppercase text-[11px]">
+--
+2629-                            Valor imóvel: R$ {formattedValue}
+2630-                          </td>
+2631-                          {/* Column G - Ações (rowSpan=3) */}
+2632-                          <td className="px-2 py-4 border-r border-zinc-200 text-center w-[5%] bg-zinc-50/30" rowSpan={3}>
+2633-                            <div className="flex flex-col gap-1.5 items-center justify-center">
+2634:                              <div className="flex items-center gap-1">
+2635-                                <button
+2636-                                  onClick={() => handleWhatsAppClick(lead)}
+2637-                                  disabled={generatingScriptLeadId === lead.id}
+2638:                                  className="p-1 px-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-zinc-950 rounded text-[10px] font-mono font-black uppercase flex items-center justify-center gap-0.5 transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] cursor-pointer"
+2639-                                  title={generatingScriptLeadId === lead.id ? "Gerando roteiro..." : "WhatsApp"}
+2640-                                >
+2641-                                  💬
+2642-                                </button>
+2643-                                <a
+2644-                                  href={`tel:${(lead.phone || "").replace(/\D/g, '')}`}
+2645-                                  onClick={() => onUpdateLeadField?.(lead.id, { lastInteractionAt: new Date().toISOString() })}
+2646:                                  className="p-1 px-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 border border-zinc-950 rounded text-[10px] font-mono font-black uppercase flex items-center justify-center gap-0.5 transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)]"
+2647-                                  title="Ligar"
+2648-                                >
+2649-                                  📞
+2650-                                </a>
+2651-                              </div>
+2652:                              <div className="flex items-center gap-1">
+2653-                                <button
+2654-                                  onClick={() => onOpenLeadDetails(lead)}
+2655-                                  className="p-1 px-1.5 bg-zinc-100 hover:bg-zinc-200 text-[10px] rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] cursor-pointer"
+2656-                                  title="Ficha do Lead"
+2657-                                >
+--
+2813-
+2814-                      {/* Nome completo e Gênero */}
+2815-                      <td className="px-2 py-2 text-[10px] font-sans min-w-[170px] md:min-w-[225px]">
+2816-                        <div className="flex items-start gap-2.5">
+2817-                          <div className="space-y-1 w-full">
+2818:                            <div className="flex items-center gap-1.5 flex-wrap">
+2819-                              <input 
+2820-                                defaultValue={lead.name}
+2821-                                onBlur={(e) => { if (e.target.value !== lead.name) onUpdateLeadField?.(lead.id, { name: e.target.value }) }}
+2822-                                className="font-extrabold text-zinc-950 text-sm tracking-tight bg-transparent border-b-2 border-transparent focus:border-indigo-500 focus:outline-none w-full max-w-[145px] md:max-w-[210px] truncate"
+2823-                                title={lead.name}
+2824-                              />
+2825-                              {isOverdue && (
+2826-                                <span 
+2827:                                  className="inline-flex items-center gap-0.5 text-[8.5px] bg-red-150 border border-red-500 rounded px-1.5 py-0.5 font-mono font-black text-red-700 select-none"
+2828-                                  title={`Último contato há ${daysSinceContact} dias!`}
+2829-                                >
+2830-                                  <AlertTriangle className="w-2.5 h-2.5 text-red-600 shrink-0" />
+2831-                                  <span>{daysSinceContact}d</span>
+2832-                                </span>
+--
+2836-                            {/* Gênero Selector below Name */}
+2837-                            <div className="mt-1">
+2838-                              <select
+2839-                                value={lead.gender || 'Não Informado'}
+2840-                                onChange={(e) => onUpdateLeadField?.(lead.id, { gender: e.target.value })}
+2841:                                className={`inline-flex items-center gap-1 text-[9px] font-black px-1.5 py-0.5 rounded border uppercase tracking-wide font-mono focus:outline-none cursor-pointer w-[120px] truncate ${
+2842-                                  lead.gender === 'Homem' ? 'bg-sky-50 text-sky-850 border-sky-350' :
+2843-                                  lead.gender === 'Mulher' ? 'bg-pink-50 text-pink-850 border-pink-350' :
+2844-                                  'bg-zinc-50 text-zinc-800 border-zinc-200'
+2845-                                }`}
+2846-                              >
+--
+2849-                                <option value="Mulher">👩 Mulher</option>
+2850-                              </select>
+2851-                            </div>
+2852-                            
+2853-                            {/* Tags list (Profiles & Age) */}
+2854:                            <div className="flex items-center gap-1 flex-wrap">
+2855-                              {lead.ageBracket && (
+2856-                                <span className={`text-[8.5px] font-mono font-black px-1.5 py-0.5 rounded uppercase tracking-wider ${ageBadgeColors}`}>
+2857-                                  {lead.ageBracket}
+2858-                                </span>
+2859-                              )}
+--
+2923-                            </div>
+2924-                          </td>
+2925-
+2926-                          {/* Ações Rápidas */}
+2927-                          <td className="px-2 py-2 text-[10px] font-sans whitespace-nowrap">
+2928:                            <div className="flex items-center gap-1">
+2929-                              {/* Whatsapp Action with AI generation */}
+2930-                              <button
+2931-                                onClick={() => handleWhatsAppClick(lead)}
+2932-                                disabled={generatingScriptLeadId === lead.id}
+2933:                                className="p-1 px-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-zinc-950 rounded text-[10px] font-mono font-black uppercase flex items-center justify-center gap-0.5 transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] cursor-pointer min-w-[28px]"
+2934-                                title={generatingScriptLeadId === lead.id ? "Gerando..." : "WhatsApp"}
+2935-                              >
+2936-                                {generatingScriptLeadId === lead.id ? (
+2937-                                  <span className=" text-[8px]">⏳</span>
+2938-                                ) : (
+--
+2942-
+2943-                              {/* Ligar action */}
+2944-                              <a
+2945-                                href={`tel:${(lead.phone || "").replace(/\D/g, '')}`}
+2946-                                onClick={() => onUpdateLeadField?.(lead.id, { lastInteractionAt: new Date().toISOString() })}
+2947:                                className="p-1 px-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 border border-zinc-950 rounded text-[10px] font-mono font-black uppercase flex items-center gap-0.5 transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)]"
+2948-                                title="Ligar"
+2949-                              >
+2950-                                <span>📞</span>
+2951-                              </a>
+2952-
+--
+2958-                                    onNavigateToFollowUp(lead);
+2959-                                  } else {
+2960-                                    onOpenEditModal(lead);
+2961-                                  }
+2962-                                }}
+2963:                                className="p-1 px-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 border border-zinc-950 rounded text-[10px] font-mono font-black uppercase flex items-center gap-0.5 transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)]"
+2964-                                title="Agendar Follow-up"
+2965-                              >
+2966-                                <span>🚨</span>
+2967-                              </button>
+2968-
+2969-                              {/* Excluir action */}
+2970-                              <button
+2971-                                onClick={() => handleIndividualDelete(lead.id)}
+2972:                                className="p-1 px-1.5 bg-red-100 hover:bg-red-200 text-red-800 border border-zinc-950 rounded text-[10px] font-mono font-black uppercase flex items-center gap-0.5 transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] cursor-pointer"
+2973-                                title="Excluir Lead"
+2974-                              >
+2975-                                <span>🗑️</span>
+2976-                              </button>
+2977-                            </div>
+--
+3023-                          </td>
+3024-
+3025-                          {/* Ações */}
+3026-                          <td className="px-2 py-2 text-center whitespace-nowrap">
+3027-                            <div className="flex flex-col gap-1 items-center justify-center">
+3028:                              <div className="flex items-center gap-1">
+3029-                                {/* Whatsapp Action with dynamic AI simulation */}
+3030-                                <button
+3031-                                  onClick={() => handleWhatsAppClick(lead)}
+3032-                                  disabled={generatingScriptLeadId === lead.id}
+3033:                                  className="p-1 px-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-zinc-950 rounded text-[10px] font-mono font-black uppercase flex items-center justify-center gap-0.5 transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] cursor-pointer min-w-[28px]"
+3034-                                  title={generatingScriptLeadId === lead.id ? "Gerando roteiro inteligente..." : "Conversar no WhatsApp"}
+3035-                                >
+3036-                                  {generatingScriptLeadId === lead.id ? (
+3037-                                    <span className=" text-[8px]">⏳</span>
+3038-                                  ) : (
+--
+3042-
+3043-                                {/* Ligar action */}
+3044-                                <a
+3045-                                  href={`tel:${(lead.phone || "").replace(/\D/g, '')}`}
+3046-                                  onClick={() => onUpdateLeadField?.(lead.id, { lastInteractionAt: new Date().toISOString() })}
+3047:                                  className="p-1 px-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 border border-zinc-950 rounded text-[10px] font-mono font-black uppercase flex items-center gap-0.5 transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)]"
+3048-                                  title="Ligar"
+3049-                                >
+3050-                                  <span>📞</span>
+3051-                                </a>
+3052-                              </div>
+3053:                              <div className="flex items-center gap-1">
+3054-                                {/* Follow-up calendar action */}
+3055-                                <button
+3056-                                  onClick={() => {
+3057-                                    onUpdateLeadField?.(lead.id, { lastInteractionAt: new Date().toISOString() });
+3058-                                    if (onNavigateToFollowUp) {
+3059-                                      onNavigateToFollowUp(lead);
+3060-                                    } else {
+3061-                                      onOpenEditModal(lead);
+3062-                                    }
+3063-                                  }}
+3064:                                  className="p-1 px-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 border border-zinc-950 rounded text-[10px] font-mono font-black uppercase flex items-center gap-0.5 transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)]"
+3065-                                  title="Agendar Follow-up"
+3066-                                >
+3067-                                  <span>🚨</span>
+3068-                                </button>
+3069-
+3070-                                {/* Excluir action */}
+3071-                                <button
+3072-                                  onClick={() => handleIndividualDelete(lead.id)}
+3073:                                  className="p-1 px-1.5 bg-red-100 hover:bg-red-200 text-red-800 border border-zinc-950 rounded text-[10px] font-mono font-black uppercase flex items-center gap-0.5 transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] cursor-pointer"
+3074-                                  title="Excluir Lead"
+3075-                                >
+3076-                                  <span>🗑️</span>
+3077-                                </button>
+3078-                              </div>
+--
+3216-                          </td>
+3217-
+3218-                          {/* Atividades */}
+3219-                          <td className="px-2 py-2 text-center border-l border-zinc-100">
+3220-                            <div className="flex flex-col gap-1 items-center justify-center">
+3221:                              <div className="flex items-center gap-1">
+3222-                                {/* Ficha */}
+3223-                                <button 
+3224-                                  type="button"
+3225-                                  onClick={() => onOpenLeadDetails(lead)}
+3226:                                  className="w-7 h-7 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 text-xs rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] text-zinc-850 cursor-pointer"
+3227-                                  title="Ver Ficha Cadastral"
+3228-                                >
+3229-                                  📑
+3230-                                </button>
+3231-
+--
+3236-                                    const dev = document.getElementById("integrated-kanban-board-scroll");
+3237-                                    if (dev) {
+3238-                                      dev.scrollIntoView({ behavior: "smooth" });
+3239-                                    }
+3240-                                  }}
+3241:                                  className="w-7 h-7 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 text-xs rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] text-zinc-850 cursor-pointer"
+3242-                                  title="Rolar para o Funil Kanban Integrado"
+3243-                                >
+3244-                                  🔽
+3245-                                </button>
+3246-
+--
+3250-                                  onClick={() => {
+3251-                                    if ((window as any).setActiveTab) {
+3252-                                      (window as any).setActiveTab("simulador");
+3253-                                    }
+3254-                                  }}
+3255:                                  className="w-7 h-7 flex items-center justify-center bg-indigo-50 hover:bg-indigo-100 text-xs rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] text-indigo-800 cursor-pointer"
+3256-                                  title="Abrir Simulador de Crédito"
+3257-                                >
+3258-                                  🧮
+3259-                                </button>
+3260-                              </div>
+3261-
+3262:                              <div className="flex items-center gap-1">
+3263-                                {/* Regras */}
+3264-                                <button 
+3265-                                  type="button"
+3266-                                  onClick={() => onOpenRuleEngine && onOpenRuleEngine(lead)}
+3267:                                  className="w-7 h-7 flex items-center justify-center bg-indigo-50 hover:bg-indigo-100 text-xs rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] text-indigo-850 cursor-pointer"
+3268-                                  title="Ações Automáticas (Regras)"
+3269-                                >
+3270-                                  🤖
+3271-                                </button>
+3272-
+3273-                                {/* Assistente */}
+3274-                                <button 
+3275-                                  type="button"
+3276-                                  onClick={() => onOpenAIAssistant && onOpenAIAssistant(lead)}
+3277:                                  className="w-7 h-7 flex items-center justify-center bg-purple-50 hover:bg-purple-100 text-xs rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] text-purple-850 cursor-pointer"
+3278-                                  title="Assistente AI & Objeções"
+3279-                                >
+3280-                                  ✨
+3281-                                </button>
+3282-
+--
+3286-                                  onClick={() => {
+3287-                                    if ((window as any).setActiveTab) {
+3288-                                      (window as any).setActiveTab("inventory");
+3289-                                    }
+3290-                                  }}
+3291:                                  className="w-7 h-7 flex items-center justify-center bg-emerald-50 hover:bg-emerald-100 text-xs rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] text-emerald-800 cursor-pointer"
+3292-                                  title="Abrir Estoque"
+3293-                                >
+3294-                                  🏢
+3295-                                </button>
+3296-                              </div>
+--
+3325-        </div>
+3326-      </div>
+3327-
+3328-      {/* Campaign and marketing script dispatching modal suite */}
+3329-      {showCampaignModal && (
+3330:        <div className="fixed inset-0 z-50 overflow-y-auto bg-zinc-950/70  flex items-center justify-center p-4 ">
+3331-          <div className="bg-white border-4 border-zinc-950 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] text-zinc-800">
+3332-            {/* Modal Header */}
+3333:            <div className="bg-zinc-950 text-white p-5 flex items-center justify-between border-b-4 border-zinc-950">
+3334:              <div className="flex items-center gap-3">
+3335-                <div className="p-2 bg-amber-400 rounded-lg text-zinc-950 font-black ">
+3336-                  <Zap className="w-5 h-5 fill-current text-zinc-900" />
+3337-                </div>
+3338-                <div>
+3339-                  <h3 className="text-sm font-black uppercase tracking-wider font-mono">
+--
+3356-            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+3357-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+3358-                
+3359-                {/* Step 1: Choose or build template */}
+3360-                <div className="md:col-span-1 space-y-4">
+3361:                  <h4 className="text-xs font-black uppercase tracking-wider text-indigo-600 font-mono flex items-center gap-1">
+3362-                    <Sparkles className="w-4 h-4 text-amber-500 fill-amber-500" />
+3363-                    <span>1. Escolha o Roteiro</span>
+3364-                  </h4>
+3365-                  <div className="space-y-2 max-h-[45vh] overflow-y-auto pr-1">
+3366-                    {CAMPAIGN_TEMPLATES.map((tmpl, idx) => (
+--
+3390-                    2. Editor & Preview Dinâmico do Script
+3391-                  </h4>
+3392-                  
+3393-                  {/* Persistently editable textarea editor with live tag indicators */}
+3394-                  <div className="space-y-2">
+3395:                    <label className="text-[10px] font-black text-zinc-500 uppercase flex items-center justify-between">
+3396-                      <span>Texto do seu script (Livre para edição):</span>
+3397-                      <span className="bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-mono font-bold text-[8px] uppercase">Roteiro Editável</span>
+3398-                    </label>
+3399-                    <textarea
+3400-                      value={customCampaignText}
+--
+3479-                      const waLink = `whatsapp://send?phone=${defaultPhone}&text=${encodeURIComponent(resolvedText)}`;
+3480-                      
+3481-                      return (
+3482-                        <div key={lead.id} className="bg-white border-2 border-zinc-950 p-3 rounded-xl flex flex-col sm:flex-row gap-3 justify-between sm:items-center">
+3483-                          <div className="space-y-1">
+3484:                            <div className="flex items-center gap-2">
+3485-                              {isSent && <span className="text-[9px] bg-emerald-100 text-emerald-800 border border-emerald-500 px-1.5 py-0.5 rounded font-black uppercase">Enviado ✔️</span>}
+3486-                              <span className="text-xs font-black text-zinc-900">{lead.name}</span>
+3487-                              <span className="text-[10px] text-zinc-500 font-mono font-bold">{lead.phone || '(Sem telefone)'}</span>
+3488-                            </div>
+3489-                            <div className="text-[11px] text-zinc-600 bg-zinc-50 p-1.5 rounded font-serif italic">
+--
+3495-                            onClick={() => {
+3496-                              setMessagedLeads(prev => ({ ...prev, [lead.id]: true }));
+3497-                              if (awardXP) awardXP(50);
+3498-                              if (addNotification) addNotification('💬 LEAD CONTATADO', `Abordagem direta via WhatsApp enviada para ${lead.name} [+50 XP]`, 'success');
+3499-                            }}
+3500:                            className={`p-2 px-3.5 border-2 border-zinc-950 font-mono font-black text-[10px] rounded-lg uppercase tracking-wider text-center flex items-center justify-center gap-1.5 hover:translate-y-[-1px] active:translate-y-0.5 shadow-[1.5px_1.5px_0px_0px_rgba(24,24,27,1)] transition shrink-0 ${
+3501-                              isSent ? 'bg-zinc-100 text-zinc-500' : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+3502-                            }`}
+3503-                          >
+3504-                            <span>Disparar Zap</span>
+3505-                            <MessageSquare className="w-3.5 h-3.5" />
+--
+3513-
+3514-              {/* Channel View - Automated Batch Dispatcher Progress */}
+3515-              {campaignDispatchMode === 'batch' && (
+3516-                <div className="border-2 border-zinc-950 rounded-xl bg-zinc-950 text-zinc-100 p-5 space-y-4  font-mono">
+3517-                  <div className="flex justify-between items-center border-b border-dashed border-zinc-800 pb-2">
+3518:                    <div className="flex items-center gap-2">
+3519-                      <div className={`w-2.5 h-2.5 rounded-full ${isDispatchingBatch ? 'bg-red-505  text-red-500' : 'bg-emerald-500'}`} style={{ backgroundColor: isDispatchingBatch ? '#ef4444' : '#10b981' }} />
+3520-                      <h4 className="text-xs font-black uppercase text-amber-400">Console de Transmissão batch v2</h4>
+3521-                    </div>
+3522-                    {isDispatchingBatch && (
+3523-                      <span className="text-[10px] bg-red-950 text-red-400 border border-red-800 px-2 py-0.5 rounded uppercase ">
+--
+3603-                          <div>
+3604-                            <span className="text-[9px] uppercase font-bold text-indigo-400">AGUARDANDO DISPARO ATIVO</span>
+3605-                            <h5 className="text-xs font-black text-white">{activeLead.name}</h5>
+3606-                          </div>
+3607-                          {batchCountdownSeconds > 0 ? (
+3608:                            <div className="text-xs bg-indigo-950 text-indigo-400 border border-indigo-700 px-2 py-1 rounded font-black  flex items-center gap-1.5">
+3609-                              ⏱️ {batchCountdownSeconds}s para liberação
+3610-                            </div>
+3611-                          ) : (
+3612:                            <div className="text-xs bg-emerald-950 text-emerald-400 border border-emerald-700 px-2 py-1 rounded font-black  flex items-center gap-1.5">
+3613-                              🔥 CANAL PRONTO
+3614-                            </div>
+3615-                          )}
+3616-                        </div>
+3617-
+--
+3621-
+3622-                        <div className="flex gap-2">
+3623-                          <button
+3624-                            type="button"
+3625-                            onClick={() => executeBatchItemDispatch(activeBatchIndex)}
+3626:                            className={`flex-1 py-3 text-center text-xs font-black uppercase rounded-lg border-2 tracking-wider flex items-center justify-center gap-2 transition active:scale-95 ${
+3627-                              batchCountdownSeconds > 0
+3628-                                ? 'bg-amber-500 hover:bg-amber-600 border-amber-400 text-zinc-950 shadow-[0_0_15px_rgba(245,158,11,0.3)]'
+3629-                                : 'bg-emerald-500 hover:bg-emerald-600 border-emerald-400 text-white shadow-[0_0_20px_rgba(16,185,129,0.5)] '
+3630-                            }`}
+3631-                          >
+--
+3670-                  <div className="flex justify-end gap-2 pt-1">
+3671-                    {isDispatchingBatch ? (
+3672-                      <button
+3673-                        type="button"
+3674-                        onClick={stopBatchDispatch}
+3675:                        className="px-5 py-3 bg-rose-600 hover:bg-rose-700 text-white font-black uppercase text-xs rounded-xl tracking-wide border-2 border-white shadow-[2px_2px_0px_0px_rgba(255,255,255,0.15)] flex items-center gap-1.5 active:translate-y-0.5 transition"
+3676-                      >
+3677-                        <X className="w-4 h-4" />
+3678-                        <span>Parar Disparo</span>
+3679-                      </button>
+3680-                    ) : (
+3681-                      <button
+3682-                        type="button"
+3683-                        onClick={startBatchDispatch}
+3684:                        className="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-xs rounded-xl tracking-wide border-2 border-white shadow-[2px_2px_0px_0px_rgba(255,255,255,0.15)] flex items-center gap-1.5 active:translate-y-0.5 transition"
+3685-                      >
+3686-                        <Send className="w-4 h-4" />
+3687-                        <span>Iniciar Transmissão em Lote</span>
+3688-                      </button>
+3689-                    )}
+--
+3692-              )}
+3693-
+3694-            </div>
+3695-
+3696-            {/* Modal Footer */}
+3697:            <div className="bg-zinc-50 p-5 flex items-center justify-between border-t-2">
+3698-              <span className="text-[10px] text-zinc-500 font-bold uppercase font-sans">
+3699-                Pro V2.0. Digital Campaign Dashboard
+3700-              </span>
+3701-              <button
+3702-                onClick={() => setShowCampaignModal(false)}
+--
+3879-            proceed();
+3880-          }
+3881-        };
+3882-
+3883-        return (
+3884:          <div className="fixed inset-0 z-[110] overflow-y-auto bg-zinc-950/70  flex items-center justify-center p-4 ">
+3885-            <div className="bg-white border-4 border-zinc-950 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] text-zinc-800">
+3886-              {/* Header */}
+3887:              <div className="bg-emerald-600 text-white p-5 flex items-center justify-between border-b-4 border-zinc-950">
+3888:                <div className="flex items-center gap-3">
+3889-                  <div className="p-2.5 bg-zinc-950 rounded-lg text-emerald-400 font-black">
+3890-                    <Wand2 className="w-5 h-5 text-emerald-400" />
+3891-                  </div>
+3892-                  <div>
+3893-                    <h3 className="text-sm font-black uppercase tracking-wider font-mono">
+--
+3928-                  </div>
+3929-                </div>
+3930-
+3931-                {/* Analysis description */}
+3932-                <div className="p-4 bg-zinc-100 border-2 border-zinc-950 rounded-xl space-y-1.5 text-xs text-zinc-700 font-medium">
+3933:                  <h4 className="font-black text-zinc-900 uppercase flex items-center gap-1.5 font-mono">
+3934-                    <Sparkles className="w-4 h-4 text-emerald-600 " />
+3935-                    Como funciona esta verificação inteligente?
+3936-                  </h4>
+3937-                  <p>
+3938-                    Vários leads importados de planilhas possuíam telefones fictícios como <strong className="font-mono text-rose-700 font-bold">(11) 99999-9999</strong>, enquanto o celular real ficava misturado junto à frase do e-mail.
+--
+3990-                              }}
+3991-                              className="mt-1 w-4 h-4 rounded border-zinc-950 text-emerald-600 focus:ring-emerald-500 cursor-pointer text-emerald-600 font-bold"
+3992-                            />
+3993-                            <div className="flex-1 space-y-2 text-xs">
+3994-                              <div className="flex flex-col gap-1 border-b pb-1">
+3995:                                <div className="flex items-center justify-between">
+3996-                                  <span className="font-black text-zinc-950 text-sm tracking-tight">{lead.name}</span>
+3997-                                  <span className="text-[9px] uppercase font-mono font-black bg-zinc-100 border px-1.5 py-0.5 rounded text-zinc-600">
+3998-                                    ID: {lead.id.slice(0, 8)}...
+3999-                                  </span>
+4000-                                </div>
+--
+4044-                <div className="p-5 border-4 border-zinc-950 bg-amber-50/20 rounded-2xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+4045-                  <div className="space-y-1.5 flex-1">
+4046-                    <span className="text-[9.5px] font-mono font-black text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded border border-amber-300 inline-block uppercase select-none">
+4047-                      Saneamento Temporal Ágil (30 Dias)
+4048-                    </span>
+4049:                    <h4 className="text-sm font-black uppercase text-zinc-950 font-mono tracking-tight flex items-center gap-1.5 mt-1">
+4050-                      <span>⏱️</span> Auto-Arquivamento de Leads Inativos
+4051-                    </h4>
+4052-                    <p className="text-[11.5px] text-zinc-650 leading-relaxed font-semibold">
+4053-                      Agilize a sua esteira de vendas! Esta inteligência local varre todos os seus contatos ativos e localiza aqueles sem interação ou contatos em <strong className="text-zinc-900 font-extrabold">mais de 30 dias</strong>.
+4054-                    </p>
+--
+4075-                </div>
+4076-
+4077-                {/* Reset Entire Table Option */}
+4078-                <div className="p-4 border-2 border-red-300 bg-red-50/40 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+4079-                  <div className="space-y-1">
+4080:                    <h4 className="text-xs font-black uppercase text-red-950 font-mono flex items-center gap-1">
+4081-                      <AlertTriangle className="w-4 h-4 text-red-650 shrink-0" />
+4082-                      Zerar Funil / Limpeza Geral de Leads (Wipeout)
+4083-                    </h4>
+4084-                    <p className="text-[11px] text-zinc-650 font-medium">
+4085-                      Exclua integralmente todos os contatos cadastrados para recomeçar com planilhas limpas. Esta ação é definitiva e sincronizada!
+--
+4095-                </div>
+4096-
+4097-              </div>
+4098-
+4099-              {/* Footer */}
+4100:              <div className="bg-zinc-50 p-5 flex items-center justify-between border-t-2-dashed">
+4101-                <span className="text-[10px] text-zinc-500 font-bold uppercase font-sans">
+4102-                  Sincronizador Inteligente CRM © 2026
+4103-                </span>
+4104-                <div className="flex gap-2">
+4105-                  <button
+--
+4110-                </button>
+4111-                  {candidates.length > 0 && (
+4112-                    <button
+4113-                      disabled={totalSelected === 0}
+4114-                      onClick={handleApplyBatchCorrections}
+4115:                      className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white border-2 border-zinc-950 font-black uppercase text-xs rounded-xl shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] transition flex items-center gap-1.5"
+4116-                    >
+4117-                      <Sparkles className="w-4 h-4 " />
+4118-                      <span>Aplicar Correções Inteligentes ({totalSelected})</span>
+4119-                    </button>
+4120-                  )}
+--
+4125-        );
+4126-      })()}
+4127-
+4128-      {/* GEMINI-POWERED Campaign active planner modal */}
+4129-      {showCampaignPlanner && (
+4130:        <div className="fixed inset-0 z-50 overflow-y-auto bg-zinc-950/70  flex items-center justify-center p-4 ">
+4131-          <div className="bg-white border-4 border-zinc-950 rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] text-zinc-850">
+4132-            {/* Header */}
+4133:            <div className="bg-zinc-900 border-b-4 border-zinc-950 p-5 flex items-center justify-between text-white">
+4134:              <div className="flex items-center gap-3">
+4135-                <div className="p-2.5 bg-emerald-500 rounded-2xl text-zinc-950">
+4136-                  <Sparkles className="w-5 h-5 " />
+4137-                </div>
+4138-                <div>
+4139-                    <h3 className="text-sm font-black uppercase tracking-wider font-mono">
+--
+4157-
+4158-            {/* Modal Body */}
+4159-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+4160-              {/* Dynamic Metrics Section */}
+4161-              <div className="bg-emerald-50/50 border-2 border-emerald-500 p-5 rounded-2xl space-y-4 shadow-[4px_4px_0px_0px_rgba(16,185,129,0.1)] text-zinc-800">
+4162:                <div className="flex items-center gap-2">
+4163-                  <span className="text-[10px] font-mono font-black uppercase tracking-wider text-emerald-850 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300">
+4164-                    Calculadora Matemática de Atividades
+4165-                  </span>
+4166-                </div>
+4167-                <h4 className="text-sm font-black uppercase tracking-tight text-emerald-950 font-mono">
+--
+4191-                    <p className="text-[9px] text-indigo-550 font-black font-mono">Taxa Meta: 2%</p>
+4192-                  </div>
+4193-                </div>
+4194-
+4195-                {/* Estimate Profit */}
+4196:                <div className="p-3 bg-zinc-900 border-2 border-zinc-950 rounded-xl flex items-center justify-between text-white font-mono text-xs flex-wrap gap-2">
+4197:                  <div className="flex items-center gap-1.5">
+4198-                    <Zap className="w-4 h-4 text-amber-400" />
+4199-                    <span className="font-bold">Lucro de Comissão Estimado:</span>
+4200-                  </div>
+4201-                  <span className="text-emerald-400 font-black text-sm">
+4202-                    R$ {Math.round((plannerLeadCount * 0.02) * plannerAverageValue * 0.03).toLocaleString('pt-BR')}
+--
+4321-                      <p className="text-zinc-500 text-xs leading-relaxed font-semibold">
+4322-                        Gostaria que o sistema organize e lance automaticamente na sua agenda do CRM as 5 macro-etapas recomendadas de engajamento para este lote de leads?
+4323-                      </p>
+4324-
+4325-                      <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-200 text-[11px] space-y-1.5 font-mono text-zinc-650">
+4326:                        <p className="flex items-center gap-1">⏱️ <span className="font-extrabold text-zinc-800">D1:</span> Abordagem WhatsApp</p>
+4327:                        <p className="flex items-center gap-1">📞 <span className="font-extrabold text-zinc-800">D2:</span> Ligação Perfil</p>
+4328:                        <p className="flex items-center gap-1">📊 <span className="font-extrabold text-zinc-800">D3:</span> Simulação Caixa</p>
+4329:                        <p className="flex items-center gap-1">🏬 <span className="font-extrabold text-zinc-800">D5:</span> Fornecer Books</p>
+4330:                        <p className="flex items-center gap-1">🤝 <span className="font-extrabold text-zinc-800">D7:</span> Visitas Stand</p>
+4331-                      </div>
+4332-                    </div>
+4333-
+4334-                    <div className="pt-3">
+4335-                      {schedulingProgress === 'idle' && (
+--
+4362-                </div>
+4363-              )}
+4364-            </div>
+4365-
+4366-            {/* Modal Footer */}
+4367:            <div className="bg-zinc-50 p-4 border-t-2 border-zinc-100 flex items-center justify-between font-mono text-[10px] text-zinc-500 font-bold uppercase">
+4368-              <span>Sincronizador CRM</span>
+4369-              <button
+4370-                onClick={() => {
+4371-                  setShowCampaignPlanner(false);
+4372-                  setSchedulingProgress('idle');

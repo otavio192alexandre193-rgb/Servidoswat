@@ -271,7 +271,7 @@ export default function KidsTab({ awardXP, accSettings = INITIAL_ACCESSIBILITY_S
         <div className="absolute right-4 bottom-2 text-9xl text-white/5 font-black font-mono select-none pointer-events-none">ROI</div>
         <div className="relative z-10 max-w-3xl space-y-4">
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-600 border border-indigo-400 text-white rounded-full text-[10px] font-black uppercase font-mono tracking-widest">
-            <TrendingUp className="w-4 h-4 shrink-0 animate-pulse text-cyan-400" />
+            <TrendingUp className="w-4 h-4 shrink-0  text-cyan-400" />
             Acelerador de Alavancagem & Fortunas
           </div>
           <h2 className="text-2xl md:text-3xl font-black font-sans uppercase italic tracking-tighter leading-none text-white">
@@ -293,7 +293,7 @@ export default function KidsTab({ awardXP, accSettings = INITIAL_ACCESSIBILITY_S
         <div className="bg-white border-4 border-zinc-950 rounded-3xl p-6 shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] flex flex-col justify-between space-y-5">
           <div className="space-y-1.5 text-left border-b border-zinc-200 pb-3">
             <h3 className="text-base font-black text-zinc-900 uppercase tracking-tight flex items-center gap-2">
-              <PiggyBank className="w-5 h-5 text-indigo-600 animate-bounce" />
+              <PiggyBank className="w-5 h-5 text-indigo-600 " />
               Simulador de Juros Compostos Reais (1% ao Mês) 🪙
             </h3>
             <p className="text-xs text-zinc-500 font-sans">
@@ -370,7 +370,7 @@ export default function KidsTab({ awardXP, accSettings = INITIAL_ACCESSIBILITY_S
 
           <div className="bg-zinc-900 text-zinc-300 border-2 border-zinc-950 p-3.5 rounded-2xl space-y-1.5 text-xs font-sans text-left">
             <div className="flex items-center gap-1.5 text-yellow-300 font-mono text-[9px] font-extrabold uppercase tracking-widest">
-              <Zap className="w-3.5 h-3.5 text-yellow-300 animate-pulse" />
+              <Zap className="w-3.5 h-3.5 text-yellow-300 " />
               <span>Por que 1% Juros Real?</span>
             </div>
             <p className="text-[10px] leading-relaxed">
@@ -398,7 +398,7 @@ export default function KidsTab({ awardXP, accSettings = INITIAL_ACCESSIBILITY_S
                 <div
                   key={tool.id}
                   onClick={() => toggleTool(tool.id)}
-                  className={`border-2 rounded-2xl p-3.5 cursor-pointer text-left transition-all relative flex flex-col justify-between ${
+                  className={`border-2 rounded-2xl p-3.5 cursor-pointer text-left transition-colors relative flex flex-col justify-between ${
                     active 
                       ? 'bg-indigo-50/50 border-indigo-600 shadow-[2.5px_2.5px_0px_0px_rgba(79,70,229,1)]' 
                       : 'bg-white border-zinc-350 hover:bg-zinc-50'
@@ -607,7 +607,7 @@ export default function KidsTab({ awardXP, accSettings = INITIAL_ACCESSIBILITY_S
                           type="button"
                           onClick={() => handleSelectAnswer(idx)}
                           disabled={submitted}
-                          className={`w-full text-left p-3 text-[11px] rounded-xl border-2 transition-all font-sans relative ${
+                          className={`w-full text-left p-3 text-[11px] rounded-xl border-2 transition-colors font-sans relative ${
                             submitted
                               ? idx === quizQuestions[quizIndex].correct
                                 ? 'bg-emerald-900/40 border-emerald-500 text-emerald-250 font-black'
@@ -668,7 +668,7 @@ export default function KidsTab({ awardXP, accSettings = INITIAL_ACCESSIBILITY_S
                 </div>
               ) : (
                 <div className="py-6 text-center space-y-4">
-                  <div className="w-16 h-16 bg-indigo-950 border-2 border-indigo-500 rounded-full flex items-center justify-center text-yellow-300 font-black text-2xl mx-auto shadow-lg animate-pulse">
+                  <div className="w-16 h-16 bg-indigo-950 border-2 border-indigo-500 rounded-full flex items-center justify-center text-yellow-300 font-black text-2xl mx-auto shadow-lg ">
                     🏆
                   </div>
                   <div className="space-y-1">
@@ -699,7 +699,7 @@ export default function KidsTab({ awardXP, accSettings = INITIAL_ACCESSIBILITY_S
       <div className="border-4 border-zinc-950 bg-white rounded-3xl p-6 shadow-[6px_6px_0px_0px_rgba(24,24,27,1)] text-left animate-fadeIn">
         <div className="border-b border-zinc-200 pb-3 mb-6">
           <span className="text-[10px] uppercase font-mono font-black text-emerald-600 bg-emerald-50 px-2.5 py-1 border border-emerald-300 rounded-full tracking-widest inline-flex items-center gap-1">
-            <Zap className="w-3.5 h-3.5 animate-pulse text-amber-500" />
+            <Zap className="w-3.5 h-3.5  text-amber-500" />
             <span>Alavancagem de Lucro Real de Vendas</span>
           </span>
           <h3 className="text-lg font-black text-zinc-900 uppercase italic mt-1.5 flex items-center gap-2">
@@ -802,7 +802,7 @@ export default function KidsTab({ awardXP, accSettings = INITIAL_ACCESSIBILITY_S
               {/* Engine A: Yield passive compounding */}
               <div className="bg-indigo-50/40 border-2 border-indigo-600 p-5 rounded-2xl flex flex-col justify-between relative shadow-[4px_4px_0px_0px_rgba(79,70,229,0.1)]">
                 <div className="absolute top-3 right-3 p-1 bg-indigo-100 rounded-lg text-indigo-700">
-                  <PiggyBank className="w-4 h-4 animate-bounce" />
+                  <PiggyBank className="w-4 h-4 " />
                 </div>
                 
                 <div className="space-y-3">
@@ -841,7 +841,7 @@ export default function KidsTab({ awardXP, accSettings = INITIAL_ACCESSIBILITY_S
               {/* Engine B: Active Marketing Multiplier */}
               <div className="bg-emerald-50/40 border-2 border-emerald-600 p-5 rounded-2xl flex flex-col justify-between relative shadow-[4px_4px_0px_0px_rgba(16,185,129,0.1)]">
                 <div className="absolute top-3 right-3 p-1 bg-emerald-100 rounded-lg text-emerald-700">
-                  <TrendingUp className="w-4 h-4 animate-pulse" />
+                  <TrendingUp className="w-4 h-4 " />
                 </div>
 
                 <div className="space-y-3">

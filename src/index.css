@@ -148,6 +148,13 @@
   scrollbar-color: #52525b transparent;
 }
 
+.custom-scrollbar {
+  scrollbar-width: none;
+}
+.custom-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* FORÇA TEMA ESCURO NO FUNIL (KANBAN) E TABELA (LEADLIST) */
 .dark, [data-palette] {
   color-scheme: dark;

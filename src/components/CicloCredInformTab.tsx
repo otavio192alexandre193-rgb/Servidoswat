@@ -179,7 +179,7 @@ export default function CicloCredInformTab({
               🌐 Site de Captação Conectado
             </span>
             <h1 className="text-xl md:text-2xl font-black uppercase italic tracking-tight text-white mt-1.5 flex items-center gap-2">
-              <Globe className="w-6 h-6 text-indigo-400 animate-spin [animation-duration:12s]" />
+              <Globe className="w-6 h-6 text-indigo-400  [animation-duration:12s]" />
               Portal Público de Captação
             </h1>
             <p className="text-xs text-zinc-300 font-sans mt-0.5 max-w-2xl leading-normal">
@@ -245,7 +245,7 @@ export default function CicloCredInformTab({
               <div className="flex gap-3">
                 <a 
                   href="#estoque" 
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-[10px] rounded-lg tracking-wider transition-all"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-[10px] rounded-lg tracking-wider transition-colors"
                 >
                   🚀 Ver Empreendimentos
                 </a>
@@ -389,7 +389,7 @@ export default function CicloCredInformTab({
               {properties.filter(p => p.status === 'disponivel').slice(0, 6).map((item) => (
                 <div 
                   key={item.id} 
-                  className="bg-white border-2 border-zinc-350 rounded-2xl overflow-hidden flex flex-col justify-between hover:shadow-lg transition-all"
+                  className="bg-white border-2 border-zinc-350 rounded-2xl overflow-hidden flex flex-col justify-between hover:shadow-lg transition-colors"
                 >
                   <div className="relative h-44 bg-zinc-200">
                     <img 
@@ -443,7 +443,7 @@ export default function CicloCredInformTab({
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {posts.map((post) => (
-                <div key={post.id} className="p-5 border border-zinc-200 rounded-2xl bg-zinc-50/50 space-y-2 flex flex-col justify-between hover:border-zinc-400 transition-all">
+                <div key={post.id} className="p-5 border border-zinc-200 rounded-2xl bg-zinc-50/50 space-y-2 flex flex-col justify-between hover:border-zinc-400 transition-colors">
                   <div className="space-y-1">
                     <div className="flex justify-between items-center text-[9px] font-mono font-black uppercase text-indigo-600">
                       <span>{post.category}</span>
@@ -471,7 +471,7 @@ export default function CicloCredInformTab({
 
       {/* POPUP MODAL FOR SOLICITING SIMULATION ON A SPECIFIC PROPERTY CARD */}
       {selectedPropertyForInbound && (
-        <div className="fixed inset-0 z-50 bg-zinc-950/70 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+        <div className="fixed inset-0 z-50 bg-zinc-950/70  flex items-center justify-center p-4 animate-fadeIn">
           <div className="bg-white border-4 border-zinc-950 rounded-2xl max-w-md w-full overflow-hidden flex flex-col shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] text-zinc-800 animate-scaleIn">
             
             {/* Modal Header */}

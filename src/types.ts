@@ -48,6 +48,7 @@ export interface Lead {
   objection?: string; // Objeção (para funil Carteira)
   notes: string;
   origin: string;
+  qualificacao?: string;
   createdAt: string;
   lastContactAt?: string;
   lastInteractionAt?: string;
@@ -74,6 +75,57 @@ export interface Lead {
   unitTypeMatters?: 'sim' | 'nao'; // Tipo de unidade importa?
   deliveryMatters?: 'sim' | 'nao'; // Tempo de entrega importa?
   firstImpression?: string; // Primeira impressão / Observação
+
+  // Ficha Cadastral Fields - Pessoal e Qualificação
+  cpfOrRg?: string;
+  age?: number | string;
+  dependents?: number | string;
+  program?: string;
+  mcmvDiscount?: number;
+  downPaymentAvailable?: number;
+  ownsProperty?: 'sim' | 'nao';
+  approvedStatus?: string;
+  address?: string;
+  profession?: string;
+  restrictions?: string;
+
+  // Parâmetros e Preferência
+  desiredSqm?: number | string;
+  bedrooms?: number | string;
+  suites?: number | string;
+  balcony?: 'sim' | 'nao';
+  parkingSpots?: number | string;
+  nearestStation?: string;
+  unitTypology?: string;
+  nextSteps?: string;
+
+  // Financeiro e Arquivamento
+  propertyValue?: number;
+  financedValue?: number;
+  installmentValue?: number;
+  downPaymentValue?: number;
+  facilitatedInstallment?: number;
+  valorAto?: number;
+  valorAnual?: number;
+  valorChaves?: number;
+  tempoObra?: number;
+
+  // Documentos
+  documentsChecklist?: {
+    photoId?: boolean;
+    dependentCert?: boolean;
+    marriageCert?: boolean;
+    incomeProof?: boolean;
+    addressProof?: boolean;
+    irRegistry?: boolean;
+    interactionReport?: boolean;
+    registrationForm?: boolean;
+    imagesBook?: boolean;
+    salesTable?: boolean;
+    assessment?: boolean;
+    simulation?: boolean;
+    proposal?: boolean;
+  };
 
   // HIGH FIDELITY SPREADSHEET FORMULAE ATTRIBUTES
   cpf?: string;
@@ -143,7 +195,7 @@ export interface Appointment {
   time: string; // HH:MM
   description: string;
   status: 'agendado' | 'realizado' | 'cancelado';
-  type: 'reuniao' | 'telefone' | 'proposta' | 'outro';
+  type: 'reuniao' | 'telefone' | 'proposta' | 'whatsapp' | 'visita' | 'presencial' | 'outro';
   reminderMinutes?: number; // e.g. 15, 60, 1440
   reminderSent?: boolean;
 }

@@ -99,7 +99,7 @@ export default function Sidebar({
             setActiveTab('leads');
             triggerSensoryFeedback('click', accSettings);
           }}
-          className="flex items-center gap-2 cursor-pointer hover:opacity-80 active:scale-95 transition-all select-none"
+          className="flex items-center gap-2 cursor-pointer hover:opacity-80 active:scale-95 transition-colors select-none"
           title="Ir para a página inicial (Leads)"
         >
           <Briefcase className="w-5.5 h-5.5 text-indigo-400" />
@@ -125,7 +125,7 @@ export default function Sidebar({
                 triggerSensoryFeedback('click', accSettings);
                 setActiveTab(item.id);
               }}
-              className={`w-full flex items-center justify-between px-3.5 py-3 rounded-lg text-sm font-bold transition-all ${
+              className={`w-full flex items-center justify-between px-3.5 py-3 rounded-lg text-sm font-bold transition-colors ${
                 isActive
                   ? 'bg-indigo-600 text-white border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] font-extrabold translate-y-[-1px]'
                   : 'text-zinc-400 hover:text-white hover:bg-zinc-800/80 hover:translate-x-1'
@@ -159,7 +159,7 @@ export default function Sidebar({
                   onToggleForceLocalMode(!forceLocalStorageMode);
                 }
               }}
-              className={`w-full flex items-center justify-center gap-2 p-2.5 rounded-lg border text-[9.5px] font-mono font-black uppercase tracking-wider transition-all duration-150 cursor-pointer ${
+              className={`w-full flex items-center justify-center gap-2 p-2.5 rounded-lg border text-[9.5px] font-mono font-black uppercase tracking-wider transition-colors cursor-pointer ${
                 forceLocalStorageMode
                   ? 'bg-amber-500/15 text-amber-400 border-amber-600/50 hover:bg-amber-500/25'
                   : 'bg-emerald-500/10 text-emerald-400 border-emerald-950 hover:bg-emerald-500/20'
@@ -171,7 +171,7 @@ export default function Sidebar({
               }
             >
               <span className={`w-1.5 h-1.5 rounded-full ${
-                forceLocalStorageMode ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'
+                forceLocalStorageMode ? 'bg-amber-400 ' : 'bg-emerald-400'
               }`} />
               <span>
                 {forceLocalStorageMode ? '📁 Usar Local' : '☁️ Usar Firestore'}
@@ -186,7 +186,7 @@ export default function Sidebar({
               </div>
               <div className="w-full bg-zinc-850 h-1.5 rounded-full mt-1.5 overflow-hidden border border-zinc-900">
                 <div 
-                  className="bg-indigo-500 h-full rounded-full transition-all duration-500"
+                  className="bg-indigo-500 h-full rounded-full transition-colors"
                   style={{ width: `${Math.min(100, (userXP / 5000) * 100)}%` }}
                 />
               </div>
@@ -199,7 +199,7 @@ export default function Sidebar({
                   setShowUserMenu(false);
                   onLogout();
                 }}
-                className="w-full flex items-center gap-2 text-rose-400 hover:text-white hover:bg-rose-950/40 p-2.5 rounded-lg transition-all border border-transparent hover:border-rose-900/30 font-mono font-black uppercase text-[10px]"
+                className="w-full flex items-center gap-2 text-rose-400 hover:text-white hover:bg-rose-950/40 p-2.5 rounded-lg transition-colors border border-transparent hover:border-rose-900/30 font-mono font-black uppercase text-[10px]"
               >
                 <LogOut className="w-3.5 h-3.5 shrink-0" />
                 <span>Sair do Sistema</span>
@@ -233,7 +233,7 @@ export default function Sidebar({
               <p className="text-[10px] text-zinc-400 font-bold font-mono truncate">{userEmail}</p>
               {/* Compact cloud firestore connection indicator */}
               <div className="mt-1 flex items-center gap-1 text-[8.5px] font-mono uppercase font-black tracking-wider text-zinc-400 select-none">
-                <span className={`w-1 h-1 rounded-full ${forceLocalStorageMode ? 'bg-amber-400' : 'bg-emerald-450 animate-pulse'}`} />
+                <span className={`w-1 h-1 rounded-full ${forceLocalStorageMode ? 'bg-amber-400' : 'bg-emerald-450 '}`} />
                 <span>{forceLocalStorageMode ? '📁 OFF-LINE' : '☁️ FIRESTORE'}</span>
               </div>
             </div>

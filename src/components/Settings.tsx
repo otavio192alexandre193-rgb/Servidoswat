@@ -96,9 +96,9 @@ const SettingControl = ({ setting, value, onChange }: { setting: SettingDefiniti
           <div className="flex items-center">
             <button
               onClick={() => onChange(!currentVal)}
-              className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${currentVal ? 'bg-indigo-600' : 'bg-gray-200'}`}
+              className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors  ease-in-out focus:outline-none ${currentVal ? 'bg-indigo-600' : 'bg-gray-200'}`}
             >
-              <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${currentVal ? 'translate-x-5' : 'translate-x-0'}`} />
+              <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition  ease-in-out ${currentVal ? 'translate-x-5' : 'translate-x-0'}`} />
             </button>
           </div>
         ) : setting.type === 'enum' ? (
@@ -185,7 +185,7 @@ export default function Settings(props: SettingsProps) {
               placeholder="BUSCAR PARÂMETRO..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-3 py-3 bg-zinc-950 border-2 border-zinc-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest focus:ring-2 focus:ring-indigo-500/50 outline-none transition-all placeholder:text-zinc-600"
+              className="w-full pl-10 pr-3 py-3 bg-zinc-950 border-2 border-zinc-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest focus:ring-2 focus:ring-indigo-500/50 outline-none transition-colors placeholder:text-zinc-600"
             />
           </div>
         </div>
@@ -198,7 +198,7 @@ export default function Settings(props: SettingsProps) {
                 setActiveCategory(cat.id);
                 setSearchQuery('');
               }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border-2 ${
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors border-2 ${
                 activeCategory === cat.id && !searchQuery
                   ? 'bg-indigo-600 border-zinc-950 text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
                   : 'border-transparent text-zinc-400 hover:text-white hover:bg-zinc-800'
@@ -235,14 +235,14 @@ export default function Settings(props: SettingsProps) {
                 {searchQuery ? `Resultados: "${searchQuery}"` : activeCategoryLabel}
               </h2>
               <div className="flex items-center gap-2 mt-0.5">
-                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse border border-zinc-950" />
+                <span className="w-2 h-2 rounded-full bg-green-500  border border-zinc-950" />
                 <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest">Núcleo Central / v4.2</p>
               </div>
             </div>
           </div>
           <button
             onClick={() => applyChanges?.()}
-            className="px-6 py-3 bg-zinc-950 text-white rounded-xl text-[10px] font-black uppercase hover:bg-indigo-600 transition-all active:scale-95 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] border-2 border-zinc-950 flex items-center gap-2 active:translate-y-0.5 active:shadow-none"
+            className="px-6 py-3 bg-zinc-950 text-white rounded-xl text-[10px] font-black uppercase hover:bg-indigo-600 transition-colors active:scale-95 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] border-2 border-zinc-950 flex items-center gap-2 active:translate-y-0.5 active:shadow-none"
           >
             <Save className="w-3.5 h-3.5" />
             <span>Sincronizar Kernels</span>
@@ -260,7 +260,7 @@ export default function Settings(props: SettingsProps) {
                       <button
                         key={t}
                         onClick={() => props.setTheme(t)}
-                        className={`p-4 rounded-xl border-4 flex flex-col items-center gap-2 transition-all ${props.theme === t ? 'bg-indigo-600 border-zinc-950 text-white translate-y-[-2px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]' : (props.theme === 'claro' ? 'bg-zinc-50 border-zinc-100 text-zinc-400 hover:border-zinc-300' : 'bg-zinc-800 border-zinc-700 text-zinc-500 hover:border-zinc-500')}`}
+                        className={`p-4 rounded-xl border-4 flex flex-col items-center gap-2 transition-colors ${props.theme === t ? 'bg-indigo-600 border-zinc-950 text-white translate-y-[-2px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]' : (props.theme === 'claro' ? 'bg-zinc-50 border-zinc-100 text-zinc-400 hover:border-zinc-300' : 'bg-zinc-800 border-zinc-700 text-zinc-500 hover:border-zinc-500')}`}
                       >
                         <span className="text-2xl">{t === 'claro' ? '☀️' : t === 'escuro' ? '🌙' : '🌌'}</span>
                         <span className="text-[10px] font-black uppercase">{t}</span>
@@ -277,7 +277,7 @@ export default function Settings(props: SettingsProps) {
                         <button
                           key={p}
                           onClick={() => props.setGalaxyPreset(p)}
-                          className={`px-3 py-2 rounded-lg border-2 text-[9px] font-bold uppercase transition-all ${props.galaxyPreset === p ? 'bg-indigo-500 border-zinc-950 text-white' : 'bg-zinc-800 border-zinc-700 text-zinc-400'}`}
+                          className={`px-3 py-2 rounded-lg border-2 text-[9px] font-bold uppercase transition-colors ${props.galaxyPreset === p ? 'bg-indigo-500 border-zinc-950 text-white' : 'bg-zinc-800 border-zinc-700 text-zinc-400'}`}
                         >
                           {p}
                         </button>
@@ -292,7 +292,7 @@ export default function Settings(props: SettingsProps) {
               filteredSettings.map(s => {
                 const contextValue = settings?.config?.[s.id]?.value;
                 return (
-                  <div key={s.id} className="bg-white p-7 rounded-2xl border-2 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-2px] transition-all duration-200 group">
+                  <div key={s.id} className="bg-white p-7 rounded-2xl border-2 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-2px] transition-colors group">
                     <SettingControl
                       setting={s}
                       value={contextValue}
@@ -314,7 +314,7 @@ export default function Settings(props: SettingsProps) {
             {(activeCategory === 'dados-logs' || activeCategory === 'dev') && !searchQuery && (
               <div className="mt-8 p-6 bg-rose-50 dark:bg-zinc-900 rounded-2xl border-4 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] space-y-4">
                 <div className="flex items-center gap-3 text-rose-600 dark:text-rose-400">
-                  <AlertTriangle className="h-6 w-6 shrink-0 animate-bounce" />
+                  <AlertTriangle className="h-6 w-6 shrink-0 " />
                   <div>
                     <h4 className="font-black uppercase text-sm tracking-tight italic">Limpeza Crítica de Base & Expurgo Global</h4>
                     <p className="text-[10px] text-zinc-500 font-bold uppercase">Ações permanentes e irreversíveis de higienização de dados</p>
@@ -340,7 +340,7 @@ export default function Settings(props: SettingsProps) {
                           "danger"
                         );
                       }}
-                      className="w-full py-2 bg-rose-600 hover:bg-rose-700 text-white border-2 border-zinc-950 rounded-lg text-[9px] font-black uppercase tracking-wider shadow-[2px_2px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer"
+                      className="w-full py-2 bg-rose-600 hover:bg-rose-700 text-white border-2 border-zinc-950 rounded-lg text-[9px] font-black uppercase tracking-wider shadow-[2px_2px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-none transition-colors cursor-pointer"
                     >
                       Excluir Leads Definitivamente
                     </button>
@@ -360,7 +360,7 @@ export default function Settings(props: SettingsProps) {
                           "danger"
                         );
                       }}
-                      className="w-full py-2 bg-amber-500 hover:bg-amber-600 text-zinc-950 border-2 border-zinc-950 rounded-lg text-[9px] font-black uppercase tracking-wider shadow-[2px_2px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer"
+                      className="w-full py-2 bg-amber-500 hover:bg-amber-600 text-zinc-950 border-2 border-zinc-950 rounded-lg text-[9px] font-black uppercase tracking-wider shadow-[2px_2px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-none transition-colors cursor-pointer"
                     >
                       Excluir Estoque Definitivamente
                     </button>
@@ -370,7 +370,7 @@ export default function Settings(props: SettingsProps) {
             )}
 
             {activeCategory === 'dev' && !searchQuery && (
-              <div className="mt-12 p-8 bg-zinc-900 rounded-2xl border-l-4 border-indigo-500 space-y-4 shadow-2xl relative overflow-hidden group">
+              <div className="mt-12 p-8 bg-zinc-900 rounded-2xl border-l-4 border-indigo-500 space-y-4 shadow-lg relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:rotate-12 transition-transform">
                   <Cpu className="w-24 h-24 text-white" />
                 </div>
@@ -395,7 +395,7 @@ export default function Settings(props: SettingsProps) {
           </div>
         </div>
 
-        <footer className="px-6 py-4 border-t border-zinc-100 bg-white/80 backdrop-blur-md flex items-center justify-between">
+        <footer className="px-6 py-4 border-t border-zinc-100 bg-white/80  flex items-center justify-between">
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-green-500" />

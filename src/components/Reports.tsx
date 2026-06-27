@@ -23,6 +23,19 @@ import {
   ChevronRight,
   Sparkles
 } from 'lucide-react';
+import {
+  FunnelChart,
+  Funnel,
+  LabelList,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  BarChart as RechartsBarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Legend
+} from 'recharts';
 
 interface ReportsProps {
   leads: Lead[];
@@ -111,7 +124,7 @@ export default function Reports({
     const uniqueId = `neon-glow-${label.replace(/[^a-zA-Z]/g, '')}`;
 
     return (
-      <div className="flex flex-col items-center justify-center p-5 bg-zinc-950 text-white border-4 border-zinc-950 rounded-3xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] hover:shadow-[4px_4px_0px_0px_rgba(99,102,241,1)] hover:translate-y-[-2px] transition-all relative overflow-hidden h-48 w-full select-none">
+      <div className="flex flex-col items-center justify-center p-5 bg-zinc-950 text-white border-4 border-zinc-950 rounded-3xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] hover:shadow-[4px_4px_0px_0px_rgba(99,102,241,1)] hover:translate-y-[-2px] transition-colors relative overflow-hidden h-48 w-full select-none">
         {/* Subtle holographic grid lines background */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#1f2937_1px,transparent_1px),linear-gradient(to_bottom,#1f2937_1px,transparent_1px)] bg-[size:10px_10px] opacity-10 pointer-events-none" />
         <div className="absolute -right-3 -top-3 w-10 h-10 border border-indigo-500/10 rounded-full" />
@@ -161,7 +174,7 @@ export default function Reports({
               strokeDasharray="110"
               strokeDashoffset={110 - (110 * cleanPct / 100)}
               filter={`url(#${uniqueId})`}
-              className="transition-all duration-1000 ease-out"
+              className="transition-colors ease-out"
             />
 
             {/* 3 central guide dots */}
@@ -169,13 +182,13 @@ export default function Reports({
 
             {/* Digital Tick Indicators */}
             <circle cx="15" cy="50" r="1" fill="#ef4444" /> {/* Min */}
-            <circle cx="50" cy="15" r="1.2" fill="#6366f1" className="animate-pulse" /> {/* Mid */}
+            <circle cx="50" cy="15" r="1.2" fill="#6366f1" className="" /> {/* Mid */}
             <circle cx="85" cy="50" r="1" fill="#10b981" /> {/* Max */}
           </svg>
 
           {/* Glowing HUD Needle */}
           <div 
-            className="absolute bottom-0 left-1/2 w-[2px] h-15 bg-gradient-to-t from-zinc-500 to-indigo-400 origin-bottom transition-transform duration-1000 ease-out"
+            className="absolute bottom-0 left-1/2 w-[2px] h-15 bg-gradient-to-t from-zinc-500 to-indigo-400 origin-bottom transition-transform  ease-out"
             style={{ 
               transform: `translate(-50%, 0) rotate(${rotation}deg)`,
               boxShadow: '0 0 8px 1px rgba(129, 140, 248, 0.4)'
@@ -326,35 +339,64 @@ export default function Reports({
               </div>
 
               <div id="funnel-visualization-container" className="space-y-4 pt-4">
-                {Object.entries(statusCounts).map(([statusKey, count], idx) => {
-                  const maxCount = Math.max(...Object.values(statusCounts), 1);
-                  const colInfo = statusColors[statusKey];
-                  const label = statusLabels[statusKey];
-                  const pctOfMax = Math.round((count / maxCount) * 100);
+                {(() => {
+                  const funnelData = Object.entries(statusCounts).map(([statusKey, count]) => ({
+                    name: statusLabels[statusKey],
+                    value: count,
+                    fill: statusColors[statusKey]
+                  })).filter(item => item.value > 0).sort((a, b) => b.value - a.value);
 
                   return (
-                    <div key={statusKey} className="space-y-1.5" id={`report-funnel-${statusKey}`}>
-                      <div className="flex items-center justify-between text-xs font-bold text-zinc-800">
-                        <span className="font-extrabold">{label}</span>
-                        <span className="font-mono text-zinc-500">
-                          {count} lead{count !== 1 ? 's' : ''} ({totalLeads > 0 ? Math.round((count / totalLeads) * 100) : 0}%)
-                        </span>
-                      </div>
-                      <div className="w-full bg-zinc-100 rounded-full h-4 overflow-hidden border-2 border-zinc-950">
-                        <div
-                          className="h-full rounded-full transition-all duration-1000"
-                          style={{ 
-                            width: `${Math.max(pctOfMax, 3)}%`, 
-                            backgroundColor: colInfo,
-                            borderRightWidth: count > 0 ? '2px' : '0px',
-                            borderRightColor: '#09090b',
-                            opacity: 1 - (idx * 0.08)
-                          }}
-                        ></div>
-                      </div>
+                    <div className="h-64 w-full bg-zinc-50 rounded-2xl border-2 border-zinc-950 p-2">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <FunnelChart>
+                          <RechartsTooltip formatter={(value: number) => [`${value} leads`, 'Quantidade']} />
+                          <Funnel
+                            dataKey="value"
+                            data={funnelData}
+                            isAnimationActive
+                          >
+                            <LabelList position="right" fill="#18181b" stroke="none" dataKey="name" fontSize={11} fontWeight="bold" />
+                          </Funnel>
+                        </FunnelChart>
+                      </ResponsiveContainer>
                     </div>
                   );
-                })}
+                })()}
+
+                {/* Legacy visual backup */}
+                <div className="space-y-4 pt-4 border-t-2 border-dashed border-zinc-200">
+                  <h4 className="text-[10px] font-black uppercase text-zinc-400 font-mono tracking-wider">Detalhamento Visual Linear</h4>
+                  {Object.entries(statusCounts).map(([statusKey, count], idx) => {
+                    const maxCount = Math.max(...Object.values(statusCounts), 1);
+                    const colInfo = statusColors[statusKey];
+                    const label = statusLabels[statusKey];
+                    const pctOfMax = Math.round((count / maxCount) * 100);
+
+                    return (
+                      <div key={statusKey} className="space-y-1.5" id={`report-funnel-${statusKey}`}>
+                        <div className="flex items-center justify-between text-xs font-bold text-zinc-800">
+                          <span className="font-extrabold">{label}</span>
+                          <span className="font-mono text-zinc-500">
+                            {count} lead{count !== 1 ? 's' : ''} ({totalLeads > 0 ? Math.round((count / totalLeads) * 100) : 0}%)
+                          </span>
+                        </div>
+                        <div className="w-full bg-zinc-100 rounded-full h-4 overflow-hidden border-2 border-zinc-950">
+                          <div
+                            className="h-full rounded-full transition-colors"
+                            style={{ 
+                              width: `${Math.max(pctOfMax, 3)}%`, 
+                              backgroundColor: colInfo,
+                              borderRightWidth: count > 0 ? '2px' : '0px',
+                              borderRightColor: '#09090b',
+                              opacity: 1 - (idx * 0.08)
+                            }}
+                          ></div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
@@ -393,7 +435,7 @@ export default function Reports({
                           strokeDasharray={strokeDasharray}
                           strokeDashoffset={strokeDashoffset}
                           strokeLinecap="round"
-                          className="transition-all duration-1000"
+                          className="transition-colors"
                         />
                       );
                     });
@@ -770,7 +812,7 @@ export default function Reports({
                         </div>
                         <div className="w-full bg-zinc-200 h-3 bg-zinc-200 rounded-full overflow-hidden border border-zinc-950">
                           <div 
-                            className="bg-indigo-600 h-full rounded-full transition-all duration-1000" 
+                            className="bg-indigo-600 h-full rounded-full transition-colors" 
                             style={{ width: `${progressPct}%` }}
                           />
                         </div>

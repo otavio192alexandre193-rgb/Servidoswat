@@ -123,13 +123,13 @@ export default function LoginView({ onLoginSuccess, theme, setTheme }: LoginProp
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col justify-center items-center p-4 relative overflow-hidden transition-all duration-500 font-sans">
+    <div className="min-h-screen w-full flex flex-col justify-center items-center p-4 relative overflow-hidden transition-colors font-sans">
       
       {/* Dynamic graphic backgrounds based on theme selection */}
       {theme === 'galatico' && (
         <div className="absolute inset-0 bg-gradient-to-tr from-purple-950 via-zinc-950 to-indigo-950 z-0">
-          <div className="absolute top-1/4 left-1/5 w-64 h-64 rounded-full bg-violet-600/15 blur-3xl animate-pulse" />
-          <div className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full bg-indigo-500/10 blur-3xl animate-pulse" />
+          <div className="absolute top-1/4 left-1/5 w-64 h-64 rounded-full bg-violet-600/15 blur-3xl " />
+          <div className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full bg-indigo-500/10 blur-3xl " />
         </div>
       )}
 
@@ -168,7 +168,7 @@ export default function LoginView({ onLoginSuccess, theme, setTheme }: LoginProp
                 setTheme('claro');
                 triggerSensoryFeedback('click', mockAccSettings);
               }}
-              className={`py-1.5 px-2 rounded-lg border-2 border-zinc-950 text-center flex items-center justify-center gap-1 transition-all text-[9px] font-mono uppercase ${
+              className={`py-1.5 px-2 rounded-lg border-2 border-zinc-950 text-center flex items-center justify-center gap-1 transition-colors text-[9px] font-mono uppercase ${
                 theme === 'claro' ? 'bg-zinc-900 text-white font-black' : 'bg-white text-zinc-500'
               }`}
             >
@@ -181,7 +181,7 @@ export default function LoginView({ onLoginSuccess, theme, setTheme }: LoginProp
                 setTheme('escuro');
                 triggerSensoryFeedback('click', mockAccSettings);
               }}
-              className={`py-1.5 px-2 rounded-lg border-2 border-zinc-950 text-center flex items-center justify-center gap-1 transition-all text-[9px] font-mono uppercase ${
+              className={`py-1.5 px-2 rounded-lg border-2 border-zinc-950 text-center flex items-center justify-center gap-1 transition-colors text-[9px] font-mono uppercase ${
                 theme === 'escuro' ? 'bg-zinc-900 text-white font-black' : 'bg-white text-zinc-500'
               }`}
             >
@@ -194,7 +194,7 @@ export default function LoginView({ onLoginSuccess, theme, setTheme }: LoginProp
                 setTheme('galatico');
                 triggerSensoryFeedback('chime', mockAccSettings);
               }}
-              className={`py-1.5 px-1.5 rounded-lg border-2 border-indigo-400 text-indigo-200 text-center flex items-center justify-center gap-1 transition-all text-[9px] font-mono uppercase bg-indigo-950 px-1 py-1.5 ${
+              className={`py-1.5 px-1.5 rounded-lg border-2 border-indigo-400 text-indigo-200 text-center flex items-center justify-center gap-1 transition-colors text-[9px] font-mono uppercase bg-indigo-950 px-1 py-1.5 ${
                 theme === 'galatico' ? 'ring-2 ring-indigo-500 font-black' : 'opacity-70'
               }`}
             >
@@ -246,7 +246,7 @@ export default function LoginView({ onLoginSuccess, theme, setTheme }: LoginProp
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-4.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase font-mono tracking-wider rounded-2xl border-2 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-1px] active:translate-y-[1px] transition-all flex items-center justify-center gap-2 select-none cursor-pointer"
+            className="w-full py-4.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase font-mono tracking-wider rounded-2xl border-2 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-1px] active:translate-y-[1px] transition-colors flex items-center justify-center gap-2 select-none cursor-pointer"
           >
             <span>{isLoading ? 'Autenticando no Firebase...' : 'Entrar / Registrar com E-mail'}</span>
             <ChevronRight className="w-4 h-4" />
@@ -263,7 +263,7 @@ export default function LoginView({ onLoginSuccess, theme, setTheme }: LoginProp
           type="button"
           onClick={handleGoogleLogin}
           disabled={isLoading}
-          className="w-full py-4 bg-white hover:bg-zinc-50 text-zinc-950 text-xs font-black uppercase font-mono tracking-wider rounded-2xl border-2 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-1px] active:translate-y-[1px] transition-all flex items-center justify-center gap-2 select-none cursor-pointer"
+          className="w-full py-4 bg-white hover:bg-zinc-50 text-zinc-950 text-xs font-black uppercase font-mono tracking-wider rounded-2xl border-2 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-1px] active:translate-y-[1px] transition-colors flex items-center justify-center gap-2 select-none cursor-pointer"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24">
             <path

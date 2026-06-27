@@ -844,13 +844,13 @@ export default function GeminiServerTab({
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 bg-indigo-500/15 border border-indigo-400 rounded-xl flex items-center justify-center text-indigo-400 shrink-0">
-              <Sparkles className="w-6 h-6 animate-pulse" />
+              <Sparkles className="w-6 h-6 " />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-xl font-black uppercase text-white font-mono">Motor Inteligente de Vendas</h2>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold font-mono bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 " />
                   SERVIDOR ONLINE
                 </span>
               </div>
@@ -864,7 +864,7 @@ export default function GeminiServerTab({
             disabled={isLoadingConfig}
             className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-white font-mono text-xs font-black uppercase tracking-wider py-2.5 px-4 rounded-xl border-2 border-zinc-950 transition active:translate-y-0.5 disabled:opacity-50"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoadingConfig ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoadingConfig ? '' : ''}`} />
             Sincronizar Painel
           </button>
         </div>
@@ -910,7 +910,7 @@ export default function GeminiServerTab({
             if (triggerSensoryFeedback && accSettings) triggerSensoryFeedback('click', accSettings);
             setInnerTab('ai');
           }}
-          className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase font-mono tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
+          className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase font-mono tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer border ${
             innerTab === 'ai'
               ? 'bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
               : 'text-zinc-400 hover:text-white hover:bg-zinc-800 border-transparent'
@@ -926,7 +926,7 @@ export default function GeminiServerTab({
             if (triggerSensoryFeedback && accSettings) triggerSensoryFeedback('click', accSettings);
             setInnerTab('workspace');
           }}
-          className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase font-mono tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
+          className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase font-mono tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer border ${
             innerTab === 'workspace'
               ? 'bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
               : 'text-zinc-400 hover:text-white hover:bg-zinc-800 border-transparent'
@@ -946,7 +946,7 @@ export default function GeminiServerTab({
           <div className="bg-zinc-900 border-4 border-zinc-950 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
             <div className="p-4 bg-zinc-950 flex items-center justify-between border-b-2 border-zinc-950">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+                <Sparkles className="w-4 h-4 text-amber-400 " />
                 <span className="font-mono text-xs font-black uppercase text-white">Central de Inteligência & Coprodução de Leads (Gemini Direct)</span>
               </div>
               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold font-mono bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">
@@ -1019,7 +1019,7 @@ export default function GeminiServerTab({
                           setCoproductTab('pitch');
                           handleFetchCoproduct(selectedLeadId, 'pitch');
                         }}
-                        className={`flex-1 py-3 rounded-lg text-[9px] font-black uppercase tracking-wider font-mono transition-all flex items-center justify-center gap-1.5 ${
+                        className={`flex-1 py-3 rounded-lg text-[9px] font-black uppercase tracking-wider font-mono transition-colors flex items-center justify-center gap-1.5 ${
                           coproductTab === 'pitch'
                             ? 'bg-indigo-600 text-white'
                             : 'text-zinc-400 hover:text-white'
@@ -1033,7 +1033,7 @@ export default function GeminiServerTab({
                           setCoproductTab('dossier');
                           handleFetchCoproduct(selectedLeadId, 'dossier');
                         }}
-                        className={`flex-1 py-3 rounded-lg text-[9px] font-black uppercase tracking-wider font-mono transition-all flex items-center justify-center gap-1.5 ${
+                        className={`flex-1 py-3 rounded-lg text-[9px] font-black uppercase tracking-wider font-mono transition-colors flex items-center justify-center gap-1.5 ${
                           coproductTab === 'dossier'
                             ? 'bg-indigo-600 text-white'
                             : 'text-zinc-400 hover:text-white'
@@ -1047,7 +1047,7 @@ export default function GeminiServerTab({
                           setCoproductTab('campaign');
                           handleFetchCoproduct(selectedLeadId, 'campaign');
                         }}
-                        className={`flex-1 py-3 rounded-lg text-[9px] font-black uppercase tracking-wider font-mono transition-all flex items-center justify-center gap-1.5 ${
+                        className={`flex-1 py-3 rounded-lg text-[9px] font-black uppercase tracking-wider font-mono transition-colors flex items-center justify-center gap-1.5 ${
                           coproductTab === 'campaign'
                             ? 'bg-indigo-600 text-white'
                             : 'text-zinc-400 hover:text-white'
@@ -1061,8 +1061,8 @@ export default function GeminiServerTab({
                     <div className="bg-zinc-950 border-2 border-zinc-950 p-5 rounded-2xl relative min-h-[160px] flex flex-col justify-between">
                       {coproductLoading ? (
                         <div className="py-12 flex flex-col items-center justify-center gap-3 my-auto w-full">
-                          <RefreshCw className="w-8 h-8 text-indigo-400 animate-spin" />
-                          <span className="text-xs text-zinc-400 font-mono uppercase tracking-widest animate-pulse">
+                          <RefreshCw className="w-8 h-8 text-indigo-400 " />
+                          <span className="text-xs text-zinc-400 font-mono uppercase tracking-widest ">
                             Gemini 3.5 interpretando ficha cadastral...
                           </span>
                         </div>
@@ -1195,7 +1195,7 @@ export default function GeminiServerTab({
             <div className="p-6 space-y-6">
               {isLoadingConfig ? (
                 <div className="py-12 flex flex-col items-center justify-center gap-3">
-                  <RefreshCw className="w-8 h-8 text-indigo-400 animate-spin" />
+                  <RefreshCw className="w-8 h-8 text-indigo-400 " />
                   <span className="text-xs text-zinc-400 font-mono uppercase tracking-wider">Carregando parâmetros...</span>
                 </div>
               ) : (
@@ -1216,7 +1216,7 @@ export default function GeminiServerTab({
                           config.active ? 'bg-indigo-600 justify-end' : 'bg-zinc-800 justify-start'
                         } border border-zinc-950`}
                       >
-                        <span className="w-4 h-4 rounded-full bg-white transition-all shadow-md" />
+                        <span className="w-4 h-4 rounded-full bg-white transition-colors shadow-md" />
                       </button>
                     </div>
 
@@ -1234,7 +1234,7 @@ export default function GeminiServerTab({
                           config.whatsapp_enabled ? 'bg-indigo-600 justify-end' : 'bg-zinc-800 justify-start'
                         } border border-zinc-950`}
                       >
-                        <span className="w-4 h-4 rounded-full bg-white transition-all shadow-md" />
+                        <span className="w-4 h-4 rounded-full bg-white transition-colors shadow-md" />
                       </button>
                     </div>
 
@@ -1254,7 +1254,7 @@ export default function GeminiServerTab({
                           config.leads_auto_creation_enabled ? 'bg-indigo-600 justify-end' : 'bg-zinc-800 justify-start'
                         } border border-zinc-950`}
                       >
-                        <span className="w-4 h-4 rounded-full bg-white transition-all shadow-md" />
+                        <span className="w-4 h-4 rounded-full bg-white transition-colors shadow-md" />
                       </button>
                     </div>
                   </div>
@@ -1396,7 +1396,7 @@ export default function GeminiServerTab({
                     >
                       {isSavingConfig ? (
                         <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <RefreshCw className="w-3.5 h-3.5 " />
                           Gravando Servidor...
                         </>
                       ) : (
@@ -1463,7 +1463,7 @@ export default function GeminiServerTab({
               </div>
 
               <div className="bg-rose-950/20 border border-rose-500/20 p-3.5 rounded-xl flex gap-3 items-start mt-3">
-                <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0 mt-0.5 animate-pulse" />
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0 mt-0.5 " />
                 <div className="text-[10.5px] text-zinc-300 leading-normal space-y-1">
                   <p className="font-extrabold uppercase tracking-wide text-rose-400 font-mono text-[9.5px]">🔒 Barreira de Cookie Sandbox (Ambiente Protegido do Google AI Studio)</p>
                   <p>
@@ -1480,7 +1480,7 @@ export default function GeminiServerTab({
         </div>
 
         {/* Column Right: Interactive Playground & Real-Time Log Viewer */}
-        <div className="xl:col-span-12 lg:col-span-12 space-y-8 transition-all">
+        <div className="xl:col-span-12 lg:col-span-12 space-y-8 transition-colors">
           
           {/* Main Container with 2 tabs: 💬 Active Chats WA or 📲 Whatauto Simulator */}
           <div className="bg-zinc-900 border-4 border-zinc-950 rounded-2xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
@@ -1490,20 +1490,20 @@ export default function GeminiServerTab({
               <button
                 type="button"
                 onClick={() => { triggerSensoryFeedback('click', accSettings); setActiveRightPanelTab('chatbot'); }}
-                className={`flex-1 py-4.5 px-4 text-center text-xs font-black uppercase font-mono tracking-wider transition-all flex items-center justify-center gap-2 border-r-2 border-zinc-850 ${
+                className={`flex-1 py-4.5 px-4 text-center text-xs font-black uppercase font-mono tracking-wider transition-colors flex items-center justify-center gap-2 border-r-2 border-zinc-850 ${
                   activeRightPanelTab === 'chatbot'
                     ? 'bg-zinc-900 text-indigo-400 border-b-4 border-b-indigo-500'
                     : 'bg-zinc-950 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
                 }`}
               >
-                <Sparkles className="w-4 h-4 text-indigo-400 animate-pulse" />
+                <Sparkles className="w-4 h-4 text-indigo-400 " />
                 🤖 Chatbot do Assistente AI
               </button>
 
               <button
                 type="button"
                 onClick={() => { triggerSensoryFeedback('click', accSettings); setActiveRightPanelTab('whatsapp_conversations'); }}
-                className={`flex-1 py-4.5 px-4 text-center text-xs font-black uppercase font-mono tracking-wider transition-all flex items-center justify-center gap-2 border-r-2 border-zinc-850 ${
+                className={`flex-1 py-4.5 px-4 text-center text-xs font-black uppercase font-mono tracking-wider transition-colors flex items-center justify-center gap-2 border-r-2 border-zinc-850 ${
                   activeRightPanelTab === 'whatsapp_conversations'
                     ? 'bg-zinc-900 text-emerald-400 border-b-4 border-b-emerald-500'
                     : 'bg-zinc-950 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
@@ -1516,7 +1516,7 @@ export default function GeminiServerTab({
               <button
                 type="button"
                 onClick={() => { triggerSensoryFeedback('click', accSettings); setActiveRightPanelTab('playground'); }}
-                className={`flex-1 py-4.5 px-4 text-center text-xs font-black uppercase font-mono tracking-wider transition-all flex items-center justify-center gap-2 ${
+                className={`flex-1 py-4.5 px-4 text-center text-xs font-black uppercase font-mono tracking-wider transition-colors flex items-center justify-center gap-2 ${
                   activeRightPanelTab === 'playground'
                     ? 'bg-zinc-900 text-[#4E9F3D] border-b-4 border-b-[#4E9F3D]'
                     : 'bg-zinc-950 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
@@ -1535,9 +1535,9 @@ export default function GeminiServerTab({
                   <div className="flex items-center gap-2.5">
                     <div className="relative">
                       <div className="w-8 h-8 rounded-full bg-indigo-600 border-2 border-zinc-900 flex items-center justify-center text-white font-extrabold text-sm">
-                        <Sparkles className="w-4 h-4 text-indigo-200 animate-spin-slow" />
+                        <Sparkles className="w-4 h-4 text-indigo-200 " />
                       </div>
-                      <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 border-2 border-zinc-950 animate-pulse" />
+                      <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 border-2 border-zinc-950 " />
                     </div>
                     <div>
                       <h4 className="text-xs font-black uppercase text-white font-mono tracking-wider flex items-center gap-1.5">
@@ -1576,15 +1576,15 @@ export default function GeminiServerTab({
                     })}
                     
                     {isBotResponding && (
-                      <div className="flex max-w-[80%] flex-col mr-auto items-start animate-pulse">
+                      <div className="flex max-w-[80%] flex-col mr-auto items-start ">
                         <span className="text-[8px] font-black uppercase font-mono tracking-wider text-indigo-400 mb-1">
                           🤖 Assistente está elaborando resposta...
                         </span>
                         <div className="p-3.5 bg-zinc-900 border-2 border-zinc-950 text-xs font-semibold rounded-2xl rounded-tl-none text-zinc-400 flex items-center gap-2">
                           <div className="flex gap-1">
-                            <span className="h-1.5 w-1.5 bg-indigo-400 rounded-full animate-bounce delay-75" />
-                            <span className="h-1.5 w-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:0.2s]" />
-                            <span className="h-1.5 w-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:0.4s]" />
+                            <span className="h-1.5 w-1.5 bg-indigo-400 rounded-full  delay-75" />
+                            <span className="h-1.5 w-1.5 bg-indigo-400 rounded-full  [animation-delay:0.2s]" />
+                            <span className="h-1.5 w-1.5 bg-indigo-400 rounded-full  [animation-delay:0.4s]" />
                           </div>
                           <span className="font-mono text-[10px] text-zinc-500 uppercase tracking-wide">Consultando motor Generativo...</span>
                         </div>
@@ -1648,7 +1648,7 @@ export default function GeminiServerTab({
                 <div className="md:col-span-4 bg-zinc-950/40 border-r-4 border-zinc-950 flex flex-col h-[580px] overflow-hidden">
                   <div className="p-3.5 bg-zinc-950 border-b-2 border-zinc-950 flex items-center justify-between">
                     <span className="text-[10px] font-black font-mono text-zinc-300 uppercase tracking-widest flex items-center gap-1.5">
-                      <span className="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-ping" />
+                      <span className="h-1.5 w-1.5 bg-emerald-500 rounded-full " />
                       Interações Ativas ({activeChats.length})
                     </span>
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-500 font-mono font-bold">LIVE</span>
@@ -1671,7 +1671,7 @@ export default function GeminiServerTab({
                             key={chat.phone}
                             type="button"
                             onClick={() => { triggerSensoryFeedback('click', accSettings); setSelectedChatPhone(chat.phone); }}
-                            className={`w-full text-left p-4 flex gap-3 transition-all ${
+                            className={`w-full text-left p-4 flex gap-3 transition-colors ${
                               isSelected 
                                 ? 'bg-zinc-800 text-white border-l-4 border-l-emerald-500 shadow-[inset_-3px_0px_0px_0px_rgba(0,0,0,0.5)]' 
                                 : 'hover:bg-zinc-900/60 text-zinc-300 border-l-4 border-l-transparent'
@@ -1742,7 +1742,7 @@ export default function GeminiServerTab({
                               <span className="text-xs font-bold text-white">
                                 {logs.find(l => l.phone === selectedChatPhone)?.sender || 'Cliente WhatsApp'}
                               </span>
-                              <span className="inline-flex items-center gap-1 text-[8.5px] px-2 py-0.5 bg-emerald-950 border border-emerald-500/25 rounded-md text-emerald-400 font-extrabold uppercase font-mono tracking-widest animate-pulse">
+                              <span className="inline-flex items-center gap-1 text-[8.5px] px-2 py-0.5 bg-emerald-950 border border-emerald-500/25 rounded-md text-emerald-400 font-extrabold uppercase font-mono tracking-widest ">
                                 <span className="h-1 w-1 bg-emerald-400 rounded-full shrink-0" />
                                 Monitoramento Ativo
                               </span>
@@ -1765,7 +1765,7 @@ export default function GeminiServerTab({
                             >
                               {selectedLead.ai_muted ? (
                                 <>
-                                  <AlertTriangle className="w-3.5 h-3.5 animate-pulse text-yellow-300 shrink-0" />
+                                  <AlertTriangle className="w-3.5 h-3.5  text-yellow-300 shrink-0" />
                                   <span>Humano Ativo (IA Muda)</span>
                                 </>
                               ) : (
@@ -1779,7 +1779,7 @@ export default function GeminiServerTab({
 
                           <div className="flex items-center gap-1.5 bg-zinc-950/60 px-3 py-1.5 rounded-lg border border-zinc-850">
                             <span className="text-[9px] font-mono text-zinc-400">Canal LIVE</span>
-                            <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                            <div className="h-2 w-2 rounded-full bg-emerald-400 " />
                           </div>
                         </div>
                       </div>
@@ -1857,7 +1857,7 @@ export default function GeminiServerTab({
                           disabled={isSendingCustom}
                           className="text-[10px] font-mono font-black text-indigo-300 shrink-0 bg-zinc-950 border border-indigo-500/30 py-1.5 px-3.5 rounded-full hover:bg-zinc-900 flex items-center gap-1.5 transition active:scale-95 disabled:opacity-40 shadow-sm"
                         >
-                          <Sparkles className="w-3.5 h-3.5 text-indigo-400 animate-pulse fill-indigo-400" />
+                          <Sparkles className="w-3.5 h-3.5 text-indigo-400  fill-indigo-400" />
                           <span>✨ Auto-Sugerir IA</span>
                         </button>
                         
@@ -1918,7 +1918,7 @@ export default function GeminiServerTab({
                           title="Enviar Mensagem via Dispositivo Ativo"
                         >
                           {isSendingCustom ? (
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <RefreshCw className="w-3.5 h-3.5 " />
                           ) : (
                             <>
                               <Zap className="w-3.5 h-3.5 fill-amber-300 stroke-amber-400" />
@@ -1931,7 +1931,7 @@ export default function GeminiServerTab({
                   ) : (
                     <div className="m-auto text-center px-6 max-w-xs space-y-4 py-28 z-10">
                       <MessageSquare className="w-12 h-12 text-zinc-700 mx-auto" />
-                      <h4 className="text-sm font-black text-zinc-300 font-mono uppercase tracking-wider animate-pulse">Selecione uma Conversa</h4>
+                      <h4 className="text-sm font-black text-zinc-300 font-mono uppercase tracking-wider ">Selecione uma Conversa</h4>
                       <p className="text-[11px] text-zinc-500 font-mono leading-relaxed">
                         Selecione um dos contatos na lista lateral para monitorar o timeline de diálogo da inteligência e do WhatsApp de ponta a ponta.
                       </p>
@@ -1950,7 +1950,7 @@ export default function GeminiServerTab({
                   <button
                     type="button"
                     onClick={() => { triggerSensoryFeedback('click', accSettings); setActivePlaygroundTab('flow'); }}
-                    className={`flex-1 py-3 text-center text-[10px] font-black uppercase font-mono tracking-wider transition-all border-r border-[#1a1a1a] ${
+                    className={`flex-1 py-3 text-center text-[10px] font-black uppercase font-mono tracking-wider transition-colors border-r border-[#1a1a1a] ${
                       activePlaygroundTab === 'flow'
                         ? 'bg-zinc-800 text-white'
                         : 'bg-zinc-950/40 text-zinc-400 hover:text-zinc-200'
@@ -1961,7 +1961,7 @@ export default function GeminiServerTab({
                   <button
                     type="button"
                     onClick={() => { triggerSensoryFeedback('click', accSettings); setActivePlaygroundTab('json'); }}
-                    className={`flex-1 py-3 text-center text-[10px] font-black uppercase font-mono tracking-wider transition-all border-r border-[#1a1a1a] ${
+                    className={`flex-1 py-3 text-center text-[10px] font-black uppercase font-mono tracking-wider transition-colors border-r border-[#1a1a1a] ${
                       activePlaygroundTab === 'json'
                         ? 'bg-zinc-800 text-[#4E9F3D]'
                         : 'bg-zinc-950/40 text-zinc-400 hover:text-zinc-200'
@@ -1972,7 +1972,7 @@ export default function GeminiServerTab({
                   <button
                     type="button"
                     onClick={() => { triggerSensoryFeedback('click', accSettings); setActivePlaygroundTab('debugger'); }}
-                    className={`flex-1 py-3 text-center text-[10px] font-black uppercase font-mono tracking-wider transition-all ${
+                    className={`flex-1 py-3 text-center text-[10px] font-black uppercase font-mono tracking-wider transition-colors ${
                       activePlaygroundTab === 'debugger'
                         ? 'bg-zinc-800 text-amber-400'
                         : 'bg-zinc-950/40 text-zinc-400 hover:text-zinc-200'
@@ -2095,7 +2095,7 @@ export default function GeminiServerTab({
                         >
                           {isTesting ? (
                             <>
-                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              <RefreshCw className="w-3.5 h-3.5 " />
                               Simulando...
                             </>
                           ) : (
@@ -2115,7 +2115,7 @@ export default function GeminiServerTab({
                         >
                           {isTestingDirect ? (
                             <>
-                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              <RefreshCw className="w-3.5 h-3.5 " />
                               Disparando...
                             </>
                           ) : (
@@ -2128,7 +2128,7 @@ export default function GeminiServerTab({
                       </div>
 
                       {testReply && (
-                        <div className="bg-zinc-950/40 p-4 rounded-xl border-2 border-zinc-950 space-y-3.5 mt-2 transition-all">
+                        <div className="bg-zinc-950/40 p-4 rounded-xl border-2 border-zinc-950 space-y-3.5 mt-2 transition-colors">
                           <div className="flex items-center justify-between text-[10px] font-mono border-b border-zinc-950 pb-2">
                             <span className="text-emerald-400 font-extrabold uppercase tracking-wider">Fluxo Webhook Processado</span>
                             {testResult?.latency_ms && (
@@ -2247,14 +2247,14 @@ export default function GeminiServerTab({
                           disabled={isLoadingDebugLogs}
                           className="flex items-center gap-1 bg-zinc-950 hover:bg-zinc-800 text-zinc-400 hover:text-white px-2.5 py-1.5 rounded-lg border border-zinc-850 text-[10px] uppercase font-mono font-bold tracking-wider transition"
                         >
-                          <RefreshCw className={`w-3 h-3 ${isLoadingDebugLogs ? 'animate-spin' : ''}`} />
+                          <RefreshCw className={`w-3 h-3 ${isLoadingDebugLogs ? '' : ''}`} />
                           Atualizar
                         </button>
                       </div>
 
                       {isLoadingDebugLogs && webhookDebugLogsList.length === 0 ? (
                         <div className="py-16 text-center space-y-2">
-                          <RefreshCw className="w-6 h-6 text-indigo-400 animate-spin mx-auto" />
+                          <RefreshCw className="w-6 h-6 text-indigo-400  mx-auto" />
                           <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-mono font-sans">Lendo fluxos brutos...</p>
                         </div>
                       ) : webhookDebugLogsList.length === 0 ? (
@@ -2354,7 +2354,7 @@ export default function GeminiServerTab({
                 className="p-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition"
                 title="Sincronizar Logs"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingLogs ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingLogs ? '' : ''}`} />
               </button>
             </div>
 
@@ -2367,13 +2367,13 @@ export default function GeminiServerTab({
                   placeholder="Filtro rápido: buscar por nome, telefone, mensagem ou retorno..."
                   value={logSearchQuery}
                   onChange={(e) => setLogSearchQuery(e.target.value)}
-                  className="w-full bg-zinc-950/25 border-2 border-zinc-800/60 hover:border-zinc-700 focus:border-purple-600 focus:bg-zinc-950/45 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white font-mono placeholder-zinc-500 focus:outline-none transition-all"
+                  className="w-full bg-zinc-950/25 border-2 border-zinc-800/60 hover:border-zinc-700 focus:border-purple-600 focus:bg-zinc-950/45 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white font-mono placeholder-zinc-500 focus:outline-none transition-colors"
                 />
               </div>
 
               {isLoadingLogs && logs.length === 0 ? (
                 <div className="py-12 flex flex-col items-center justify-center gap-2">
-                  <RefreshCw className="w-6 h-6 text-purple-400 animate-spin" />
+                  <RefreshCw className="w-6 h-6 text-purple-400 " />
                   <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-mono">Lendo logs...</span>
                 </div>
               ) : logs.length === 0 ? (
@@ -2413,7 +2413,7 @@ export default function GeminiServerTab({
                             addNotification('Chat Aberto', `Visualizando timeline de ${log.sender}`, 'info');
                           }
                         }}
-                        className={`group relative p-3.5 rounded-xl border-2 border-zinc-950 cursor-pointer hover:border-indigo-500/60 hover:bg-zinc-800/40 transition-all ${
+                        className={`group relative p-3.5 rounded-xl border-2 border-zinc-950 cursor-pointer hover:border-indigo-500/60 hover:bg-zinc-800/40 transition-colors ${
                           log.status === 'sucesso' 
                             ? 'bg-zinc-950/20' 
                             : 'bg-rose-950/10 border-rose-950/40'

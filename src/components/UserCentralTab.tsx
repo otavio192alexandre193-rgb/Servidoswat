@@ -116,7 +116,7 @@ export default function UserCentralTab({
             triggerSensoryFeedback('click', accSettings);
             setInnerTab('gamification');
           }}
-          className={`px-6 py-3 rounded-lg text-xs font-black uppercase font-mono tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
+          className={`px-6 py-3 rounded-lg text-xs font-black uppercase font-mono tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer border ${
             innerTab === 'gamification'
               ? 'bg-indigo-650 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
               : 'text-zinc-400 hover:text-white hover:bg-zinc-800 border-transparent'
@@ -133,7 +133,7 @@ export default function UserCentralTab({
             triggerSensoryFeedback('click', accSettings);
             setInnerTab('leveraging');
           }}
-          className={`px-6 py-3 rounded-lg text-xs font-black uppercase font-mono tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
+          className={`px-6 py-3 rounded-lg text-xs font-black uppercase font-mono tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer border ${
             innerTab === 'leveraging'
               ? 'bg-indigo-650 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
               : 'text-zinc-400 hover:text-white hover:bg-zinc-800 border-transparent'
@@ -150,7 +150,7 @@ export default function UserCentralTab({
             triggerSensoryFeedback('click', accSettings);
             setInnerTab('settings');
           }}
-          className={`px-6 py-3 rounded-lg text-xs font-black uppercase font-mono tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer border ${
+          className={`px-6 py-3 rounded-lg text-xs font-black uppercase font-mono tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer border ${
             innerTab === 'settings'
               ? 'bg-indigo-650 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
               : 'text-zinc-400 hover:text-white hover:bg-zinc-800 border-transparent'

@@ -57,6 +57,7 @@ interface RealEstateInventoryProps {
   onDeleteMultipleProperties?: (ids: string[]) => void;
   onUpdatePropertyStatus: (id: string, status: 'disponivel' | 'reservado' | 'vendido') => void;
   onUpdateProperty?: (prop: RealEstateProperty) => void;
+  onUpdateLeadField?: (leadId: string, updates: Partial<Lead>) => void;
   theme?: 'claro' | 'escuro' | 'galatico';
   accSettings?: any;
   addNotification?: (title: string, msg: string, type: 'success' | 'warning' | 'info') => void;
@@ -76,12 +77,14 @@ export default function RealEstateInventory({
   onDeleteMultipleProperties,
   onUpdatePropertyStatus,
   onUpdateProperty,
+  onUpdateLeadField,
   theme,
   accSettings,
   addNotification,
   awardXP
 }: RealEstateInventoryProps) {
   const [activeSubTab, setActiveSubTab] = useState<'estoque' | 'estoque-tabela' | 'importador'>('estoque');
+  const [showTableBelowBlocks, setShowTableBelowBlocks] = useState(false);
   const [isPropertyImportModalOpen, setIsPropertyImportModalOpen] = useState(false);
 
   useEffect(() => {
@@ -121,7 +124,8 @@ export default function RealEstateInventory({
     const saved = localStorage.getItem("ciclocred_crm_carousel_blocks");
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
       } catch (e) {
         console.error(e);
       }
@@ -230,7 +234,12 @@ export default function RealEstateInventory({
 
   const [architecturePresets, setArchitecturePresets] = useState<{name: string, url: string}[]>(() => {
     const saved = localStorage.getItem("ciclocred_architecture_presets");
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (_) {}
+    }
     return [
       { name: 'Living Decor', url: 'https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&q=80&w=600' },
       { name: 'Cozinha Gourmet', url: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80&w=600' },
@@ -302,9 +311,11 @@ export default function RealEstateInventory({
 
   // Matching leads list solver based on price range matching 65% to 125%
   const getMatchingLeadsForProperty = (prop: RealEstateProperty) => {
-    return leads.filter(lead => {
-      const minBudget = lead.value * 0.65;
-      const maxBudget = lead.value * 1.25;
+    return (leads || []).filter(lead => {
+      if (!lead) return false;
+      const val = lead.value || 0;
+      const minBudget = val * 0.65;
+      const maxBudget = val * 1.25;
       return prop.price >= minBudget && prop.price <= maxBudget;
     });
   };
@@ -758,11 +769,23 @@ export default function RealEstateInventory({
   // Lead profiling & recommendation algorithm:
   // Shows real estate that are closely aligned with lead "value" budget (+- 25%)
   const matchesLeadProfile = (prop: RealEstateProperty, leadId: string): boolean => {
-    const lead = leads.find(l => l.id === leadId);
+    const lead = (leads || []).find(l => l && l.id === leadId);
     if (!lead) return true;
-    const maxBudget = lead.value * 1.25;
-    const minBudget = lead.value * 0.65;
+    const val = lead.value || 0;
+    const maxBudget = val * 1.25;
+    const minBudget = val * 0.65;
     return prop.price >= minBudget && prop.price <= maxBudget;
+  };
+
+  // Calculate matching leads numbers for each property to show dynamic recommendation counts
+  const getMatchingLeadsCount = (prop: RealEstateProperty) => {
+    return (leads || []).filter(lead => {
+      if (!lead) return false;
+      const val = lead.value || 0;
+      const minBudget = val * 0.65;
+      const maxBudget = val * 1.25;
+      return prop.price >= minBudget && prop.price <= maxBudget;
+    }).length;
   };
 
   // Filtering properties with Global Search over Lead names & Compatibility toggle filter
@@ -774,11 +797,13 @@ export default function RealEstateInventory({
 
     // 2. Global search: search for lead name. If lead matches and is compatible with this unit, return true!
     const matchingLeadsByName = searchQuery.trim()
-      ? leads.filter(l => l.name.toLowerCase().includes(searchQuery.toLowerCase()))
+      ? (leads || []).filter(l => l && (l.name || '').toLowerCase().includes(searchQuery.toLowerCase()))
       : [];
     const hasCompatibleLeadInSearch = matchingLeadsByName.some(lead => {
-      const minBudget = lead.value * 0.65;
-      const maxBudget = lead.value * 1.25;
+      if (!lead) return false;
+      const val = lead.value || 0;
+      const minBudget = val * 0.65;
+      const maxBudget = val * 1.25;
       return prop.price >= minBudget && prop.price <= maxBudget;
     });
 
@@ -792,15 +817,6 @@ export default function RealEstateInventory({
 
     return matchesSearch && matchesType && matchesStatus && matchesLead && matchesCompatibilityToggle;
   });
-
-  // Calculate matching leads numbers for each property to show dynamic recommendation counts
-  const getMatchingLeadsCount = (prop: RealEstateProperty) => {
-    return leads.filter(lead => {
-      const minBudget = lead.value * 0.65;
-      const maxBudget = lead.value * 1.25;
-      return prop.price >= minBudget && prop.price <= maxBudget;
-    }).length;
-  };
 
   // MCMV / SBPE / CAIXA Lookup Table (based on the PDF Document data)
   const getBracketData = (income: number) => {
@@ -1357,12 +1373,29 @@ export default function RealEstateInventory({
               </p>
             </div>
 
-            <button
-              onClick={() => setIsRegistering(!isRegistering)}
-              className="px-5 py-3.5 bg-indigo-600 hover:bg-indigo-700 font-extrabold uppercase font-mono rounded-xl border-2 border-zinc-950 text-xs shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition active:translate-y-0.5"
-            >
-              {isRegistering ? 'Fechar Formulário' : 'Cadastrar Imóvel Avulso'}
-            </button>
+            <div className="flex flex-wrap gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  if (accSettings) {
+                    try {
+                      accSettings.triggerSensoryFeedback("click", accSettings);
+                    } catch (e) {}
+                  }
+                  setShowTableBelowBlocks(!showTableBelowBlocks);
+                }}
+                className={`px-5 py-3.5 font-extrabold uppercase font-mono rounded-xl border-2 border-zinc-950 text-xs shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition active:translate-y-0.5 ${showTableBelowBlocks ? 'bg-amber-500 hover:bg-amber-600 text-zinc-950' : 'bg-indigo-600 hover:bg-indigo-700 text-white'}`}
+              >
+                {showTableBelowBlocks ? 'Ocultar Tabela' : 'Tabela de Ativos'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsRegistering(!isRegistering)}
+                className="px-5 py-3.5 bg-zinc-800 hover:bg-zinc-700 text-white font-extrabold uppercase font-mono rounded-xl border-2 border-zinc-950 text-xs shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition active:translate-y-0.5"
+              >
+                {isRegistering ? 'Fechar Formulário' : 'Cadastrar Imóvel Avulso'}
+              </button>
+            </div>
           </div>
 
           {/* CAROUSEL MASTER PORTFOLIO ROW (4 Blocks) */}
@@ -1380,7 +1413,7 @@ export default function RealEstateInventory({
                 <div 
                   key={block.id}
                   onClick={() => setSelectedBlockIdForEdit(block.id)}
-                  className="group bg-white border-4 border-zinc-950 rounded-2xl overflow-hidden shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-2px] hover:shadow-[6px_6px_0px_0px_rgba(24,24,27,1)] active:translate-y-0.5 cursor-pointer transition-all flex flex-col h-[270px] relative"
+                  className="group bg-white border-4 border-zinc-950 rounded-2xl overflow-hidden shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] hover:translate-y-[-2px] hover:shadow-[6px_6px_0px_0px_rgba(24,24,27,1)] active:translate-y-0.5 cursor-pointer transition-colors flex flex-col h-[270px] relative"
                 >
                   <div 
                     className="relative w-full h-[150px] overflow-hidden bg-zinc-950 border-b-2 border-zinc-950 z-10"
@@ -1394,14 +1427,14 @@ export default function RealEstateInventory({
                       src={activeImg.url} 
                       alt={activeImg.title} 
                       referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform "
                     />
-                    <div className="absolute top-2 right-2 px-2 py-0.5 bg-zinc-950/80 backdrop-blur border border-zinc-700 rounded-md text-[8px] font-mono text-white tracking-widest uppercase font-black">
+                    <div className="absolute top-2 right-2 px-2 py-0.5 bg-zinc-950/80  border border-zinc-700 rounded-md text-[8px] font-mono text-white tracking-widest uppercase font-black">
                       Bloco {block.id} • {activeIndex + 1}/{block.images.length}
                     </div>
                     {/* Tiny visual pulse badge */}
                     <div className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 bg-emerald-500/80 border border-emerald-400 rounded-md text-[7px] font-mono text-white font-black">
-                      <span className="w-1 h-1 bg-white rounded-full animate-ping" />
+                      <span className="w-1 h-1 bg-white rounded-full " />
                       {block.displayDuration || (idx < 2 ? 8 : 10)}s
                     </div>
                   </div>
@@ -1470,14 +1503,259 @@ export default function RealEstateInventory({
             })}
           </div>
 
+          {showTableBelowBlocks && (
+            <div className="bg-white border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] text-zinc-900 overflow-hidden my-4">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-4 border-b">
+                <div>
+                  <span className="text-[10px] uppercase font-mono font-black text-indigo-600 block">Tabela de Ativos</span>
+                  <h3 className="text-lg font-black italic uppercase tracking-tight text-zinc-950">Acervo Operacional do Estoque</h3>
+                  <p className="text-xs text-zinc-500 font-medium mt-0.5 font-sans">Visão consolidada com filtros, controle de reservas e matching biunívoco com os leads cadastrados.</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => setIsPropertyImportModalOpen(true)}
+                    className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white border-2 border-zinc-950 rounded-xl font-mono font-black text-[9.5px] uppercase shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition active:translate-y-0.5 flex items-center gap-1.5 cursor-pointer"
+                    title="Importar lista de ativos imobiliários (.csv)"
+                  >
+                    <Upload className="w-3.5 h-3.5 text-indigo-200 shrink-0" />
+                    <span>Importar</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleExportCSV('properties')}
+                    className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white border-2 border-zinc-950 rounded-xl font-mono font-black text-[9.5px] uppercase shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] transition active:translate-y-0.5 flex items-center gap-1.5 cursor-pointer"
+                    title="Exportar arquivo consolidado (.csv)"
+                  >
+                    <Download className="w-3.5 h-3.5 text-emerald-100 shrink-0" />
+                    <span>Exportar</span>
+                  </button>
+                  <span className="text-[10px] font-mono font-black py-2 px-3 bg-zinc-100 border border-zinc-350 rounded-lg shrink-0">
+                    ATIVOS NO CRM: {properties.length} UNIDADES
+                  </span>
+                </div>
+              </div>
+
+              {selectedProperties.length > 0 && (
+                <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 p-2 rounded-xl text-indigo-900 mb-4 ">
+                  <span className="text-[10px] uppercase font-mono font-black border-r border-indigo-200 pr-3">{selectedProperties.length} Selecionados</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm(`Deseja realmente excluir ${selectedProperties.length} imóveis?`)) {
+                        if (onDeleteMultipleProperties) {
+                          onDeleteMultipleProperties(selectedProperties);
+                        } else if (setProperties) {
+                          setProperties((prev: typeof properties) => prev.filter((p) => !selectedProperties.includes(p.id)));
+                        } else {
+                          selectedProperties.forEach(id => onDeleteProperty(id));
+                        }
+                        setSelectedProperties([]);
+                        if (addNotification) addNotification('LOTE REMOVIDO', `${selectedProperties.length} imóveis selecionados excluídos com sucesso.`, 'info');
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[9px] font-mono font-black uppercase shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="w-3 h-3 inline-block mr-1" /> Excluir Lote
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                       let totalLeadsUpdated = 0;
+                       
+                       selectedProperties.forEach(propId => {
+                         const prop = properties.find(p => p.id === propId);
+                         if (prop && onUpdateLeadField) {
+                           const matchingLeads = getMatchingLeadsForProperty(prop);
+                           matchingLeads.forEach(lead => {
+                             onUpdateLeadField(lead.id, { propertyInterest: prop.code });
+                             totalLeadsUpdated++;
+                           });
+                         }
+                       });
+
+                       setShowOnlyCompatibilityMode(true);
+                       setSelectedProperties([]);
+                       if (addNotification) {
+                         addNotification(
+                           '🤝 AUTOMAÇÃO CONCLUÍDA',
+                           `${totalLeadsUpdated} leads foram atrelados aos imóveis selecionados com sucesso!`,
+                           'success'
+                         );
+                       }
+                    }}
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[9px] font-mono font-black uppercase shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition-colors cursor-pointer"
+                  >
+                    <Users className="w-3 h-3 inline-block mr-1" /> Atrelar Leads Compatíveis
+                  </button>
+                </div>
+              )}
+              
+              <div className="border border-zinc-250 rounded-2xl shadow-inner bg-zinc-50 overflow-x-auto custom-scrollbar">
+                <div className="min-w-[900px] w-full">
+                  <table className="w-full text-left text-xs border-collapse font-sans">
+                  <thead className="bg-zinc-950 text-white font-mono text-[10px] uppercase font-black tracking-wider sticky top-0 z-10">
+                    <tr>
+                      <th className="p-3 pl-4 w-10">
+                        <input 
+                          type="checkbox"
+                          checked={filteredProperties.length > 0 && selectedProperties.length === filteredProperties.length}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedProperties(filteredProperties.map(p => p.id));
+                            else setSelectedProperties([]);
+                          }}
+                          className="cursor-pointer w-3.5 h-3.5 accent-indigo-500 rounded border-zinc-700 outline-none focus:ring-0"
+                        />
+                      </th>
+                      <th className="p-3">Código</th>
+                      <th className="p-3">Empreendimento</th>
+                      <th className="p-3">Tipo</th>
+                      <th className="p-3 text-right">Área</th>
+                      <th className="p-3 text-right">Valor</th>
+                      <th className="p-3 text-center">Status</th>
+                      <th className="p-3 text-center pr-4">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-200">
+                    {filteredProperties.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="p-8 text-center text-zinc-400 font-bold uppercase font-mono">
+                          Nenhum imóvel corresponde aos filtros vigentes.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredProperties.map((prop) => (
+                        <tr key={prop.id} className="hover:bg-zinc-100/70 transition-colors">
+                          <td className="p-3 pl-4">
+                            <input 
+                              type="checkbox"
+                              checked={selectedProperties.includes(prop.id)}
+                              onChange={(e) => {
+                                  if (e.target.checked) setSelectedProperties(prev => [...prev, prop.id]);
+                                  else setSelectedProperties(prev => prev.filter(id => id !== prop.id));
+                              }}
+                              className="cursor-pointer w-3.5 h-3.5 accent-indigo-500 rounded border-zinc-300 outline-none focus:ring-0"
+                            />
+                          </td>
+                          <td className="p-3 font-mono font-black text-indigo-600">
+                            <input
+                              defaultValue={prop.code}
+                              onBlur={(e) => { if (e.target.value !== prop.code && onUpdateProperty) onUpdateProperty({...prop, code: e.target.value}) }}
+                              className="bg-transparent border-b border-transparent focus:border-indigo-500 focus:outline-none w-full min-w-[60px]"
+                            />
+                          </td>
+                          <td className="p-3">
+                            <div className="leading-tight">
+                              <input
+                                defaultValue={prop.title}
+                                onBlur={(e) => { if (e.target.value !== prop.title && onUpdateProperty) onUpdateProperty({...prop, title: e.target.value}) }}
+                                className="block text-zinc-900 font-extrabold uppercase bg-transparent border-b border-transparent focus:border-indigo-500 focus:outline-none w-full"
+                              />
+                              <div className="flex gap-1">
+                                <input
+                                  defaultValue={prop.neighborhood}
+                                  onBlur={(e) => { if (e.target.value !== prop.neighborhood && onUpdateProperty) onUpdateProperty({...prop, neighborhood: e.target.value}) }}
+                                  className="block text-[10px] text-zinc-450 uppercase font-mono font-bold bg-transparent border-b border-transparent focus:border-indigo-500 focus:outline-none w-1/2"
+                                  placeholder="Bairro"
+                                />
+                                <input
+                                  defaultValue={prop.location}
+                                  onBlur={(e) => { if (e.target.value !== prop.location && onUpdateProperty) onUpdateProperty({...prop, location: e.target.value}) }}
+                                  className="block text-[10px] text-zinc-450 uppercase font-mono font-bold bg-transparent border-b border-transparent focus:border-indigo-500 focus:outline-none w-1/2"
+                                  placeholder="Cidade"
+                                />
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-3 text-zinc-700 capitalize">
+                            <div className="flex items-center gap-1">
+                              <select 
+                                value={prop.type}
+                                onChange={(e) => { if (onUpdateProperty) onUpdateProperty({...prop, type: e.target.value as any}) }}
+                                className="bg-transparent border-b border-transparent focus:border-indigo-500 focus:outline-none cursor-pointer text-xs"
+                              >
+                                <option value="Apartamento">Apt</option>
+                                <option value="Casa">Casa</option>
+                                <option value="Terreno">Terr</option>
+                                <option value="Comercial">Com</option>
+                              </select>
+                              • 
+                              <input 
+                                type="number"
+                                defaultValue={prop.bedrooms}
+                                onBlur={(e) => { if (Number(e.target.value) !== prop.bedrooms && onUpdateProperty) onUpdateProperty({...prop, bedrooms: Number(e.target.value)}) }}
+                                className="bg-transparent border-b border-transparent focus:border-indigo-500 focus:outline-none w-8 text-center"
+                              />
+                              Dorms (
+                              <input 
+                                type="number"
+                                defaultValue={prop.suites}
+                                onBlur={(e) => { if (Number(e.target.value) !== prop.suites && onUpdateProperty) onUpdateProperty({...prop, suites: Number(e.target.value)}) }}
+                                className="bg-transparent border-b border-transparent focus:border-indigo-500 focus:outline-none w-8 text-center"
+                              />
+                              Suíte)
+                            </div>
+                          </td>
+                          <td className="p-3 text-right font-mono font-bold text-zinc-650">
+                            <input
+                              type="number"
+                              defaultValue={prop.sizeSqm}
+                              onBlur={(e) => { if (Number(e.target.value) !== prop.sizeSqm && onUpdateProperty) onUpdateProperty({...prop, sizeSqm: Number(e.target.value)}) }}
+                              className="bg-transparent border-b border-transparent focus:border-indigo-500 focus:outline-none w-16 text-right"
+                            /> m²
+                          </td>
+                          <td className="p-3 text-right font-mono font-black text-zinc-950">
+                            R$ <input
+                              type="number"
+                              defaultValue={prop.price}
+                              onBlur={(e) => { if (Number(e.target.value) !== prop.price && onUpdateProperty) onUpdateProperty({...prop, price: Number(e.target.value)}) }}
+                              className="bg-transparent border-b border-transparent focus:border-indigo-500 focus:outline-none w-24 text-right"
+                            />
+                          </td>
+                          <td className="p-3 text-center font-sans">
+                            <span className={`inline-block px-2.5 py-1 text-[9px] uppercase font-mono font-black rounded-lg border cursor-pointer select-none transition ${
+                              prop.status === 'disponivel' 
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                                : prop.status === 'reservado'
+                                ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+                                : 'bg-rose-50 text-rose-800 border-rose-300 hover:bg-rose-100'
+                            }`}
+                            onClick={() => {
+                              const statuses: Array<'disponivel' | 'reservado' | 'vendido'> = ['disponivel', 'reservado', 'vendido'];
+                              const nextIndex = (statuses.indexOf(prop.status) + 1) % statuses.length;
+                              onUpdatePropertyStatus(prop.id, statuses[nextIndex]);
+                            }}
+                            >
+                              {prop.status === 'disponivel' ? 'Disponível' : prop.status === 'reservado' ? 'Reservado' : 'Vendido'}
+                            </span>
+                          </td>
+                          <td className="p-3 text-center pr-4">
+                            <button
+                              type="button"
+                              onClick={() => onDeleteProperty(prop.id)}
+                              className="p-1 px-2.5 bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white rounded-lg border border-rose-200 transition font-mono text-[9px] font-black uppercase cursor-pointer"
+                            >
+                              Excluir
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* LARGE CAROUSEL EDITING AND IMPORTATION MODAL */}
           {selectedBlockIdForEdit !== null && (() => {
             const block = carouselBlocks.find(b => b.id === selectedBlockIdForEdit);
             if (!block) return null;
 
             return (
-              <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/85 backdrop-blur-sm p-4 overflow-y-auto w-full h-full animate-fadeIn">
-                <div className="bg-white border-4 border-zinc-950 rounded-3xl shadow-[8px_8px_0px_0px_rgba(24,24,27,1)] max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col border-collapse font-sans text-zinc-900 animate-slideUp">
+              <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/85  p-4 overflow-y-auto w-full h-full ">
+                <div className="bg-white border-4 border-zinc-950 rounded-3xl shadow-[8px_8px_0px_0px_rgba(24,24,27,1)] max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col border-collapse font-sans text-zinc-900 ">
                   {/* Modal Header */}
                   <div className="p-6 bg-zinc-900 text-white border-b-4 border-zinc-950 flex justify-between items-center shrink-0">
                     <div className="flex-1 mr-4">
@@ -1512,7 +1790,7 @@ export default function RealEstateInventory({
                     </div>
                     <button 
                       onClick={() => setSelectedBlockIdForEdit(null)}
-                      className="w-10 h-10 rounded-xl bg-zinc-800 hover:bg-rose-600 border-2 border-zinc-700 hover:border-zinc-950 text-white flex items-center justify-center font-black transition-all cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px]"
+                      className="w-10 h-10 rounded-xl bg-zinc-800 hover:bg-rose-600 border-2 border-zinc-700 hover:border-zinc-950 text-white flex items-center justify-center font-black transition-colors cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px]"
                     >
                       ✕
                     </button>
@@ -1872,11 +2150,11 @@ export default function RealEstateInventory({
 
             return (
               <div 
-                className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-md animate-fadeIn"
+                className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95  "
                 onClick={() => setSlideshowBlock(null)}
               >
                 <div 
-                  className="relative max-w-7xl max-h-[90vh] w-full flex items-center justify-center animate-zoomIn"
+                  className="relative max-w-7xl max-h-[90vh] w-full flex items-center justify-center "
                   onClick={e => e.stopPropagation()}
                 >
                   <button 
@@ -1889,7 +2167,7 @@ export default function RealEstateInventory({
                   <div className="relative group w-full h-full flex justify-center items-center">
                     <button
                       onClick={() => setSlideshowIndex(prev => (prev - 1 + block.images.length) % block.images.length)}
-                      className="absolute left-4 lg:-left-20 w-12 h-12 bg-white/10 hover:bg-white border-2 border-white/20 hover:border-white rounded-full flex items-center justify-center text-white hover:text-black transition-all opacity-0 group-hover:opacity-100 backdrop-blur-sm z-10"
+                      className="absolute left-4 lg:-left-20 w-12 h-12 bg-white/10 hover:bg-white border-2 border-white/20 hover:border-white rounded-full flex items-center justify-center text-white hover:text-black transition-colors opacity-0 group-hover:opacity-100  z-10"
                     >
                       <span className="font-mono font-black text-xl leading-none -ml-1">←</span>
                     </button>
@@ -1897,12 +2175,12 @@ export default function RealEstateInventory({
                     <img
                       src={currentImg.url}
                       alt={currentImg.title}
-                      className="max-w-full max-h-[85vh] object-contain rounded-xl border-4 border-zinc-800 shadow-[0_0_50px_rgba(0,0,0,0.5)]"
+                      className="max-w-full max-h-[85vh] object-contain rounded-xl border-4 border-zinc-800 "
                     />
 
                     <button
                       onClick={() => setSlideshowIndex(prev => (prev + 1) % block.images.length)}
-                      className="absolute right-4 lg:-right-20 w-12 h-12 bg-white/10 hover:bg-white border-2 border-white/20 hover:border-white rounded-full flex items-center justify-center text-white hover:text-black transition-all opacity-0 group-hover:opacity-100 backdrop-blur-sm z-10"
+                      className="absolute right-4 lg:-right-20 w-12 h-12 bg-white/10 hover:bg-white border-2 border-white/20 hover:border-white rounded-full flex items-center justify-center text-white hover:text-black transition-colors opacity-0 group-hover:opacity-100  z-10"
                     >
                       <span className="font-mono font-black text-xl leading-none ml-1">→</span>
                     </button>
@@ -2005,7 +2283,7 @@ export default function RealEstateInventory({
 
           {/* 3. BARRA DE FILTROS PADRÃO UTILIZADO NAS OUTRAS PÁGINAS - NOW TO THE 3RD PLACE */}
           <div className="bg-white border-4 border-zinc-950 p-5 rounded-3xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col md:flex-row gap-4 items-center justify-between">
-            {/* Search input with search icon */}
+            {/* Search input restored as requested */}
             <div className="relative w-full md:max-w-md">
               <Search className="absolute left-3.5 top-3.5 w-4 h-4 text-zinc-400" />
               <input
@@ -2049,7 +2327,7 @@ export default function RealEstateInventory({
                 className={`px-4.5 py-2.5 border-2 border-zinc-950 rounded-xl font-mono text-xs font-black uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition active:translate-y-0.5 flex items-center gap-1.5 cursor-pointer ${showOnlyCompatibilityMode ? 'bg-indigo-600 text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-white hover:bg-zinc-50 text-indigo-950'}`}
               >
                 <span>🤝 Compatibilidade</span>
-                {showOnlyCompatibilityMode && <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />}
+                {showOnlyCompatibilityMode && <span className="w-2 h-2 rounded-full bg-emerald-400 " />}
               </button>
 
               {/* Reset button if active */}
@@ -2239,7 +2517,7 @@ export default function RealEstateInventory({
                               setPropertyImages(prev => [...prev, preset.url]);
                             }
                           }}
-                          className="px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-zinc-950 text-[10px] font-black uppercase rounded shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition-all"
+                          className="px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-zinc-950 text-[10px] font-black uppercase rounded shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition-colors"
                         >
                           + {preset.name}
                         </button>
@@ -2280,7 +2558,7 @@ export default function RealEstateInventory({
                               <button
                                 type="button"
                                 onClick={() => setPropertyImages(prev => prev.filter((_, i) => i !== idx))}
-                                className="absolute bg-rose-600 hover:bg-rose-700 text-white rounded-full p-1 opacity-90 hover:scale-105 transition-all text-[8px] top-1 right-1 w-4 h-4 flex items-center justify-center font-bold"
+                                className="absolute bg-rose-600 hover:bg-rose-700 text-white rounded-full p-1 opacity-90 hover:scale-105 transition-colors text-[8px] top-1 right-1 w-4 h-4 flex items-center justify-center font-bold"
                                 title="Excluir Foto"
                               >
                                 ×
@@ -2320,7 +2598,7 @@ export default function RealEstateInventory({
               const leadsCount = getMatchingLeadsCount(prop);
 
               return (
-                <div key={prop.id} className="bg-white border-4 border-zinc-950 rounded-3xl overflow-hidden shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between hover:translate-y-[-2px] transition-all text-zinc-900 w-full">
+                <div key={prop.id} className="bg-white border-4 border-zinc-950 rounded-3xl overflow-hidden shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between hover:translate-y-[-2px] transition-colors text-zinc-900 w-full">
                   <div>
                     {/* Visual header with image carousels */}
                     <div className="relative h-44 bg-zinc-100 flex items-center justify-center overflow-hidden border-b-4 border-zinc-950 group">
@@ -2350,7 +2628,7 @@ export default function RealEstateInventory({
                             <img 
                               src={currentImg || undefined} 
                               alt={prop.title}
-                              className="w-full h-full object-cover transition-all duration-300"
+                              className="w-full h-full object-cover transition-colors"
                               referrerPolicy="no-referrer"
                             />
                             
@@ -2462,14 +2740,10 @@ export default function RealEstateInventory({
 
                       {/* Compatible Leads List Box inside card */}
                       {(() => {
-                        const matchingLeads = leads.filter(lead => {
-                          const minBudget = lead.value * 0.65;
-                          const maxBudget = lead.value * 1.25;
-                          return prop.price >= minBudget && prop.price <= maxBudget;
-                        });
+                        const matchingLeads = getMatchingLeadsForProperty(prop);
 
                         return (
-                          <div className={`mt-3 pt-3 border-t border-dashed border-zinc-200 transition-all ${showOnlyCompatibilityMode ? 'bg-indigo-50/70 p-3 rounded-2xl border-solid border-indigo-200' : ''}`}>
+                          <div className={`mt-3 pt-3 border-t border-dashed border-zinc-200 transition-colors ${showOnlyCompatibilityMode ? 'bg-indigo-50/70 p-3 rounded-2xl border-solid border-indigo-200' : ''}`}>
                             <div className="flex justify-between items-center mb-1.5">
                               <span className="text-[9px] uppercase font-mono font-black text-indigo-950 flex items-center gap-1">
                                 <Users className="w-3.5 h-3.5 text-indigo-600" />
@@ -2489,7 +2763,7 @@ export default function RealEstateInventory({
                                       <span className="text-[8px] font-mono text-zinc-500 font-bold opacity-75">({lead.status})</span>
                                     </div>
                                     <span className="font-mono font-black text-emerald-700 whitespace-nowrap">
-                                      {lead.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+                                      {(lead.value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
                                     </span>
                                   </div>
                                 ))}
@@ -2585,7 +2859,7 @@ export default function RealEstateInventory({
 
             {/* Scrollable table container */}
             {selectedProperties.length > 0 && (
-              <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 p-2 rounded-xl text-indigo-900 mb-4 animate-fadeIn">
+              <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 p-2 rounded-xl text-indigo-900 mb-4 ">
                 <span className="text-[10px] uppercase font-mono font-black border-r border-indigo-200 pr-3">{selectedProperties.length} Selecionados</span>
                 <button
                   type="button"
@@ -2605,31 +2879,46 @@ export default function RealEstateInventory({
                       setSelectedProperties([]);
                     }
                   }}
-                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[9px] font-mono font-black uppercase shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition-all cursor-pointer"
+                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[9px] font-mono font-black uppercase shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition-colors cursor-pointer"
                 >
                   <Trash2 className="w-3 h-3 inline-block mr-1" /> Excluir Lote
                 </button>
                 <button
                   type="button"
                   onClick={() => {
-                     // Toggle compatibility mode on, clear selected so UI shows filtered catalog
+                     let totalLeadsUpdated = 0;
+                     
+                     selectedProperties.forEach(propId => {
+                       const prop = properties.find(p => p.id === propId);
+                       if (prop && onUpdateLeadField) {
+                         const matchingLeads = getMatchingLeadsForProperty(prop);
+                         matchingLeads.forEach(lead => {
+                           onUpdateLeadField(lead.id, { propertyInterest: prop.code });
+                           totalLeadsUpdated++;
+                         });
+                       }
+                     });
+
                      setShowOnlyCompatibilityMode(true);
                      setSelectedProperties([]);
-                     addNotification(
-                       '🤝 COMPATIBILIDADE ATIVADA',
-                       `Exibindo apenas os imóveis que possuem Leads com capacidade de compra validada e budget correspondente.`,
-                       'info'
-                     );
+                     if (addNotification) {
+                       addNotification(
+                         '🤝 AUTOMAÇÃO CONCLUÍDA',
+                         `${totalLeadsUpdated} leads foram atrelados aos imóveis selecionados com sucesso!`,
+                         'success'
+                       );
+                     }
                   }}
-                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[9px] font-mono font-black uppercase shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition-all cursor-pointer"
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[9px] font-mono font-black uppercase shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition-colors cursor-pointer"
                 >
                   <Users className="w-3 h-3 inline-block mr-1" /> Atrelar Leads Compatíveis
                 </button>
               </div>
             )}
             
-            <div className="border border-zinc-250 rounded-2xl overflow-visible shadow-inner bg-zinc-50 overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse font-sans">
+            <div className="border border-zinc-250 rounded-2xl shadow-inner bg-zinc-50 overflow-x-auto custom-scrollbar">
+              <div className="min-w-[900px] w-full">
+                <table className="w-full text-left text-xs border-collapse font-sans">
                 <thead className="bg-zinc-950 text-white font-mono text-[10px] uppercase font-black tracking-wider sticky top-0 z-10 font-sans">
                   <tr>
                     <th className="p-3 pl-4 w-10">
@@ -2779,6 +3068,7 @@ export default function RealEstateInventory({
                   )}
                 </tbody>
               </table>
+              </div>
             </div>
           </div>
         </div>
@@ -3131,7 +3421,7 @@ export default function RealEstateInventory({
                   handleFileImport(file);
                 }
               }}
-              className={`border-4 border-dashed rounded-2xl p-6 text-center transition-all select-none flex flex-col items-center justify-center gap-2 ${
+              className={`border-4 border-dashed rounded-2xl p-6 text-center transition-colors select-none flex flex-col items-center justify-center gap-2 ${
                 isDraggingFile 
                   ? 'border-indigo-600 bg-indigo-50/50 scale-[1.01]' 
                   : 'border-zinc-300 bg-zinc-50 hover:bg-zinc-100/60'
@@ -3222,8 +3512,9 @@ export default function RealEstateInventory({
                   </button>
                 </div>
 
-                <div className="border border-zinc-300 rounded-xl overflow-x-auto max-h-[300px] shadow-sm font-mono text-zinc-805">
-                  <table className="w-full text-left border-collapse text-xs">
+                <div className="border border-zinc-305 rounded-xl overflow-x-auto max-h-[300px] shadow-sm font-mono text-zinc-805 custom-scrollbar">
+                  <div className="min-w-[800px] w-full">
+                    <table className="w-full text-left border-collapse text-xs">
                     <thead>
                       <tr className="bg-zinc-100 border-b border-zinc-305 text-zinc-500 uppercase font-black">
                         <th className="p-3">#</th>
@@ -3247,6 +3538,7 @@ export default function RealEstateInventory({
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               </div>
             )}
@@ -3642,7 +3934,7 @@ export default function RealEstateInventory({
       
         {isPdfModalOpen && createPortal(
           <div
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto print:p-0 print:bg-white print:static print:block"
+            className="fixed inset-0 z-50 bg-black/60  flex items-center justify-center p-4 overflow-y-auto print:p-0 print:bg-white print:static print:block"
           >
             <div
               className="bg-zinc-100 border-4 border-zinc-950 p-6 rounded-3xl max-w-4xl w-full shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] flex flex-col gap-4 text-zinc-900 print:p-0 print:border-none print:shadow-none print:bg-white print:max-w-none"
@@ -3829,7 +4121,7 @@ export default function RealEstateInventory({
       
         {mediaModalOpen && selectedPropertyForMedia && (
           <div
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+            className="fixed inset-0 z-50 bg-black/60  flex items-center justify-center p-4 overflow-y-auto"
           >
             <div
               className="bg-white border-4 border-zinc-950 p-6 rounded-3xl max-w-4xl w-full shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] flex flex-col gap-4 text-zinc-900"
@@ -4346,7 +4638,7 @@ export default function RealEstateInventory({
                               </div>
                               <div className="w-full bg-zinc-900 border border-zinc-700 h-2.5 rounded-full overflow-hidden">
                                 <div
-                                  className="bg-indigo-505 bg-indigo-500 h-full rounded-full transition-all duration-300"
+                                  className="bg-indigo-505 bg-indigo-500 h-full rounded-full transition-colors"
                                   style={{ width: `${Math.floor(activeInventoryBatchIndex / matchingLeads.length * 100)}%` }}
                                 />
                               </div>
@@ -4372,7 +4664,7 @@ export default function RealEstateInventory({
                                 <div key={lead.id} className="p-2 border border-zinc-100 bg-white rounded-lg flex justify-between items-center shrink-0">
                                   <div>
                                     <span className="font-bold text-zinc-900">{lead.name}</span>
-                                    <span className="block text-[8px] text-zinc-500 font-mono">Budget: {lead.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}</span>
+                                    <span className="block text-[8px] text-zinc-500 font-mono">Budget: {(lead.value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}</span>
                                   </div>
                                   <span className="text-[8.5px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-150 px-1.5 py-0.5 rounded">Qualificado</span>
                                 </div>
@@ -4592,7 +4884,7 @@ export default function RealEstateInventory({
       {/* EXCLUSIVO MODAL DE IMPORTAÇÃO DE ATIVOS / CURY / CAIXA */}
       
         {isPropertyImportModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-4 backdrop-blur-md select-none overflow-y-auto">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-4  select-none overflow-y-auto">
             <div
               className="bg-white border-4 border-zinc-950 rounded-3xl w-full max-w-4xl shadow-[8px_8px_0px_0px_rgba(24,24,27,1)] overflow-hidden max-h-[90vh] flex flex-col text-zinc-900"
             >

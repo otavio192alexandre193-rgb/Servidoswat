@@ -81,9 +81,9 @@ export default function SmartCalendar({
                 <input 
                   type="text" 
                   placeholder="Ex: Agendar follow-up para quinta às 14h..."
-                  className={`w-full p-3 rounded-xl border-2 text-[10px] uppercase font-black font-mono transition-all focus:outline-none bg-zinc-50 dark:bg-zinc-950 border-zinc-950 dark:border-zinc-700 focus:border-indigo-500 shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] dark:shadow-none placeholder-zinc-400`}
+                  className={`w-full p-3 rounded-xl border-2 text-[10px] uppercase font-black font-mono transition-colors focus:outline-none bg-zinc-50 dark:bg-zinc-950 border-zinc-950 dark:border-zinc-700 focus:border-indigo-500 shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] dark:shadow-none placeholder-zinc-400`}
                 />
-                <button className="w-full p-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-black uppercase text-[10px] tracking-widest shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] transition-all hover:translate-y-[-1px] cursor-pointer border-2 border-zinc-950 dark:border-indigo-400">
+                <button className="w-full p-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-black uppercase text-[10px] tracking-widest shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] transition-colors hover:translate-y-[-1px] cursor-pointer border-2 border-zinc-950 dark:border-indigo-400">
                   Executar Comando NLP
                 </button>
               </div>
@@ -110,15 +110,15 @@ export default function SmartCalendar({
             <div className={`flex rounded-lg border-2 overflow-hidden shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] border-zinc-950 dark:border-zinc-700`}>
               <button 
                 onClick={() => setViewMode("dia")}
-                className={`px-4 py-2 text-[9px] font-black uppercase transition-all ${viewMode === "dia" ? "bg-indigo-600 text-white" : "bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-900 dark:text-zinc-400"} border-r-2 border-zinc-950 dark:border-zinc-700`}
+                className={`px-4 py-2 text-[9px] font-black uppercase transition-colors ${viewMode === "dia" ? "bg-indigo-600 text-white" : "bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-900 dark:text-zinc-400"} border-r-2 border-zinc-950 dark:border-zinc-700`}
               >Dia</button>
               <button 
                 onClick={() => setViewMode("semana")}
-                className={`px-4 py-2 text-[9px] font-black uppercase transition-all ${viewMode === "semana" ? "bg-indigo-600 text-white" : "bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-900 dark:text-zinc-400"} border-r-2 border-zinc-950 dark:border-zinc-700`}
+                className={`px-4 py-2 text-[9px] font-black uppercase transition-colors ${viewMode === "semana" ? "bg-indigo-600 text-white" : "bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-900 dark:text-zinc-400"} border-r-2 border-zinc-950 dark:border-zinc-700`}
               >Semana</button>
               <button 
                 onClick={() => setViewMode("mes")}
-                className={`px-4 py-2 text-[9px] font-black uppercase transition-all ${viewMode === "mes" ? "bg-indigo-600 text-white" : "bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-900 dark:text-zinc-400"}`}
+                className={`px-4 py-2 text-[9px] font-black uppercase transition-colors ${viewMode === "mes" ? "bg-indigo-600 text-white" : "bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-900 dark:text-zinc-400"}`}
               >Mês</button>
             </div>
           </div>
@@ -129,7 +129,7 @@ export default function SmartCalendar({
             {days.map((day, idx) => {
               const isToday = isSameDay(day, new Date());
               return (
-                <div key={idx} className={`min-h-[140px] rounded-xl border-2 flex flex-col p-2 transition-all bg-white dark:bg-zinc-900 ${isToday ? "border-indigo-600 shadow-[4px_4px_0px_0px_rgba(79,70,229,1)] scale-[1.02] z-10" : "border-zinc-950 dark:border-zinc-800 shadow-[2px_2px_0px_0px_rgba(24,24,27,1)]"}`}>
+                <div key={idx} className={`min-h-[140px] rounded-xl border-2 flex flex-col p-2 transition-colors bg-white dark:bg-zinc-900 ${isToday ? "border-indigo-600 shadow-[4px_4px_0px_0px_rgba(79,70,229,1)] scale-[1.02] z-10" : "border-zinc-950 dark:border-zinc-800 shadow-[2px_2px_0px_0px_rgba(24,24,27,1)]"}`}>
                   <div className="flex items-center justify-between mb-3 border-b-2 border-dashed border-zinc-200 dark:border-zinc-800 pb-1">
                     <span className={`text-xs font-black font-mono ${isToday ? "text-indigo-600 dark:text-indigo-400" : "text-zinc-900 dark:text-zinc-400"}`}>
                       {format(day, "dd")} <span className="opacity-50 ml-1">{viewMode !== "mes" && format(day, "EEE", { locale: ptBR })}</span>

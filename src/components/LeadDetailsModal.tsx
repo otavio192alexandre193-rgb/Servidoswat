@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Lead, LeadStatus, EmailLog } from '../types';
+import { Lead, LeadStatus, EmailLog, OperationalFlow, Appointment } from '../types';
 import { handleWhatsAppAction } from '../utils/whatsapp';
 import { getKanbanColumns } from '../utils/kanban';
 import { 
@@ -35,7 +35,10 @@ import {
   Bot,
   ListTree,
   ChevronDown,
-  Trash2
+  Trash2,
+  Plus,
+  Check,
+  CalendarDays
 } from 'lucide-react';
 import { 
   getWorkspaceToken, 
@@ -47,6 +50,7 @@ interface LeadDetailsModalProps {
   isOpen: boolean;
   lead: Lead | null;
   emailLogs: EmailLog[];
+  properties?: any[];
   onClose: () => void;
   onUpdateLeadNotes: (leadId: string, notes: string) => void;
   onUpdateLeadStatus: (leadId: string, status: string, targetPageId?: string) => void;
@@ -58,6 +62,8 @@ interface LeadDetailsModalProps {
   onOpenEditModal?: (lead: Lead) => void;
   onDeleteLead?: (leadId: string) => void;
   onNavigateToFollowUp?: (lead: Lead) => void;
+  appointments?: Appointment[];
+  setAppointments?: React.Dispatch<React.SetStateAction<Appointment[]>>;
 }
 
 const getDaysSinceContact = (lastContactAt?: string): number | null => {
@@ -124,7 +130,7 @@ const STOCK_DEVELOPMENTS: PredictiveProperty[] = [
     location: 'Itaquera (Ao lado do Metrô) - SP',
     typology: '1 ou 2 Dorms • Opção de Vaga Coberta',
     minIncomeRequired: 2200,
-    benefits: ['Fácil acesso ao metrô', 'Documentação Grátis Cury', 'Subsídio MCMV ativo'],
+    benefits: ['Fácil acesso ao metrô', 'Documentação Grátis Cury', 'Subsídio MCMV active'],
     icon: '🚇',
     imageBg: 'from-sky-100 to-blue-50/50'
   },
@@ -157,7 +163,8 @@ const STOCK_DEVELOPMENTS: PredictiveProperty[] = [
 export default function LeadDetailsModal({ 
   isOpen, 
   lead, 
-  emailLogs, 
+  emailLogs,
+  properties = [],
   onClose, 
   onUpdateLeadNotes,
   onUpdateLeadStatus,
@@ -168,11 +175,83 @@ export default function LeadDetailsModal({
   onOpenRuleEngine,
   onOpenEditModal,
   onDeleteLead,
-  onNavigateToFollowUp
+  onNavigateToFollowUp,
+  appointments = [],
+  setAppointments
 }: LeadDetailsModalProps) {
+  const [activeTab, setActiveTab] = useState<'ficha_checklist' | 'dossies_fluxos' | 'agenda' | 'historico'>('ficha_checklist');
   const [notesText, setNotesText] = useState('');
+  const [selectedFlowId, setSelectedFlowId] = useState<string>('');
+  const [flowNotification, setFlowNotification] = useState<string | null>(null);
+  const [selectedScriptId, setSelectedScriptId] = useState<string>('script-mcmv');
+
+  const [operationalFlows, setOperationalFlows] = useState<OperationalFlow[]>(() => {
+    const saved = localStorage.getItem("ciclocred_crm_operational_flows");
+    try {
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
+    return [
+      {
+        id: "flow-1",
+        name: "Fluxo Padrão - Geral",
+        createdAt: new Date().toISOString(),
+        stages: [
+          { id: "stage-1", name: "Primeiro Contato", timer: { days: 1, hours: 0, minutes: 0 } },
+          { id: "stage-2", name: "Simulação", timer: { days: 2, hours: 0, minutes: 0 } },
+          { id: "stage-3", name: "Análise de Crédito", timer: { days: 3, hours: 0, minutes: 0 } }
+        ]
+      }
+    ];
+  });
+
+  useEffect(() => {
+    if (lead) {
+      setSelectedFlowId(lead.fluxoId || '');
+    }
+  }, [lead]);
+
+  const SCRIPTS_LIBRARY = [
+    {
+      id: 'script-mcmv',
+      title: '🟢 Abordagem MCMV & Subsídio',
+      category: 'Primeiro Imóvel',
+      description: 'Focado em atrair clientes com potencial para subsídio de até R$ 55 mil.',
+      template: 'Olá [Nome], tudo bem? Me chamo [Corretor] e sou especialista em crédito do cicloCRED.\n\nEstava analisando seu perfil e vi que tem interesse no empreendimento [Imovel]. Sabia que com a sua renda mensal declarada de R$ [Renda], você tem direito ao programa Minha Casa Minha Vida e pode receber até R$ 55.000 de subsídio direto do governo para abater o saldo?\n\nGostaria de simular suas parcelas em 2 minutos sem compromisso? Tenho um simulador oficial Caixa aberto aqui.'
+    },
+    {
+      id: 'script-sbpe',
+      title: '🔵 Apresentação de Parcelas Médias / SBPE',
+      category: 'Médio/Alto Padrão',
+      description: 'Ideal para clientes de classe média interessados em tabela SAC ou Price.',
+      template: 'Olá [Nome], excelente dia! Aqui é [Corretor] do cicloCRED.\n\nTenho ótimas notícias sobre o empreendimento [Imovel] de seu interesse. Fiz um pré-enquadramento de crédito habitacional pelo SBPE na tabela SAC, e as primeiras parcelas estimadas ficaram super confortáveis, com a facilidade de amortização progressiva.\n\nSua renda declarada de R$ [Renda] se enquadra perfeitamente. Vamos fazer uma simulação personalizada hoje? Qual o melhor horário?'
+    },
+    {
+      id: 'script-restricao',
+      title: '🟡 Contorno de Restrição Bacen & Composição',
+      category: 'Recuperação',
+      description: 'Roteiro de acolhimento para contornar restrições de crédito propondo composição familiar.',
+      template: 'Olá [Nome], tudo bem?\n\nQuero te tranquilizar sobre o financiamento do [Imovel]. Muitos clientes pensam que ter alguma restrição Bacen inviabiliza o sonho do imóvel, mas a verdade é que existem ótimas soluções! Nós conseguimos fazer a composição de renda familiar, incluindo um co-comprador para aprovar seu crédito sem burocracia na Caixa.\n\nCom a renda conjunta ajustada, o banco aprova o crédito rapidamente. Vamos conversar para eu te mostrar como funciona?'
+    }
+  ];
+
+  const getPersonalizedScript = (template: string) => {
+    if (!lead) return '';
+    const agentName = localStorage.getItem('ciclocred_user_name') || 'Consultor';
+    const rawIncome = lead.familyIncome || 5000;
+    const formattedIncome = Number(rawIncome).toLocaleString('pt-BR');
+    const imovelName = lead.propertyInterest || 'Empreendimento de Interesse';
+    
+    return template
+      .replace(/\[Nome\]/g, lead.name)
+      .replace(/\[Corretor\]/g, agentName)
+      .replace(/\[Renda\]/g, formattedIncome)
+      .replace(/\[Imovel\]/g, imovelName);
+  };
+
   const [isSavingNotes, setIsSavingNotes] = useState(false);
-  const [activeModalSection, setActiveModalSection] = useState<'dossier' | 'ficha'>('dossier');
 
   const scoreBadgeColor = () => {
     if (!lead) return 'bg-zinc-100 text-zinc-800 border-zinc-500';
@@ -221,6 +300,11 @@ export default function LeadDetailsModal({
   const [leadRegion, setLeadRegion] = useState('Sul');
   const [leadGender, setLeadGender] = useState<'Homem' | 'Mulher' | 'Outro'>('Homem');
 
+  const [valorAto, setValorAto] = useState<number>(15000);
+  const [valorAnual, setValorAnual] = useState<number>(5000);
+  const [valorChaves, setValorChaves] = useState<number>(10000);
+  const [tempoObra, setTempoObra] = useState<number>(36);
+
   const [sessionIncome, setSessionIncome] = useState<number>(0);
   const [tempIncomeInput, setTempIncomeInput] = useState<string>('');
   const [isUpdatingIncome, setIsUpdatingIncome] = useState(false);
@@ -242,6 +326,25 @@ export default function LeadDetailsModal({
 
   // Checklist de Qualificação (Financiamento & Simulação)
   const [checklist, setChecklist] = useState<Record<string, boolean>>({});
+
+  // Inline appointment creation state
+  const [newAptTitle, setNewAptTitle] = useState('');
+  const [newAptDate, setNewAptDate] = useState(new Date().toISOString().substring(0, 10));
+  const [newAptTime, setNewAptTime] = useState('14:00');
+  const [newAptType, setNewAptType] = useState<'reuniao' | 'telefone' | 'proposta' | 'outro'>('telefone');
+
+  const availableProperties = properties.length > 0 ? properties.map(p => ({
+    id: p.id,
+    title: p.title,
+    developer: p.ownerName || 'Construtora Parceira',
+    price: p.price,
+    location: `${p.neighborhood}, ${p.city} - ${p.state}`,
+    typology: `${p.bedrooms} Dorms • ${p.type}`,
+    minIncomeRequired: p.price * 0.01,
+    benefits: p.features || ['Excelente localização', 'Financiamento facilitado'],
+    icon: '🏢',
+    imageBg: 'from-blue-100 to-indigo-50/50'
+  })) : STOCK_DEVELOPMENTS;
 
   useEffect(() => {
     if (lead?.id) {
@@ -301,7 +404,7 @@ export default function LeadDetailsModal({
     setAiPitchText('');
     setIsCopied(false);
     
-    const activeProperty = STOCK_DEVELOPMENTS.find(p => p.id === selectedPropertyId) || STOCK_DEVELOPMENTS[0];
+    const activeProperty = availableProperties.find(p => p.id === selectedPropertyId) || availableProperties[0];
     const targetAction = actionOverride || modalCoproductTab;
 
     try {
@@ -357,6 +460,11 @@ export default function LeadDetailsModal({
       setLeadRegion(lead.region || 'Sul');
       setLeadGender(lead.gender || 'Homem');
       
+      setValorAto(lead.valorAto !== undefined ? lead.valorAto : 15000);
+      setValorAnual(lead.valorAnual !== undefined ? lead.valorAnual : 5000);
+      setValorChaves(lead.valorChaves !== undefined ? lead.valorChaves : 10000);
+      setTempoObra(lead.tempoObra !== undefined ? lead.tempoObra : 36);
+
       // Deduce co-buyer and dependents based on value/notes if they matched
       setHasCoBuyer(lead.value > 250000 || lead.name.length % 2 === 0);
       setHasDependents(lead.notes.toLowerCase().includes('concluí') || lead.name.length % 3 === 0);
@@ -388,8 +496,8 @@ export default function LeadDetailsModal({
   const handleNotesSave = () => {
     setIsSavingNotes(true);
     setTimeout(() => {
-       onUpdateLeadNotes(lead.id, notesText);
-       setIsSavingNotes(false);
+        onUpdateLeadNotes(lead.id, notesText);
+        setIsSavingNotes(false);
     }, 400);
   };
 
@@ -501,7 +609,7 @@ export default function LeadDetailsModal({
     // Obras em 36 meses padrão construtora
     const constructionInstallment = workBalanceToInstall / 36;
 
-    // 7. Calculate Suitability Match percentage
+    // Suitability Match percentage
     let suitability = 100;
 
     if (grossIncome <= 0) {
@@ -558,11 +666,11 @@ export default function LeadDetailsModal({
   };
 
   // Find current selected property simulation
-  const selectedProperty = STOCK_DEVELOPMENTS.find(p => p.id === selectedPropertyId) || STOCK_DEVELOPMENTS[1];
+  const selectedProperty = availableProperties.find(p => p.id === selectedPropertyId) || availableProperties[0];
   const sim = calculateAdvancedMetrics(selectedProperty.price, selectedProperty.minIncomeRequired);
 
   // Map developments to show live fitting score
-  const rankedProperties = STOCK_DEVELOPMENTS.map(p => {
+  const rankedProperties = availableProperties.map(p => {
     const metrics = calculateAdvancedMetrics(p.price, p.minIncomeRequired);
     return {
       ...p,
@@ -574,92 +682,75 @@ export default function LeadDetailsModal({
     const parsed = parseFloat(tempIncomeInput);
     if (!isNaN(parsed) && parsed >= 0) {
       setIsUpdatingIncome(true);
+      setSessionIncome(parsed);
+      updateField('familyIncome', parsed);
       setTimeout(() => {
-        setSessionIncome(parsed);
-        if (onUpdateLeadFamilyIncome) {
-          onUpdateLeadFamilyIncome(lead.id, parsed);
-        }
         setIsUpdatingIncome(false);
-      }, 400);
+      }, 300);
+      if (awardXP) awardXP(40);
     }
   };
 
-  const handleUpdateCoBuyerIncome = () => {
-    const parsed = parseFloat(tempCoBuyerIncomeInput);
-    if (!isNaN(parsed) && parsed >= 0) {
-      setCoBuyerIncome(parsed);
-    }
-  };
+  const handleAddNewAppointment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAptTitle.trim() || !setAppointments) return;
 
-  const handleUpdateFgts = () => {
-    const parsed = parseFloat(tempFgtsInput);
-    if (!isNaN(parsed) && parsed >= 0) {
-      setFgtsBalance(parsed);
-    }
-  };
+    const newApt: Appointment = {
+      id: `appt-${Math.random().toString(36).substr(2, 9)}`,
+      leadId: lead.id,
+      leadName: lead.name,
+      title: newAptTitle,
+      date: newAptDate,
+      time: newAptTime,
+      type: newAptType,
+      status: 'agendado',
+      description: `Compromisso programado diretamente na aba de Agenda do lead ${lead.name}.`
+    };
 
-  const handleUpdateOwnSavings = () => {
-    const parsed = parseFloat(tempOwnSavingsInput);
-    if (!isNaN(parsed) && parsed >= 0) {
-      setOwnSavings(parsed);
-    }
-  };
-
-  // Auto copy simulation dossier text into NOTES
-  const handleApplySimulationToNotes = () => {
-    const mainIncomeStr = (sessionIncome || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    const jointIncomeStr = (hasCoBuyer ? coBuyerIncome : 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    const subsidyStr = sim.subsidy.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    const loanStr = sim.approvedLoan.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    const firstInstallmentStr = sim.initialInstallment.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    const workInstallmentStr = sim.constructionInstallment.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const updated = [...appointments, newApt];
+    setAppointments(updated);
+    localStorage.setItem("ciclocred_crm_appointments", JSON.stringify(updated));
     
-    // Calculate 5-rules parameters for dossier text
-    const totalIncome = sessionIncome + (hasCoBuyer ? coBuyerIncome : 0);
-    const maxPermitidoParcela = totalIncome * 0.3;
-    const isMCMV = selectedProperty.price <= 275000;
-    const rule1Passed = !isMCMV || selectedProperty.price <= 275000;
-    const rule2Passed = sim.initialInstallment <= maxPermitidoParcela;
-    const totalEntrada = fgtsBalance + ownSavings;
-    const rule3Passed = totalEntrada >= (selectedProperty.price * 0.2);
-    const rule4Passed = sim.approvalProbability >= 50;
-    const rule5Passed = hasCleanCredit;
-
-    const rulesStatus = `
-📋 SCORECARD TÉCNICO DE CRÉDITO (5 REGRAS DO SISTEMA):
-1. Regra de Teto (Enquadramento): ${rule1Passed ? '✅ Aprovável' : '❌ Falha: Excede limite MCMV R$ 275k'}
-2. Comprometimento de Renda (<30%): ${rule2Passed ? '✅ Aprovável' : '❌ Excedido (Parc: ' + firstInstallmentStr + ' / Limite: ' + maxPermitidoParcela.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }) + ')'}
-3. Cota Mínima Recursos Próprios (20% LTV): ${rule3Passed ? '✅ Aprovável' : '❌ Baixo (Entrada: ' + totalEntrada.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }) + ' / Exigido: ' + (selectedProperty.price * 0.2).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }) + ')'}
-4. Coobrigado/Lastro Cadastral Caixa: ${rule4Passed ? '✅ Viável' : '⚠️ Alto Risco'}
-5. Restrição Cadastral (BACEN/Serasa): ${rule5Passed ? '✅ CPF Limpo' : '❌ Bloqueio Cadastral Ativo'}`;
-
-    const dossierText = `🤖 [DOSSIÊ PREDITIVO DE CRÉDITO]
-Ficha de crédito analisada via motor preditivo:
-• Produto Selecionado: ${selectedProperty.title}
-• Renda Familiar Total: ${totalIncome.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-• Subsídio Estimado Caixa: ${subsidyStr}
-• Crédito Habitacional Pré-Aprovado (${amortizationSystem}): ${loanStr} (Taxa: ${sim.annualRate}% a.a.)
-• Encargo Habitacional Inicial: ${firstInstallmentStr}/mês (Termo: ${sim.maxTermMonths} meses)
-• Fluxo Período Obras Facilitado: 36x fixas de ${workInstallmentStr}/mês
-• Probabilidade de Aprovação Instantânea: ${sim.approvalProbability}%
-• Fit Score de Qualificação: ${sim.suitability}% Match
-${rulesStatus}
-
-Gerado inteligentemente pelo Sistema em ${new Date().toLocaleDateString('pt-BR')}.`;
-
-    setNotesText(prev => prev ? `${prev}\n\n${dossierText}` : dossierText);
+    // Clear form and award XP
+    setNewAptTitle('');
+    if (awardXP) awardXP(80);
+    setGoogleWorkspaceSuccess("Compromisso cadastrado no CRM!");
+    setTimeout(() => setGoogleWorkspaceSuccess(null), 3000);
   };
+
+  const handleToggleAppointmentStatus = (apptId: string) => {
+    if (!setAppointments) return;
+    const updated = appointments.map(apt => {
+      if (apt.id === apptId) {
+        const nextStatus = apt.status === 'agendado' ? 'realizado' : apt.status === 'realizado' ? 'cancelado' : 'agendado';
+        return { ...apt, status: nextStatus };
+      }
+      return apt;
+    });
+    setAppointments(updated);
+    localStorage.setItem("ciclocred_crm_appointments", JSON.stringify(updated));
+    if (awardXP) awardXP(30);
+  };
+
+  // Find active scheduled follow-ups for this lead
+  const leadAppointments = appointments.filter(apt => apt.leadId === lead.id || apt.leadName === lead.name);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/60 p-4 overflow-y-auto backdrop-blur-xs select-none">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-zinc-950/80 backdrop-blur-xs overflow-hidden"
+      id="lead-details-modal-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div 
         id="lead-details-modal-frame"
-        className="bg-white border-4 border-zinc-950 rounded-2xl w-full max-w-3xl shadow-[6px_6px_0px_0px_rgba(24,24,27,1)] overflow-hidden  max-h-[92vh] flex flex-col text-zinc-800"
+        className="bg-white border-4 border-zinc-950 rounded-2xl w-full max-w-3xl shadow-[6px_6px_0px_0px_rgba(24,24,27,1)] overflow-hidden max-h-[92vh] flex flex-col text-zinc-800 animate-in fade-in zoom-in-95 duration-150"
       >
         {/* Header containing name and current status badge */}
         <div className="p-5 border-b-4 border-zinc-950 bg-zinc-900 text-white flex items-start justify-between">
           <div className="space-y-1.5 min-w-0 flex-1">
-            <span className="text-[10px] uppercase font-black tracking-widest text-indigo-400 font-mono">Checklist & Roteiros do Lead</span>
+            <span className="text-[10px] uppercase font-black tracking-widest text-indigo-400 font-mono">Ficha de Qualificação e Dossiê</span>
             <h2 className="font-sans font-black text-xl text-white truncate">{lead.name}</h2>
             
             <div className="flex flex-wrap items-center gap-3 mt-1.5">
@@ -684,1511 +775,1243 @@ Gerado inteligentemente pelo Sistema em ${new Date().toLocaleDateString('pt-BR')
           </button>
         </div>
 
-        {/* Navigation Tabs for Modal Section */}
-        <div className="flex bg-zinc-100 border-b-4 border-zinc-950 p-1.5 gap-1.5 shrink-0 select-none">
+        {/* Sticky Tab Selector */}
+        <div className="bg-zinc-100 border-b-2 border-zinc-950 px-4 py-2.5 flex flex-wrap gap-1.5 select-none shrink-0">
           <button
             type="button"
-            onClick={() => setActiveModalSection('dossier')}
-            className={`flex-1 py-2.5 text-xs font-mono font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 border-2 rounded-xl cursor-pointer ${
-              activeModalSection === 'dossier'
-                ? 'bg-zinc-900 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(24,24,27,1)]'
-                : 'text-zinc-650 hover:text-zinc-950 bg-white border-zinc-300 hover:bg-zinc-50'
+            onClick={() => setActiveTab('ficha_checklist')}
+            className={`px-3.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider font-mono transition-colors cursor-pointer whitespace-nowrap ${
+              activeTab === 'ficha_checklist'
+                ? 'bg-zinc-900 text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                : 'text-zinc-650 hover:text-zinc-950 hover:bg-zinc-200'
             }`}
           >
-            📋 Checklist & Roteiros IA
+            📋 Ficha & Checklist
           </button>
           <button
             type="button"
-            onClick={() => setActiveModalSection('ficha')}
-            className={`flex-1 py-2.5 text-xs font-mono font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 border-2 rounded-xl cursor-pointer ${
-              activeModalSection === 'ficha'
-                ? 'bg-zinc-900 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(24,24,27,1)]'
-                : 'text-zinc-650 hover:text-zinc-950 bg-white border-zinc-300 hover:bg-zinc-50'
+            onClick={() => setActiveTab('dossies_fluxos')}
+            className={`px-3.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider font-mono transition-colors cursor-pointer whitespace-nowrap ${
+              activeTab === 'dossies_fluxos'
+                ? 'bg-zinc-900 text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                : 'text-zinc-650 hover:text-zinc-950 hover:bg-zinc-200'
             }`}
           >
-            👤 Ficha Cadastral do Lead
+            🔬 Dossiês & Fluxos
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('agenda')}
+            className={`px-3.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider font-mono transition-colors cursor-pointer whitespace-nowrap ${
+              activeTab === 'agenda'
+                ? 'bg-zinc-900 text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                : 'text-zinc-650 hover:text-zinc-950 hover:bg-zinc-200'
+            }`}
+          >
+            📅 Agenda & Workspace
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('historico')}
+            className={`px-3.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider font-mono transition-colors cursor-pointer whitespace-nowrap ${
+              activeTab === 'historico'
+                ? 'bg-zinc-900 text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                : 'text-zinc-650 hover:text-zinc-950 hover:bg-zinc-200'
+            }`}
+          >
+            🗒️ Histórico & Notas
           </button>
         </div>
 
-        {/* Modular Content split in two columns */}
-        <div className={`p-6 overflow-y-auto flex-1 bg-white ${activeModalSection === 'ficha' ? 'hidden' : 'grid grid-cols-1 md:grid-cols-12 gap-6'}`}>
-          {/* LEFT PANEL: Core details and Notes editor (7 Columns) */}
-          <div className="md:col-span-7 space-y-6">
-
-             {/* CHECKLIST DE QUALIFICAÇÃO DE FINANCIAMENTO & ANÁLISE FACILITADA */}
-             <div className="bg-zinc-50 border-2 border-zinc-950 rounded-xl p-5 space-y-4 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-               <div className="flex justify-between items-center border-b-2 border-zinc-200 pb-2">
-                 <h3 className="text-xs font-black text-zinc-900 uppercase tracking-tight flex items-center gap-1.5 font-sans">
-                   📋 Checklist de Qualificação de Financiamento
-                 </h3>
-                 <span className="text-[9px] bg-emerald-100 border border-emerald-300 text-emerald-950 px-2 py-0.5 rounded font-mono font-bold uppercase">
-                   Dossiê Digital
-                 </span>
-               </div>
-               
-               <p className="text-[11px] text-zinc-500 font-medium">
-                 Verifique se o lead possui as condições e a papelada correta para seguir com a simulação habitacional:
-               </p>
-
-               {/* Checklist Sections */}
-               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                 
-                 {/* Seção 1: Documentação Pessoal */}
-                 <div className="space-y-2 select-none">
-                   <h4 className="text-[10px] font-mono font-black text-indigo-600 uppercase tracking-widest border-b border-indigo-100 pb-1 flex items-center gap-1">
-                     <span>🪪 Doc. Pessoal</span>
-                   </h4>
-                   <div className="space-y-1.5">
-                     {[
-                       { key: 'doc_id', label: 'Documento ID (RG / CNH)' },
-                       { key: 'doc_res', label: 'Comprovante Residência' },
-                       { key: 'doc_civ', label: 'Certidão Nascimento/Casamento' }
-                     ].map(item => (
-                       <label key={item.key} className="flex items-center gap-2 text-xs font-semibold text-zinc-700 cursor-pointer">
-                         <input 
-                           type="checkbox"
-                           checked={!!checklist[item.key]}
-                           onChange={() => handleToggleChecklistItem(item.key)}
-                           className="w-4 h-4 rounded border-2 border-zinc-950 text-indigo-600 focus:ring-0 accent-indigo-600 cursor-pointer"
-                         />
-                         <span>{item.label}</span>
-                       </label>
-                     ))}
-                   </div>
-                 </div>
-
-                 {/* Seção 2: Comprovação de Renda */}
-                 <div className="space-y-2 select-none">
-                   <h4 className="text-[10px] font-mono font-black text-amber-600 uppercase tracking-widest border-b border-amber-100 pb-1 flex items-center gap-1">
-                     <span>💵 Comprov. Renda</span>
-                   </h4>
-                   <div className="space-y-1.5">
-                     {[
-                       { key: 'ren_hol', label: '3 últimos holerites/extratos' },
-                       { key: 'ren_irpf', label: 'Declaração IRPF + Recibo' },
-                       { key: 'ren_ctps', label: 'Carteira de Trabalho (CTPS)' }
-                     ].map(item => (
-                       <label key={item.key} className="flex items-center gap-2 text-xs font-semibold text-zinc-700 cursor-pointer">
-                         <input 
-                           type="checkbox"
-                           checked={!!checklist[item.key]}
-                           onChange={() => handleToggleChecklistItem(item.key)}
-                           className="w-4 h-4 rounded border-2 border-zinc-950 text-indigo-600 focus:ring-0 accent-indigo-600 cursor-pointer"
-                         />
-                         <span>{item.label}</span>
-                       </label>
-                     ))}
-                   </div>
-                 </div>
-
-                 {/* Seção 3: Análise de Crédito */}
-                 <div className="space-y-2 select-none">
-                   <h4 className="text-[10px] font-mono font-black text-emerald-600 uppercase tracking-widest border-b border-emerald-100 pb-1 flex items-center gap-1">
-                     <span>🛡️ Score & Crédito</span>
-                   </h4>
-                   <div className="space-y-1.5">
-                     {[
-                       { key: 'cre_serasa', label: 'Consulta Serasa (Score 500+)' },
-                       { key: 'cre_limpo', label: 'Nome Limpo (Sem Restrições)' },
-                       { key: 'cre_fgts', label: 'Três Anos CLT ativos (FGTS)' }
-                     ].map(item => (
-                       <label key={item.key} className="flex items-center gap-2 text-xs font-semibold text-zinc-700 cursor-pointer">
-                         <input 
-                           type="checkbox"
-                           checked={!!checklist[item.key]}
-                           onChange={() => handleToggleChecklistItem(item.key)}
-                           className="w-4 h-4 rounded border-2 border-zinc-950 text-indigo-600 focus:ring-0 accent-indigo-600 cursor-pointer"
-                         />
-                         <span>{item.label}</span>
-                       </label>
-                     ))}
-                   </div>
-                 </div>
-
-                 {/* Seção 4: Requisitos MCMV */}
-                 <div className="space-y-2 select-none">
-                   <h4 className="text-[10px] font-mono font-black text-purple-600 uppercase tracking-widest border-b border-purple-100 pb-1 flex items-center gap-1">
-                     <span>🏡 Requisitos MCMV</span>
-                   </h4>
-                   <div className="space-y-1.5">
-                     {[
-                       { key: 'req_unico', label: 'Sem outro imóvel ativo' },
-                       { key: 'req_resid', label: 'Reside ou trabalha na região' },
-                       { key: 'req_dep', label: 'Possui dependente (Subsídio+)' }
-                     ].map(item => (
-                       <label key={item.key} className="flex items-center gap-2 text-xs font-semibold text-zinc-700 cursor-pointer">
-                         <input 
-                           type="checkbox"
-                           checked={!!checklist[item.key]}
-                           onChange={() => handleToggleChecklistItem(item.key)}
-                           className="w-4 h-4 rounded border-2 border-zinc-950 text-indigo-600 focus:ring-0 accent-indigo-600 cursor-pointer"
-                         />
-                         <span>{item.label}</span>
-                       </label>
-                     ))}
-                   </div>
-                 </div>
-
-               </div>
-
-               {/* Progresso de Qualificação */}
-               {(() => {
-                 const totalItems = 12;
-                 const checkedCount = Object.keys(checklist).filter(k => checklist[k]).length;
-                 const progressPercent = Math.min((checkedCount / totalItems) * 100, 100);
-                 const barColor = progressPercent < 40 ? 'bg-red-500' : progressPercent < 80 ? 'bg-amber-400' : 'bg-emerald-500';
-
-                 return (
-                   <div className="bg-zinc-100 border-2 border-zinc-950 rounded-xl p-3 flex flex-col gap-2 mt-2 font-mono">
-                     <div className="flex justify-between items-center text-xs font-bold font-mono">
-                       <span className="text-[10px] text-zinc-500">Progresso do Dossiê:</span>
-                       <span className="text-zinc-900">{checkedCount}/{totalItems} ({Math.round(progressPercent)}%)</span>
-                     </div>
-                     <div className="w-full bg-zinc-200 border border-zinc-950 h-2.5 rounded-full overflow-hidden p-0.5">
-                       <div className={`${barColor} h-full rounded-full transition-all duration-300`} style={{ width: `${progressPercent}%` }}></div>
-                     </div>
-                     {checkedCount === totalItems && (
-                       <span className="text-[10px] font-mono font-black text-emerald-700 flex items-center gap-1 uppercase tracking-tight mt-0.5 ">
-                         <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                         <span>Excelente! Dossiê 100% completo e qualificado para proposta Caixa.</span>
-                       </span>
-                     )}
-                   </div>
-                 );
-               })()}
-             </div>
-
-            {/* AI EXPANDED PREDICTIVE STOCK SUITE */}
-            <div className="bg-gradient-to-br from-indigo-50/40 via-white to-zinc-50 border-2 border-zinc-950 rounded-xl p-5 space-y-5 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] select-none">
-              <div className="flex justify-between items-center border-b border-zinc-200 pb-2.5">
+        {/* Main Unified Content */}
+        <div className="p-3 sm:p-5 overflow-y-auto flex-1 bg-zinc-50 flex flex-col gap-6 custom-scrollbar text-zinc-900 font-sans">
+          
+          {/* TAB 1: FICHA & CHECKLIST */}
+          {activeTab === 'ficha_checklist' && (
+            <>
+              {/* Header Info */}
+              <div className="p-4 bg-white border-2 border-zinc-950 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div>
-                  <h3 className="text-xs font-black text-zinc-900 uppercase tracking-tight flex items-center gap-1.5 font-mono">
-                    <Sparkles className="w-4 h-4 text-indigo-600  shrink-0" />
-                    Inteligência Preditiva de Crédito
-                  </h3>
-                  <span className="text-[9px] tracking-widest font-bold text-zinc-400 font-mono block mt-0.5">ESTOQUE PARCEIRO CONSTRUTORA CURY</span>
+                  <h3 className="text-sm font-black uppercase text-zinc-900 tracking-tight font-mono">📋 Ficha Cadastral</h3>
+                  <p className="text-[10px] text-zinc-500 uppercase font-black font-mono">Totalmente integrada com blocos, fluxos e propostas.</p>
                 </div>
-                <div className="text-right">
-                  <span className="text-[10px] font-mono font-black text-emerald-700 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
-                    <Percent className="w-3.5 h-3.5 text-emerald-600" />
-                    {sim.suitability}% Fit Match
-                  </span>
+                <div className={`px-4 py-2 border-2 border-zinc-950 rounded-xl font-mono font-black text-xs uppercase bg-white ${scoreBadgeColor()}`}>
+                  🏆 Score: {lead.score || 40} pts
                 </div>
               </div>
 
-              {/* Dynamic state if income is configured or not */}
-              {sessionIncome <= 0 ? (
-                <div className="space-y-3.5 py-1">
-                  <p className="text-xs text-zinc-500 font-medium">
-                    Nenhuma renda familiar autodeclarada identificada para este lead. Insira a renda mensal para simular e identificar o produto e subsídio Caixa MCMV ideais:
-                  </p>
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-zinc-400 font-mono">R$</span>
-                      <input 
-                        type="number"
-                        placeholder="Renda familiar ex: 4500"
-                        value={tempIncomeInput}
-                        onChange={(e) => setTempIncomeInput(e.target.value)}
-                        className="w-full bg-white border-2 border-zinc-950 rounded-xl p-2.5 pl-9 text-xs font-mono font-black text-zinc-900 outline-none"
-                      />
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                
+                {/* 1. PESSOAL */}
+                <div className="bg-white border-4 border-zinc-950 rounded-2xl overflow-hidden shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] flex flex-col min-h-[500px]">
+                  <div className="bg-blue-100 border-b-4 border-zinc-950 py-2.5 text-center shrink-0">
+                    <h4 className="font-black text-xs uppercase tracking-wider text-blue-950 font-mono">👤 PESSOAL</h4>
+                    <p className="text-[8.5px] text-blue-900/70 font-bold uppercase tracking-widest mt-0.5">Identificação e Contato</p>
+                  </div>
+                  
+                  <div className="flex flex-col text-[11px] font-semibold text-zinc-700 divide-y divide-zinc-200 flex-1">
+                    {/* Sub-header 1 */}
+                    <div className="bg-blue-50 text-blue-950 px-3 py-1.5 font-mono font-black text-[9px] uppercase tracking-wider border-b-2 border-zinc-950 flex items-center gap-1 shrink-0">
+                      👤 Pessoal e Qualificação
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleUpdateIncomeClick}
-                      disabled={isUpdatingIncome}
-                      className="whitespace-nowrap px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white border-2 border-zinc-950 font-black rounded-xl text-xs uppercase shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition pointer-events-auto"
-                    >
-                      {isUpdatingIncome ? 'Analisando...' : '🔍 Analisar'}
-                    </button>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Nome Completo">Nome Completo</span>
+                      <div className="col-span-7">
+                        <input type="text" value={leadName} onChange={(e) => { setLeadName(e.target.value); updateField('name', e.target.value); }} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+                      </div>
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Telefone">Telefone</span>
+                      <div className="col-span-7">
+                        <input type="text" value={leadPhone} onChange={(e) => { setLeadPhone(e.target.value); updateField('phone', e.target.value); }} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+                      </div>
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="E-mail">E-mail</span>
+                      <div className="col-span-7">
+                        <input type="text" defaultValue={lead.email || ''} onBlur={(e) => updateField('email', e.target.value)} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+                      </div>
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="CPF">CPF</span>
+                      <div className="col-span-7">
+                        <input type="text" defaultValue={lead.cpf || ''} onBlur={(e) => updateField('cpf', e.target.value)} placeholder="000.000.000-00" className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+                      </div>
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Nascimento">Nascimento</span>
+                      <div className="col-span-7 text-right">
+                        <input type="date" defaultValue={lead.birthDate || ''} onBlur={(e) => updateField('birthDate', e.target.value)} className="font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full text-right" />
+                      </div>
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Estado Civil">Estado Civil</span>
+                      <div className="col-span-7 text-right">
+                        <select defaultValue={lead.maritalStatus || 'Solteiro'} onChange={(e: any) => updateField('maritalStatus', e.target.value)} className="font-black text-zinc-900 bg-transparent focus:outline-none p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full text-right">
+                          <option value="Solteiro">Solteiro</option>
+                          <option value="Casado">Casado</option>
+                          <option value="Uniao estavel">União Estável</option>
+                          <option value="Divorciado">Divorciado</option>
+                          <option value="Viuvo">Viúvo</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Gênero">Gênero</span>
+                      <div className="col-span-7 text-right">
+                        <select value={leadGender} onChange={(e: any) => { setLeadGender(e.target.value); updateField('gender', e.target.value); }} className="font-black text-zinc-900 bg-transparent focus:outline-none p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full text-right">
+                          <option value="Homem">Homem</option>
+                          <option value="Mulher">Mulher</option>
+                          <option value="Outro">Outro</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Sub-header 2 */}
+                    <div className="bg-blue-50 text-blue-950 px-3 py-1.5 font-mono font-black text-[9px] uppercase tracking-wider border-y-2 border-zinc-950 flex items-center gap-1 shrink-0">
+                      📍 Localização
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="CEP">CEP</span>
+                      <div className="col-span-7">
+                        <input type="text" defaultValue={lead.cep || ''} onBlur={(e) => updateField('cep', e.target.value)} placeholder="00000-000" className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+                      </div>
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Endereço">Endereço</span>
+                      <div className="col-span-7">
+                        <input type="text" defaultValue={lead.address || ''} onBlur={(e) => updateField('address', e.target.value)} placeholder="Rua, Número" className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+                      </div>
+                    </div>
                   </div>
                 </div>
-              ) : (
-                <div className="space-y-4.5 ">
+
+                {/* 2. QUALIFICAÇÃO */}
+                <div className="bg-white border-4 border-zinc-950 rounded-2xl overflow-hidden shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] flex flex-col min-h-[500px]">
+                  <div className="bg-amber-100 border-b-4 border-zinc-950 py-2.5 text-center shrink-0">
+                    <h4 className="font-black text-xs uppercase tracking-wider text-amber-950 font-mono">🎯 QUALIFICAÇÃO</h4>
+                    <p className="text-[8.5px] text-amber-900/70 font-bold uppercase tracking-widest mt-0.5">Perfil, Parâmetros & Preferências</p>
+                  </div>
                   
-                  {/* Phase A: Multi-layered Configurable Predictor parameters */}
-                  <div className="bg-zinc-950 text-white rounded-xl p-3 border-2 border-zinc-950 text-xs font-mono select-text">
-                    <div className="flex justify-between items-center pb-2 border-b border-zinc-800">
-                      <span className="text-[10px] font-black text-indigo-400 font-sans">1. CONFIGURAÇÃO DE PARÂMETROS DE CRÉDITO</span>
-                      <span className="text-[9px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-400">Caixa MCMV v3.5</span>
+                  <div className="flex flex-col text-[11px] font-semibold text-zinc-700 divide-y divide-zinc-200 flex-1">
+                    {/* Sub-header 1 */}
+                    <div className="bg-amber-50 text-amber-950 px-3 py-1.5 font-mono font-black text-[9px] uppercase tracking-wider border-b-2 border-zinc-950 flex items-center gap-1 shrink-0">
+                      🎯 Qualificação Profissional
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3 mt-3">
-                      {/* Proponente Renda */}
-                      <div>
-                        <span className="text-[8px] uppercase tracking-wider text-zinc-400 font-sans block font-black">Renda Proponente Principal</span>
-                        <div className="flex items-center gap-1.5 mt-1">
-                          <input 
-                            type="number"
-                            value={tempIncomeInput}
-                            onChange={(e) => setTempIncomeInput(e.target.value)}
-                            onBlur={handleUpdateIncomeClick}
-                            className="w-full bg-zinc-900 border border-zinc-700 text-white rounded px-2 py-1 text-xs font-bold font-mono text-center outline-none focus:border-indigo-400 bg-white"
-                          />
-                        </div>
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Profissão">Profissão</span>
+                      <div className="col-span-7">
+                        <input type="text" defaultValue={lead.profession || ''} onBlur={(e) => updateField('profession', e.target.value)} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
                       </div>
+                    </div>
 
-                      {/* Co-Buyer Composição Toggle & Input */}
-                      <div>
-                        <span className="text-[8px] uppercase tracking-wider text-zinc-400 font-sans block font-black">Adicionar Compositor / Co-adquirente</span>
-                        <div className="flex items-center gap-1.5 mt-1">
-                          <input 
-                            type="checkbox"
-                            checked={hasCoBuyer}
-                            onChange={(e) => setHasCoBuyer(e.target.checked)}
-                            className="rounded border-zinc-700 bg-zinc-900 text-indigo-600 focus:ring-indigo-500 w-4 h-4 shrink-0"
-                          />
-                          {hasCoBuyer ? (
-                            <input 
-                              type="number"
-                              value={tempCoBuyerIncomeInput}
-                              onChange={(e) => setTempCoBuyerIncomeInput(e.target.value)}
-                              onBlur={handleUpdateCoBuyerIncome}
-                              placeholder="Familiar extra"
-                              className="w-20 bg-zinc-900 border border-zinc-700 text-white rounded px-1.5 py-0.5 text-xs font-bold text-center outline-none bg-white"
-                            />
-                          ) : (
-                            <span className="text-[9px] text-zinc-500 font-sans font-bold">Sem coobrigado</span>
-                          )}
-                        </div>
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Como Soube">Como Soube</span>
+                      <div className="col-span-7 text-right">
+                        <select defaultValue={lead.comoSoube || 'Instagram'} onChange={(e: any) => updateField('comoSoube', e.target.value)} className="font-black text-zinc-900 bg-transparent focus:outline-none p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full text-right">
+                          <option value="Instagram">Instagram</option>
+                          <option value="Facebook">Facebook</option>
+                          <option value="Google">Google</option>
+                          <option value="Indicacao">Indicação</option>
+                          <option value="Corretor">Corretor</option>
+                          <option value="Feira">Feira</option>
+                          <option value="Outros">Outros</option>
+                        </select>
                       </div>
+                    </div>
 
-                      {/* Depentents & CLT Duration */}
-                      <div>
-                        <span className="text-[8px] uppercase tracking-wider text-zinc-400 font-sans block font-black">Propriedades do Proponente</span>
-                        <div className="flex flex-col gap-1 mt-1 font-sans">
-                          <label className="flex items-center gap-1.5 text-zinc-300 text-[10px] font-bold cursor-pointer hover:text-white">
-                            <input 
-                              type="checkbox" 
-                              checked={hasDependents} 
-                              onChange={(e) => setHasDependents(e.target.checked)}
-                              className="rounded border-zinc-700 w-3.5 h-3.5 text-indigo-600"
-                            />
-                            <span>Possui Dependentes (+Subsídio)</span>
-                          </label>
-                          <label className="flex items-center gap-1.5 text-zinc-300 text-[10px] font-bold cursor-pointer hover:text-white">
-                            <input 
-                              type="checkbox" 
-                              checked={hasThreeYearsCLT} 
-                              onChange={(e) => setHasThreeYearsCLT(e.target.checked)}
-                              className="rounded border-zinc-700 w-3.5 h-3.5 text-indigo-600"
-                            />
-                            <span>Tempo FGTS &gt; 3 anos (-Juros)</span>
-                          </label>
-                        </div>
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Dependentes">Dependentes</span>
+                      <div className="col-span-7 text-right">
+                        <input type="number" defaultValue={lead.dependents || 0} onBlur={(e) => updateField('dependents', e.target.value)} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full" />
                       </div>
+                    </div>
 
-                      {/* Score Serasa & Amortization System */}
-                      <div>
-                        <span className="text-[8px] uppercase tracking-wider text-zinc-400 font-sans block font-black">Validação Cadastral & Opção</span>
-                        <div className="flex flex-col gap-1 mt-1 font-sans">
-                          <label className="flex items-center gap-1.5 text-zinc-300 text-[10px] font-bold cursor-pointer hover:text-white">
-                            <input 
-                              type="checkbox" 
-                              checked={hasCleanCredit} 
-                              onChange={(e) => setHasCleanCredit(e.target.checked)}
-                              className="rounded border-zinc-700 w-3.5 h-3.5 text-indigo-600"
-                            />
-                            <span className="truncate">Sem restrições CADIN/Serasa</span>
-                          </label>
-                          
-                          <div className="flex items-center gap-1.5 text-[10px] text-zinc-300 font-bold mt-0.5">
-                            <span className="shrink-0">Tabela de Amort.:</span>
-                            <select 
-                              value={amortizationSystem}
-                              onChange={(e) => setAmortizationSystem(e.target.value as 'SAC' | 'PRICE')}
-                              className="bg-zinc-800 border border-zinc-700 text-white rounded text-[10px] px-1 py-0.5 font-bold outline-none cursor-pointer"
-                            >
-                              <option value="SAC">SAC (Decrescente)</option>
-                              <option value="PRICE">PRICE (Constante)</option>
-                            </select>
-                          </div>
-                        </div>
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Perfil Atendimento">Perfil Atend.</span>
+                      <div className="col-span-7 text-right">
+                        <select value={leadMainProfile} onChange={(e: any) => { setLeadMainProfile(e.target.value); updateField('mainProfile', e.target.value); }} className="font-black text-zinc-900 bg-transparent focus:outline-none p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full text-right">
+                          <option value="Primeiro Imóvel">Primeiro Imóvel</option>
+                          <option value="Investidor">Investidor</option>
+                          <option value="Jovem">Público Jovem</option>
+                          <option value="Meia idade">Meia idade</option>
+                          <option value="Idoso">Aposentado / Idoso</option>
+                        </select>
                       </div>
+                    </div>
 
-                      {/* Assets: FGTS slider and Personal Savings input */}
-                      <div className="col-span-2 pt-2 border-t border-zinc-800/60 grid grid-cols-2 gap-3 mt-1 text-[11px]">
-                        <div>
-                          <div className="flex justify-between items-center text-[8.5px] uppercase tracking-wider text-zinc-400 font-sans">
-                            <span>Saldo FGTS Utilizável:</span>
-                            <span className="text-emerald-400 font-mono font-bold">R$ {fgtsBalance.toLocaleString()}</span>
-                          </div>
-                          <input 
-                            type="range"
-                            min="0"
-                            max="80000"
-                            step="2000"
-                            value={fgtsBalance}
-                            onChange={(e) => {
-                              setFgtsBalance(parseInt(e.target.value));
-                              setTempFgtsInput(e.target.value);
-                            }}
-                            className="w-full accent-indigo-500 mt-1 cursor-pointer"
-                          />
-                        </div>
+                    {/* Sub-header 2 */}
+                    <div className="bg-amber-50 text-amber-950 px-3 py-1.5 font-mono font-black text-[9px] uppercase tracking-wider border-y-2 border-zinc-950 flex items-center gap-1 shrink-0">
+                      ⚙️ Parâmetros e Preferências
+                    </div>
 
-                        <div>
-                          <div className="flex justify-between items-center text-[8.5px] uppercase tracking-wider text-zinc-400 font-sans">
-                            <span>Recurs. Próprios / Sinal:</span>
-                            <span className="text-indigo-300 font-mono font-bold">R$ {ownSavings.toLocaleString()}</span>
-                          </div>
-                          <input 
-                            type="range"
-                            min="0"
-                            max="60000"
-                            step="2000"
-                            value={ownSavings}
-                            onChange={(e) => {
-                              setOwnSavings(parseInt(e.target.value));
-                              setTempOwnSavingsInput(e.target.value);
-                            }}
-                            className="w-full accent-indigo-500 mt-1 cursor-pointer"
-                          />
-                        </div>
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Região Preferida">Região Pref.</span>
+                      <div className="col-span-7 text-right">
+                        <select value={leadRegion} onChange={(e) => { setLeadRegion(e.target.value); updateField('region', e.target.value); }} className="font-black text-zinc-900 bg-transparent focus:outline-none p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full text-right">
+                          <option value="Sul">Sul</option>
+                          <option value="Leste">Leste</option>
+                          <option value="Oeste">Oeste</option>
+                          <option value="Norte">Norte</option>
+                          <option value="Centro">Centro / ABC</option>
+                        </select>
                       </div>
+                    </div>
 
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Bairro Desejado">Bairro</span>
+                      <div className="col-span-7">
+                        <input type="text" defaultValue={lead.bairroEspecifico || ''} onBlur={(e) => updateField('bairroEspecifico', e.target.value)} placeholder="Ex: Cambuci" className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+                      </div>
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Área M² Desejada">M² Desejado</span>
+                      <div className="col-span-7 text-right">
+                        <input type="number" defaultValue={lead.desiredSqm || ''} onBlur={(e) => updateField('desiredSqm', e.target.value)} placeholder="Ex: 55" className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full" />
+                      </div>
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Dormitórios">Dormitórios</span>
+                      <div className="col-span-7 text-right">
+                        <input type="number" defaultValue={lead.bedrooms || ''} onBlur={(e) => updateField('bedrooms', e.target.value)} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full" />
+                      </div>
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Suítes">Suítes</span>
+                      <div className="col-span-7 text-right">
+                        <input type="number" defaultValue={lead.suites || ''} onBlur={(e) => updateField('suites', e.target.value)} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full" />
+                      </div>
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Varanda">Varanda</span>
+                      <div className="col-span-7 text-right">
+                        <select defaultValue={lead.balcony || 'nao'} onChange={(e: any) => updateField('balcony', e.target.value)} className="font-black text-zinc-900 bg-transparent focus:outline-none p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full text-right">
+                          <option value="nao">Não</option>
+                          <option value="sim">Sim</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Vagas">Vagas</span>
+                      <div className="col-span-7 text-right">
+                        <input type="number" defaultValue={lead.parkingSpots || ''} onBlur={(e) => updateField('parkingSpots', e.target.value)} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full" />
+                      </div>
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Estação Próxima">Estação Próx.</span>
+                      <div className="col-span-7">
+                        <input type="text" defaultValue={lead.nearestStation || ''} onBlur={(e) => updateField('nearestStation', e.target.value)} placeholder="Ex: Metrô" className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+                      </div>
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Tipologia do Imóvel">Tipologia</span>
+                      <div className="col-span-7">
+                        <input type="text" defaultValue={lead.unitTypology || ''} onBlur={(e) => updateField('unitTypology', e.target.value)} placeholder="Ex: Padrão" className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+                      </div>
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Programa Habitacional">Prog. Habit.</span>
+                      <div className="col-span-7 text-right">
+                        <select defaultValue={lead.programaDesejado || 'Indiferente'} onChange={(e: any) => updateField('programaDesejado', e.target.value)} className="font-black text-zinc-900 bg-transparent focus:outline-none p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full text-right">
+                          <option value="Indiferente">Indiferente</option>
+                          <option value="Minha Casa Minha Vida">Minha Casa Minha Vida</option>
+                          <option value="SBPE">SBPE (Tradicional)</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. FINANCEIRO */}
+                <div className="bg-white border-4 border-zinc-950 rounded-2xl overflow-hidden shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] flex flex-col min-h-[500px]">
+                  <div className="bg-emerald-100 border-b-4 border-zinc-950 py-2.5 text-center shrink-0">
+                    <h4 className="font-black text-xs uppercase tracking-wider text-emerald-950 font-mono">💵 FINANCEIRO</h4>
+                    <p className="text-[8.5px] text-emerald-900/70 font-bold uppercase tracking-widest mt-0.5">Análise de Crédito & Valores</p>
+                  </div>
+
+                  <div className="flex flex-col text-[11px] font-semibold text-zinc-700 divide-y divide-zinc-200 flex-1">
+                    {/* Sub-header 1 */}
+                    <div className="bg-emerald-50 text-emerald-950 px-3 py-1.5 font-mono font-black text-[9px] uppercase tracking-wider border-b-2 border-zinc-950 flex items-center gap-1 shrink-0">
+                      💵 Análise Financeira
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Renda Familiar Bruta/Conjunta">Renda Fam.</span>
+                      <div className="col-span-7 text-right flex items-center justify-end gap-1">
+                        <span className="text-zinc-500 font-bold text-xs">R$</span>
+                        <input type="number" value={tempIncomeInput} onChange={(e) => setTempIncomeInput(e.target.value)} onBlur={handleUpdateIncomeClick} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+                      </div>
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Saldo FGTS Disponível">FGTS</span>
+                      <div className="col-span-7 text-right flex items-center justify-end gap-1">
+                        <span className="text-zinc-500 font-bold text-xs">R$</span>
+                        <input type="number" defaultValue={lead.fgtsSaldo || 0} onBlur={(e) => { const v = parseFloat(e.target.value) || 0; updateField('fgtsSaldo', v); }} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+                      </div>
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Restrição BACEN / Crédito">BACEN</span>
+                      <div className="col-span-7 text-right">
+                        <select defaultValue={lead.restricaoBacen || 'Não'} onChange={(e) => updateField('restricaoBacen', e.target.value)} className="font-black text-zinc-900 bg-transparent focus:outline-none p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full text-right">
+                          <option value="Não">Não</option>
+                          <option value="Sim">Sim (Prejudica)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Possui Imóvel Ativo">Possui Imóvel</span>
+                      <div className="col-span-7 text-right">
+                        <select defaultValue={lead.possuiImovel || 'Não'} onChange={(e) => updateField('possuiImovel', e.target.value)} className="font-black text-zinc-900 bg-transparent focus:outline-none p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full text-right">
+                          <option value="Não">Não (MCMV)</option>
+                          <option value="Sim">Sim (SBPE)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Sub-header 2 */}
+                    <div className="bg-emerald-50 text-emerald-950 px-3 py-1.5 font-mono font-black text-[9px] uppercase tracking-wider border-y-2 border-zinc-950 flex items-center gap-1 shrink-0">
+                      📊 Condições de Crédito
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Valor do Imóvel de Interesse">Vlr Imóvel</span>
+                      <div className="col-span-7 text-right flex items-center justify-end gap-1">
+                        <span className="text-zinc-500 font-bold text-xs">R$</span>
+                        <input type="number" defaultValue={lead.propertyValue || ''} onBlur={(e) => { const v = parseFloat(e.target.value) || 0; updateField('propertyValue', v); }} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+                      </div>
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Financiamento Estimado CEF">Financ. Est.</span>
+                      <div className="col-span-7 text-right flex items-center justify-end gap-1">
+                        <span className="text-zinc-500 font-bold text-xs">R$</span>
+                        <input type="number" defaultValue={lead.financedValue || ''} onBlur={(e) => { const v = parseFloat(e.target.value) || 0; updateField('financedValue', v); }} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+                      </div>
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Valor Estimado da Parcela">Vlr Parcela</span>
+                      <div className="col-span-7 text-right flex items-center justify-end gap-1">
+                        <span className="text-zinc-500 font-bold text-xs">R$</span>
+                        <input type="number" defaultValue={lead.installmentValue || ''} onBlur={(e) => { const v = parseFloat(e.target.value) || 0; updateField('installmentValue', v); }} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+                      </div>
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Entrada Total de Financiamento">Entrada</span>
+                      <div className="col-span-7 text-right flex items-center justify-end gap-1">
+                        <span className="text-zinc-500 font-bold text-xs">R$</span>
+                        <input type="number" defaultValue={lead.downPaymentValue || ''} onBlur={(e) => { const v = parseFloat(e.target.value) || 0; updateField('downPaymentValue', v); }} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* PLANO DE PARCELAMENTO FACILITADO COM A CONSTRUTORA (TABELA DE SIMULAÇÃO & PROPOSTA) */}
+              <div className="bg-zinc-900 text-white p-5 rounded-2xl space-y-4 border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden animate-fadeIn">
+                <div className="absolute right-3 top-3 opacity-10 rotate-12 select-none pointer-events-none">
+                  <Calculator className="w-20 h-20 text-white" />
+                </div>
+
+                <div className="border-b border-zinc-800 pb-2 relative z-10 flex justify-between items-center">
+                  <div>
+                    <span className="text-[8.5px] font-mono font-black text-emerald-400 uppercase tracking-widest block leading-none">TABELA DE SIMULAÇÃO E PROPOSTA</span>
+                    <h4 className="text-xs font-black uppercase text-white tracking-tight flex items-center gap-1.5 mt-1">
+                      🏡 Entrada Facilitada Construtora (Período Obras)
+                    </h4>
+                  </div>
+                  <div className="px-2 py-0.5 rounded text-[8.5px] font-mono font-black uppercase bg-emerald-500 text-zinc-950 tracking-wider">
+                    Entrada Necessária: R$ {(lead.downPaymentValue || sim.totalDownPaymentRequired || 0).toLocaleString('pt-BR')}
+                  </div>
+                </div>
+
+                {/* Inputs for downpayment facilitation layout */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 relative z-10 text-xs">
+                  {/* Parcela de Ato */}
+                  <div className="space-y-1">
+                    <label className="block text-[9px] font-mono font-black text-zinc-400 uppercase">Ato (Sinal)</label>
+                    <div className="relative">
+                      <span className="absolute left-2 top-1.5 text-[10px] text-zinc-500 font-bold">R$</span>
+                      <input
+                        type="number"
+                        value={valorAto || ''}
+                        onChange={(e) => {
+                          const val = Math.max(0, Number(e.target.value) || 0);
+                          setValorAto(val);
+                          updateField('valorAto', val);
+                        }}
+                        className="w-full bg-zinc-950 border border-zinc-800 hover:border-zinc-700 focus:border-zinc-505 rounded-lg p-1.5 pl-6 text-xs text-white font-mono"
+                      />
                     </div>
                   </div>
 
-                  {/* Phase B: Property Stock Fitting Matrix (Dynamic Portfolio Match Selection) */}
-                  <div className="space-y-2">
-                    <span className="text-[9.5px] font-black uppercase text-zinc-500 font-mono block">
-                      2. MATRIZ DE DESTAQUES CURY EM PORTFÓLIO (ORDENAÇÃO POR COMPATIBILIDADE)
+                  {/* 2 Parcelas Anuais */}
+                  <div className="space-y-1">
+                    <label className="block text-[9px] font-mono font-black text-zinc-400 uppercase text-amber-400">2x Balões Anuais (Cada)</label>
+                    <div className="relative">
+                      <span className="absolute left-2 top-1.5 text-[10px] text-zinc-500 font-bold">R$</span>
+                      <input
+                        type="number"
+                        value={valorAnual || ''}
+                        onChange={(e) => {
+                          const val = Math.max(0, Number(e.target.value) || 0);
+                          setValorAnual(val);
+                          updateField('valorAnual', val);
+                        }}
+                        className="w-full bg-zinc-950 border border-zinc-800 hover:border-zinc-700 focus:border-zinc-505 rounded-lg p-1.5 pl-6 text-xs text-white font-mono"
+                      />
+                    </div>
+                    <span className="block text-[8px] text-zinc-500 font-mono">Total de Balões: R$ {(2 * valorAnual).toLocaleString('pt-BR')}</span>
+                  </div>
+
+                  {/* Parcela de Chaves */}
+                  <div className="space-y-1">
+                    <label className="block text-[9px] font-mono font-black text-zinc-400 uppercase">Chaves</label>
+                    <div className="relative">
+                      <span className="absolute left-2 top-1.5 text-[10px] text-zinc-500 font-bold">R$</span>
+                      <input
+                        type="number"
+                        value={valorChaves || ''}
+                        onChange={(e) => {
+                          const val = Math.max(0, Number(e.target.value) || 0);
+                          setValorChaves(val);
+                          updateField('valorChaves', val);
+                        }}
+                        className="w-full bg-zinc-950 border border-zinc-800 hover:border-zinc-700 focus:border-zinc-505 rounded-lg p-1.5 pl-6 text-xs text-white font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Tempo de Obra */}
+                  <div className="space-y-1">
+                    <label className="block text-[9px] font-mono font-black text-zinc-400 uppercase">Tempo de Obra (Meses)</label>
+                    <select
+                      value={tempoObra}
+                      onChange={(e) => {
+                        const val = Number(e.target.value) || 36;
+                        setTempoObra(val);
+                        updateField('tempoObra', val);
+                      }}
+                      className="w-full bg-zinc-950 border border-zinc-800 hover:border-zinc-700 focus:border-zinc-505 rounded-lg p-1.5 text-xs text-white font-mono cursor-pointer"
+                    >
+                      <option value={12}>12 meses (1 ano)</option>
+                      <option value={18}>18 meses</option>
+                      <option value={20}>20 meses</option>
+                      <option value={24}>24 meses (2 anos)</option>
+                      <option value={30}>30 meses</option>
+                      <option value={36}>36 meses (3 anos)</option>
+                      <option value={48}>48 meses (4 anos)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Dynamic calculation banner */}
+                {(() => {
+                  const requiredDownpayment = lead.downPaymentValue || sim.totalDownPaymentRequired || 0;
+                  const totalFacilitadoAvulso = valorAto + (2 * valorAnual) + valorChaves;
+                  const diferencaRestante = Math.max(0, requiredDownpayment - totalFacilitadoAvulso);
+                  const valorMensalObra = tempoObra > 0 ? (diferencaRestante / tempoObra) : 0;
+
+                  return (
+                    <div className="relative z-10 bg-zinc-950/80 border border-zinc-800 p-3 rounded-xl grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
+                      <div>
+                        <span className="block text-[8px] font-mono font-black text-zinc-500 uppercase leading-none">Total Sinal + Balões</span>
+                        <strong className="block text-xs font-sans font-black text-zinc-300 mt-1">
+                          R$ {totalFacilitadoAvulso.toLocaleString('pt-BR')}
+                        </strong>
+                        <span className="text-[8.5px] text-zinc-500 font-mono italic">
+                          (Ato + 2 Anuais + Chaves)
+                        </span>
+                      </div>
+
+                      <div className="border-t md:border-t-0 md:border-l md:border-r border-zinc-800 py-1.5 md:py-0 md:px-3">
+                        <span className="block text-[8px] font-mono font-black text-amber-400 uppercase leading-none">Diferença Restante</span>
+                        <strong className="block text-xs font-sans font-black text-amber-300 mt-1">
+                          R$ {diferencaRestante.toLocaleString('pt-BR')}
+                        </strong>
+                        <span className="text-[8.5px] text-zinc-500 font-mono italic">
+                          (Saldo restante para obras)
+                        </span>
+                      </div>
+
+                      <div className="bg-emerald-950/55 border border-emerald-800 p-2 text-center rounded-lg">
+                        <span className="text-[9px] font-mono font-black text-emerald-300 uppercase block tracking-wider leading-none">
+                          MENSAL OBRA ({tempoObra}X)
+                        </span>
+                        <strong className="block text-sm font-mono font-black text-emerald-400 mt-1">
+                          R$ {Math.round(valorMensalObra).toLocaleString('pt-BR')} /mês
+                        </strong>
+                        <span className="text-[8px] text-zinc-400 block mt-0.5 font-sans">
+                          Dividido automaticamente pelo tempo de obra
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* CHECKLIST DE QUALIFICAÇÃO */}
+              <div className="bg-white border-2 border-zinc-950 rounded-xl p-5 space-y-4 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+                <div className="flex justify-between items-center border-b-2 border-zinc-200 pb-2">
+                  <h3 className="text-xs font-black text-zinc-900 uppercase tracking-tight flex items-center gap-1.5 font-sans">
+                    📋 Checklist de Qualificação de Financiamento
+                  </h3>
+                  <span className="text-[9px] bg-emerald-100 border border-emerald-300 text-emerald-950 px-2 py-0.5 rounded font-mono font-bold uppercase">
+                    Dossiê Ativo
+                  </span>
+                </div>
+                
+                <p className="text-[11px] text-zinc-500 font-medium">
+                  Verifique se o lead possui as condições e a papelada correta para seguir com a simulação habitacional:
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Seção 1: Documentação Pessoal */}
+                  <div className="space-y-2 select-none">
+                    <h4 className="text-[10px] font-mono font-black text-indigo-600 uppercase tracking-widest border-b border-indigo-100 pb-1 flex items-center gap-1">
+                      <span>🪪 Doc. Pessoal</span>
+                    </h4>
+                    {[
+                      { key: 'doc_cnh_rg', label: 'RG ou CNH legível e atualizada' },
+                      { key: 'doc_resid', label: 'Comprovante de residência (< 90 dias)' },
+                      { key: 'doc_est_civil', label: 'Certidão de Nascimento/Casamento' },
+                      { key: 'doc_fgts', label: 'Extrato do FGTS para abatimento' },
+                    ].map(item => (
+                      <label key={item.key} className="flex items-center gap-2 text-xs font-bold text-zinc-700 cursor-pointer hover:bg-zinc-50 p-1.5 rounded transition">
+                        <input type="checkbox" checked={!!checklist[item.key]} onChange={() => handleToggleChecklistItem(item.key)} className="rounded border-zinc-350 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" />
+                        <span>{item.label}</span>
+                      </label>
+                    ))}
+                  </div>
+
+                  {/* Seção 2: Comprovação de Renda */}
+                  <div className="space-y-2 select-none">
+                    <h4 className="text-[10px] font-mono font-black text-emerald-600 uppercase tracking-widest border-b border-emerald-100 pb-1 flex items-center gap-1">
+                      <span>💵 Comprovação de Renda</span>
+                    </h4>
+                    {[
+                      { key: 'renda_holerites', label: '3 últimos holerites (se CLT)' },
+                      { key: 'renda_ir', label: 'Declaração completa de IRPF + recibo' },
+                      { key: 'renda_extratos', label: '6 meses de extrato bancário (se autônomo)' },
+                      { key: 'renda_carteira', label: 'Carteira de Trabalho Digital (para CLT > 3 anos)' },
+                    ].map(item => (
+                      <label key={item.key} className="flex items-center gap-2 text-xs font-bold text-zinc-700 cursor-pointer hover:bg-zinc-50 p-1.5 rounded transition">
+                        <input type="checkbox" checked={!!checklist[item.key]} onChange={() => handleToggleChecklistItem(item.key)} className="rounded border-zinc-350 text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer" />
+                        <span>{item.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                {(() => {
+                  const checkedCount = Object.values(checklist).filter(Boolean).length;
+                  const totalCount = 8;
+                  const percent = Math.round((checkedCount / totalCount) * 100);
+                  return (
+                    <div className="pt-3 border-t border-zinc-150 space-y-1.5">
+                      <div className="flex justify-between items-center text-[10px] font-black uppercase text-zinc-500 font-mono">
+                        <span>Status de Qualificação Documental</span>
+                        <span>{percent}% Completo ({checkedCount}/{totalCount})</span>
+                      </div>
+                      <div className="w-full bg-zinc-200 h-2.5 rounded-full overflow-hidden border border-zinc-300">
+                        <div className="bg-indigo-600 h-full transition-all duration-300" style={{ width: `${percent}%` }} />
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </>
+          )}
+
+          {/* TAB 2: DOSSIÊS & FLUXOS */}
+          {activeTab === 'dossies_fluxos' && (
+            <>
+              {/* GEMINI AI DOSSIÊ */}
+              <div className="bg-gradient-to-br from-purple-50 via-white to-indigo-50/50 border-4 border-zinc-950 rounded-2xl p-5 space-y-4 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] select-text">
+                <div className="flex justify-between items-start border-b border-zinc-200 pb-3">
+                  <div className="space-y-0.5">
+                    <h3 className="text-xs font-mono font-black text-purple-950 uppercase tracking-tight flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-purple-650 shrink-0" />
+                      Central Coprodutora do Gemini (CRM Direct)
+                    </h3>
+                    <span className="text-[9px] tracking-widest font-black text-zinc-455 font-mono block">GEMINI 2.5 FLASH • CONECTOR SIDERADO CRÉDITO</span>
+                  </div>
+                  <div className="shrink-0 bg-purple-100 border border-purple-300 text-purple-950 font-mono font-black text-[9px] px-2 py-0.5 rounded-full select-none">
+                    +120 XP REAL
+                  </div>
+                </div>
+
+                {/* Sub-tab selectors */}
+                <div className="flex bg-zinc-950/5 p-1 rounded-xl border border-zinc-300/60 gap-1 select-none">
+                  <button type="button" onClick={() => { setModalCoproductTab('pitch'); setAiPitchText(''); }} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider font-mono transition-colors flex items-center justify-center gap-1 cursor-pointer ${modalCoproductTab === 'pitch' ? 'bg-purple-600 text-white shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]' : 'text-zinc-650 hover:text-zinc-950'}`}>
+                    📱 Abordagem Rápida
+                  </button>
+                  <button type="button" onClick={() => { setModalCoproductTab('dossier'); setAiPitchText(''); }} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider font-mono transition-colors flex items-center justify-center gap-1 cursor-pointer ${modalCoproductTab === 'dossier' ? 'bg-purple-600 text-white shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]' : 'text-zinc-650 hover:text-zinc-950'}`}>
+                    🔬 Dossiê Habitacional
+                  </button>
+                  <button type="button" onClick={() => { setModalCoproductTab('campaign'); setAiPitchText(''); }} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider font-mono transition-colors flex items-center justify-center gap-1 cursor-pointer ${modalCoproductTab === 'campaign' ? 'bg-purple-600 text-white shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]' : 'text-zinc-650 hover:text-zinc-950'}`}>
+                    📅 Plano de Campanha
+                  </button>
+                </div>
+
+                <div className="text-xs text-zinc-650 leading-relaxed font-sans space-y-3">
+                  <p>
+                    {modalCoproductTab === 'pitch' && "Gere um roteiro de abordagem e copywriting ultra persuasivo focado para WhatsApp com o Gemini."}
+                    {modalCoproductTab === 'dossier' && "Gere um Dossiê Digital de Qualificação contendo scorecard de enquadramento, taxas estimativas e plano de ação Caixa."}
+                    {modalCoproductTab === 'campaign' && "Crie um cronograma estratégico de engajamento de 7 dias com gatilhos persuasivos de follow-up."}
+                  </p>
+
+                  {aiPitchError && (
+                    <div className="p-3 bg-red-100 border border-red-300 rounded-xl text-[10px] text-red-950 font-sans leading-relaxed border-4">
+                      <strong>Falha de Integração:</strong> {aiPitchError}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end pt-1 select-none">
+                    <div>
+                      <label className="text-[8.5px] uppercase font-black text-zinc-500 block mb-1">Selecione o Imóvel Referência</label>
+                      <select value={selectedPropertyId} onChange={(e) => setSelectedPropertyId(e.target.value)} className="w-full bg-white border border-zinc-300 p-2 text-[10.5px] font-extrabold text-zinc-800 rounded-lg">
+                        {availableProperties.map(p => (
+                          <option key={p.id} value={p.id}>
+                            {p.title} (R$ {p.price.toLocaleString('pt-BR')})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <button type="button" disabled={isGeneratingPitch} onClick={() => handleGenerateAiPitch()} className="py-2.5 px-4 bg-purple-700 hover:bg-purple-650 disabled:bg-zinc-400 text-white rounded-lg text-[10px] font-mono font-black uppercase tracking-wider block transition border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 cursor-pointer">
+                      {isGeneratingPitch ? '🔮 Coprocessando IA...' : '⚡ Acionar Gemini AI'}
+                    </button>
+                  </div>
+
+                  {aiPitchText && (
+                    <div className="pt-3 border-t border-purple-200 space-y-2">
+                      <div className="flex justify-between items-center select-none">
+                        <span className="text-[9px] uppercase font-mono font-black text-purple-900 tracking-wider">Texto de Coprodução Gerado</span>
+                        <button type="button" onClick={handleCopyPitch} className="px-2.5 py-1 text-[9px] font-black uppercase bg-white hover:bg-purple-100 text-purple-950 border border-purple-300 rounded transition flex items-center gap-1 cursor-pointer">
+                          {isCopied ? '✔ Copiado!' : '📋 Copiar Roteiro'}
+                        </button>
+                      </div>
+                      <textarea readOnly value={aiPitchText} rows={8} className="w-full bg-zinc-950 text-purple-200 border-2 border-zinc-950 font-mono text-[10px] p-3 rounded-xl select-all focus:outline-none leading-relaxed" />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* INTELIGÊNCIA PREDITIVA DE CRÉDITO */}
+              <div className="bg-gradient-to-br from-indigo-50/40 via-white to-zinc-50 border-2 border-zinc-950 rounded-xl p-5 space-y-5 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] select-none">
+                <div className="flex justify-between items-center border-b border-zinc-200 pb-2.5">
+                  <div>
+                    <h3 className="text-xs font-black text-zinc-900 uppercase tracking-tight flex items-center gap-1.5 font-mono">
+                      <Sparkles className="w-4 h-4 text-indigo-600  shrink-0" />
+                      Inteligência Preditiva de Crédito
+                    </h3>
+                    <span className="text-[9px] tracking-widest font-bold text-zinc-400 font-mono block mt-0.5">ESTOQUE PARCEIRO CONSTRUTORA</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] font-mono font-black text-emerald-700 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                      <Percent className="w-3.5 h-3.5 text-emerald-600" />
+                      {sim.suitability}% Fit Match
                     </span>
-                    
-                    <div className="grid grid-cols-1 gap-2 max-h-[175px] overflow-y-auto pr-1">
-                      {rankedProperties.map((prop) => {
-                        const isSelected = selectedPropertyId === prop.id;
-                        return (
-                          <div
-                            key={prop.id}
-                            onClick={() => setSelectedPropertyId(prop.id)}
-                            className={`p-2.5 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-between ${
-                              isSelected 
-                                ? 'bg-indigo-50 border-zinc-950 translate-x-1 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' 
-                                : 'bg-white border-zinc-200 hover:border-zinc-400'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="text-xl bg-zinc-50 border border-zinc-100 p-1 rounded-lg shrink-0">{prop.icon}</span>
-                              <div className="min-w-0">
-                                <h4 className="font-extrabold text-[11px] text-zinc-900 truncate leading-tight uppercase font-sans">{prop.title}</h4>
-                                <p className="text-[9.5px] text-zinc-400 leading-tight truncate">{prop.location} • R$ {prop.price.toLocaleString()}</p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2 pl-2">
-                              <div className="text-right shrink-0">
-                                <span className={`text-[9.5px] font-black font-mono px-2 py-0.5 rounded-full ${
-                                  prop.metrics.suitability > 90 ? 'bg-emerald-100 text-emerald-800 border border-emerald-250' : 
-                                  prop.metrics.suitability >= 70 ? 'bg-amber-100 text-amber-800 border border-amber-250' : 
-                                  'bg-red-100 text-red-800 border border-rose-250'
-                                }`}>
-                                  {prop.metrics.suitability}% Match
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
                   </div>
+                </div>
 
-                  {/* Phase C: Selected Target Financial Ledger & Sugerido Obra Flux */}
-                  <div className="bg-white border-4 border-zinc-950 rounded-2xl p-4.5 space-y-3 shadow-[2.5px_2.5px_0px_0px_rgba(0,0,0,1)] select-text ">
-                    <div className="flex justify-between items-start border-b border-zinc-100 pb-2">
-                      <div>
-                        <span className="text-[8.5px] uppercase font-bold text-indigo-700 tracking-wider font-mono">Dossiê Financeiro Ativo:</span>
-                        <h4 className="font-black text-xs text-zinc-900 uppercase font-sans leading-tight mt-0.5">{selectedProperty.title}</h4>
+                <div className="space-y-4">
+                  {/* Controles Avançados */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 bg-zinc-50 p-4 border-2 border-zinc-950 rounded-xl">
+                    <div className="flex items-center justify-between p-2.5 bg-white border border-zinc-200 rounded-lg">
+                      <div className="space-y-0.5">
+                        <span className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Coobrigado / Compositor</span>
+                        <span className="text-[10px] font-extrabold text-zinc-700 font-sans">Compõe renda?</span>
                       </div>
-                      <div className="text-right">
-                        <span className="text-[10px] font-bold text-zinc-400 block font-mono">Preço Habitacional</span>
-                        <span className="text-xs font-black font-mono text-zinc-900">{selectedProperty.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}</span>
-                      </div>
+                      <input type="checkbox" checked={hasCoBuyer} onChange={(e) => setHasCoBuyer(e.target.checked)} className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-[11px] font-mono">
-                      <div className="flex justify-between pb-1 border-b border-zinc-100">
-                        <span className="text-zinc-500">Valor do Imóvel:</span>
-                        <span className="text-zinc-950 font-black">{selectedProperty.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}</span>
-                      </div>
-                      
-                      <div className="flex justify-between pb-1 border-b border-zinc-100">
-                        <span className="text-zinc-500">Subsídio Caixa MCMV:</span>
-                        <span className="text-emerald-600 font-extrabold">
-                          {sim.subsidy > 0 ? `-${sim.subsidy.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}` : 'R$ 0,00'}
-                        </span>
-                      </div>
-
-                      <div className="flex justify-between pb-1 border-b border-zinc-100">
-                        <span className="text-zinc-500">Financiamento Caixa ({amortizationSystem}):</span>
-                        <span className="text-zinc-950 font-black">-{sim.approvedLoan.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}</span>
-                      </div>
-
-                      <div className="flex justify-between pb-1Doc border-b border-zinc-100">
-                        <span className="text-zinc-500">Taxa de Juros Caixa:</span>
-                        <span className="text-indigo-600 font-black">{sim.annualRate.toFixed(2)}% a.a.</span>
-                      </div>
-
-                      <div className="flex justify-between pb-1 border-b border-zinc-100">
-                        <span className="text-zinc-500">Recurso Próprio (FGTS + Sinal):</span>
-                        <span className="text-zinc-950 font-semibold">R$ {(fgtsBalance + ownSavings).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
-                      </div>
-
-                      <div className="flex justify-between pb-1 border-b border-zinc-150 bg-amber-50 px-1 font-bold">
-                        <span className="text-amber-900">Entrada Pendente Obras:</span>
-                        <span className="text-amber-700 font-extrabold">
-                          {(Math.max(0, selectedProperty.price - sim.approvedLoan - sim.subsidy - fgtsBalance - ownSavings)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Caixa Credit scoring probability bar */}
-                    <div className="pt-2.5 border-t border-zinc-100">
-                      <div className="flex justify-between items-center text-[10px] mb-1 font-sans">
-                        <span className="font-extrabold text-zinc-650 uppercase font-mono">Pró-Análise: Probabilidade de Crédito Caixa</span>
-                        <span className={`font-mono font-black ${
-                          sim.approvalProbability > 85 ? 'text-emerald-600' :
-                          sim.approvalProbability >= 50 ? 'text-amber-600' :
-                          'text-red-650'
-                        }`}>{sim.approvalProbability}% (Score {hasCleanCredit ? 'Filtro Ok' : 'Restrito'})</span>
-                      </div>
-                      <div className="w-full bg-zinc-100 h-2 rounded-full overflow-hidden border border-zinc-200">
-                        <div 
-                          className={`h-full rounded-full transition-all duration-500 ${
-                            sim.approvalProbability > 85 ? 'bg-emerald-500' :
-                            sim.approvalProbability >= 50 ? 'bg-amber-500' :
-                            'bg-red-500'
-                          }`}
-                          style={{ width: `${sim.approvalProbability}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* 5-Rule Credit Checklist */}
-                    {(() => {
-                      const totalIncome = sessionIncome + (hasCoBuyer ? coBuyerIncome : 0);
-                      const maxPermitidoParcela = totalIncome * 0.3;
-                      const isMCMV = selectedProperty.price <= 275000;
-                      const rule1Passed = !isMCMV || selectedProperty.price <= 275000;
-                      const rule2Passed = sim.initialInstallment <= maxPermitidoParcela;
-                      const totalEntrada = fgtsBalance + ownSavings;
-                      const rule3Passed = totalEntrada >= (selectedProperty.price * 0.2);
-                      const rule4Passed = sim.approvalProbability >= 50;
-                      const rule5Passed = hasCleanCredit;
-                      const allRulesPassed = rule1Passed && rule2Passed && rule3Passed && rule4Passed && rule5Passed;
-
-                      return (
-                        <div className="mt-4 border-2 border-zinc-950 rounded-xl bg-zinc-50 p-3.5 space-y-3">
-                          <div className="flex items-center justify-between border-b-2 border-zinc-200 pb-1.5">
-                            <span className="text-[10px] font-mono font-black text-zinc-900 uppercase">
-                              📋 Diagnóstico Técnico de Crédito (5 Regras Gerais)
-                            </span>
-                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border font-mono ${
-                              allRulesPassed
-                                ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                                : 'bg-amber-100 text-amber-800 border-amber-300'
-                            }`}>
-                              {allRulesPassed ? 'Ficha Altamente Qualificada ✅' : 'Verificar Inconsistências de Margem ⚠️'}
-                            </span>
-                          </div>
-
-                          <div className="space-y-2 text-xs">
-                            {/* Rule 1 */}
-                            <div className="flex items-start justify-between gap-2.5 pb-2 border-b border-zinc-200/40 leading-normal">
-                              <div className="min-w-0 flex-1">
-                                <span className="block font-sans font-extrabold text-[10.5px] uppercase text-zinc-950">
-                                  Regra 1: Teto Regulatório (Faixa Programa)
-                                </span>
-                                <span className="text-[9.5px] text-zinc-500 block font-sans">
-                                  {isMCMV 
-                                    ? `Empreendimento MCMV sob teto de R$ 275.000` 
-                                    : `Modalidade SBPE sem limite superior de teto`}
-                                </span>
-                              </div>
-                              <span className={`text-[10px] font-black font-mono uppercase px-2 py-0.5 rounded shrink-0 ${
-                                rule1Passed 
-                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
-                                  : 'bg-rose-100 text-rose-850 border border-rose-300'
-                              }`}>
-                                {rule1Passed ? 'Aprovado ✓' : 'Excedido ✖'}
-                              </span>
-                            </div>
-
-                            {/* Rule 2 */}
-                            <div className="flex items-start justify-between gap-2.5 pb-2 border-b border-zinc-200/40 leading-normal">
-                              <div className="min-w-0 flex-1">
-                                <span className="block font-sans font-extrabold text-[10.5px] uppercase text-zinc-950">
-                                  Regra 2: Comprometimento Máximo de Renda (30% Limite)
-                                </span>
-                                <span className="text-[9.5px] text-zinc-500 block font-sans">
-                                  Encargo: {sim.initialInstallment.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })} | Margem Permitida: {maxPermitidoParcela.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
-                                </span>
-                              </div>
-                              <span className={`text-[10px] font-black font-mono uppercase px-2 py-0.5 rounded shrink-0 ${
-                                rule2Passed 
-                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
-                                  : 'bg-rose-100 text-rose-800 border border-rose-300'
-                              }`}>
-                                {rule2Passed ? 'Aprovado ✓' : `Excedido (${((sim.initialInstallment / totalIncome) * 100).toFixed(0)}%) ✖`}
-                              </span>
-                            </div>
-
-                            {/* Rule 3 */}
-                            <div className="flex items-start justify-between gap-2.5 pb-2 border-b border-zinc-200/40 leading-normal">
-                              <div className="min-w-0 flex-1">
-                                <span className="block font-sans font-extrabold text-[10.5px] uppercase text-zinc-950">
-                                  Regra 3: Cota Mínima de Entrada Mínima (20% LTV)
-                                </span>
-                                <span className="text-[9.5px] text-zinc-500 block font-sans">
-                                  Sinal + FGTS: {totalEntrada.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })} ({(((totalEntrada) / selectedProperty.price) * 100).toFixed(1)}%) | Exigido: {(selectedProperty.price * 0.2).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
-                                </span>
-                              </div>
-                              <span className={`text-[10px] font-black font-mono uppercase px-2 py-0.5 rounded shrink-0 ${
-                                rule3Passed 
-                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-350' 
-                                  : 'bg-amber-100 text-amber-800 border border-amber-350'
-                              }`}>
-                                {rule3Passed ? 'Garantido ✓' : 'Sinal Baixo ✖'}
-                              </span>
-                            </div>
-
-                            {/* Rule 4 */}
-                            <div className="flex items-start justify-between gap-2.5 pb-2 border-b border-zinc-200/40 leading-normal">
-                              <div className="min-w-0 flex-1">
-                                <span className="block font-sans font-extrabold text-[10.5px] uppercase text-zinc-950">
-                                  Regra 4: Probabilidade Regulatória do Financiamento
-                                </span>
-                                <span className="text-[9.5px] text-zinc-500 block font-sans">
-                                  Motor Preditivo Caixa indica probabilidade de aprovação de {sim.approvalProbability}%
-                                </span>
-                              </div>
-                              <span className={`text-[10px] font-black font-mono uppercase px-2 py-0.5 rounded shrink-0 ${
-                                rule4Passed 
-                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
-                                  : 'bg-rose-100 text-rose-800 border border-rose-300'
-                              }`}>
-                                {rule4Passed ? 'Viável ✓' : 'Risco Alto ✖'}
-                              </span>
-                            </div>
-
-                            {/* Rule 5 */}
-                            <div className="flex items-start justify-between gap-2.5 leading-normal">
-                              <div className="min-w-0 flex-1">
-                                <span className="block font-sans font-extrabold text-[10.5px] uppercase text-zinc-950">
-                                  Regra 5: CPF Desimpedido (Restrições CADIN/Bacen)
-                                </span>
-                                <span className="text-[9.5px] text-zinc-500 block font-sans">
-                                  Filtros Serasa/Bacen sem apontamentos ativos
-                                </span>
-                              </div>
-                              <span className={`text-[10px] font-black font-mono uppercase px-2 py-0.5 rounded shrink-0 ${
-                                rule5Passed 
-                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
-                                  : 'bg-rose-100 text-rose-800 border border-rose-300'
-                              }`}>
-                                {rule5Passed ? 'Sem Restrição ✓' : 'Restrito ✖'}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                    {/* SEPARATED PAYMENTS ANALYSIS */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t border-zinc-200">
-                      
-                      {/* 1. BANK FINANCING ITEM */}
-                      <div className="bg-indigo-50/70 p-3 rounded-xl border border-indigo-200 flex flex-col justify-between">
-                        <div>
-                          <span className="text-[9px] font-black text-indigo-900 block uppercase font-mono">🏦 1. Parcela do Financiamento Bancário (Pós-Obra)</span>
-                          <span className="text-[9px] text-indigo-800 block mt-0.5 leading-tight">Garantia sob a menor faixa MCMV / SBPE simulada:</span>
-                        </div>
-                        <div className="mt-3 space-y-1.5">
-                          <div className="flex justify-between items-center bg-white border border-indigo-100 rounded px-1.5 py-1">
-                            <span className="text-[9px] font-bold text-zinc-650 font-sans font-medium">Primeira Parcela:</span>
-                            <span className="text-xs font-black text-indigo-950 font-mono">
-                              {sim.initialInstallment.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}/mês
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center bg-white border border-indigo-100 rounded px-1.5 py-1">
-                            <span className="text-[9px] font-bold text-zinc-650 font-sans font-medium">Última Parcela (Estimada):</span>
-                            <span className="text-xs font-black text-indigo-950 font-mono">
-                              {sim.finalInstallment.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}/mês
-                            </span>
-                          </div>
-                          <div className="flex justify-between text-[8px] text-zinc-400 font-mono">
-                            <span>PRAZO: {sim.maxTermMonths} meses</span>
-                            <span>SISTEMA: {amortizationSystem}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* 2. FACILITATED DOWNPAYMENT ITEM */}
-                      <div className="bg-emerald-50/75 p-3 rounded-xl border border-emerald-300 flex flex-col justify-between">
-                        <div>
-                          <span className="text-[9px] font-black text-emerald-950 block uppercase font-mono">🧱 2. Parcela da Entrada Facilitada (Durante a Obra)</span>
-                          <span className="text-[9px] text-emerald-800 block mt-0.5 leading-tight">Saldo residual parcelado no período de obras:</span>
-                        </div>
-                        <div className="mt-3 space-y-1.5">
-                          <div className="flex justify-between items-center bg-white border border-emerald-100 rounded px-1.5 py-1 flex-1">
-                            <span className="text-[9px] font-bold text-zinc-650 font-sans font-medium">Período de Obra SUGERIDO:</span>
-                            <span className="text-xs font-black text-emerald-950 font-mono">
-                              {sim.constructionInstallment.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}/mês
-                            </span>
-                          </div>
-                          <div className="p-1 px-1.5 bg-white border border-emerald-150 rounded text-[8.5px] text-emerald-900 font-sans leading-tight">
-                            • Parcelamento em <strong className="font-extrabold text-emerald-950">36 parcelas mensais fixas</strong> durante a construção do empreendimento.
-                          </div>
-                        </div>
-                      </div>
-
-                    </div>
-
-                    {(sim.totalDownPaymentRequired / selectedProperty.price) > 0.18 && (
-                      <div className="flex items-start gap-2 bg-amber-50 border-2 border-amber-500 text-zinc-900 p-2.5 rounded-xl text-[10px] leading-tight font-sans mt-1">
-                        <Users className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                        <div>
-                          <strong className="block text-amber-850 uppercase text-[8px] font-mono">👥 ENTRADA REQUERIDA CONFIRMADA ACIMA DE 18%</strong>
-                          <span>A entrada calculada de R$ {sim.totalDownPaymentRequired.toLocaleString('pt-BR')} ({((sim.totalDownPaymentRequired / selectedProperty.price) * 100).toFixed(1)}%) ultrapassou o teto confortável de 18% do valor do imóvel (R$ {selectedProperty.price.toLocaleString('pt-BR')}). <span className="font-extrabold text-indigo-800">É preciso agregar renda, compor um co-adquirente ou um fiador</span> para diminuir este saldo residual de entrada!</span>
+                    {hasCoBuyer && (
+                      <div className="space-y-1">
+                        <label className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Renda do Compositor</label>
+                        <div className="flex items-center border border-zinc-300 rounded-lg p-1 px-2 bg-white">
+                          <span className="text-[10.5px] font-bold text-zinc-450 mr-1">R$</span>
+                          <input type="number" value={tempCoBuyerIncomeInput} onChange={(e) => { setTempCoBuyerIncomeInput(e.target.value); const val = parseFloat(e.target.value) || 0; setCoBuyerIncome(val); }} className="w-full text-xs font-black text-zinc-800 bg-transparent focus:outline-none" />
                         </div>
                       </div>
                     )}
 
-                    {/* Action copy integration */}
-                    <div className="pt-2 flex justify-end">
-                      <button
-                        type="button"
-                        onClick={handleApplySimulationToNotes}
-                        className="bg-indigo-600 hover:bg-indigo-700 active:translate-y-0.5 text-white border-2 border-zinc-950 font-mono font-black text-[9.5px] uppercase px-3 py-1.5 rounded-lg shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] cursor-pointer transition inline-flex items-center gap-1"
-                      >
-                        <Calculator className="w-3.5 h-3.5" />
-                        Vincular Simulação às Notas
-                      </button>
+                    <div className="flex items-center justify-between p-2.5 bg-white border border-zinc-200 rounded-lg">
+                      <div className="space-y-0.5">
+                        <span className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Dependentes</span>
+                        <span className="text-[10px] font-extrabold text-zinc-700 font-sans">Possui dependentes?</span>
+                      </div>
+                      <input type="checkbox" checked={hasDependents} onChange={(e) => setHasDependents(e.target.checked)} className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" />
                     </div>
 
-                  </div>
+                    <div className="flex items-center justify-between p-2.5 bg-white border border-zinc-200 rounded-lg">
+                      <div className="space-y-0.5">
+                        <span className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Vínculo de fomento</span>
+                        <span className="text-[10px] font-extrabold text-zinc-700 font-sans">CLT &gt; 3 anos (FGTS)?</span>
+                      </div>
+                      <input type="checkbox" checked={hasThreeYearsCLT} onChange={(e) => setHasThreeYearsCLT(e.target.checked)} className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" />
+                    </div>
 
-                </div>
-              )}
-            </div>
+                    <div className="space-y-1">
+                      <label className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Saldo do FGTS</label>
+                      <div className="flex items-center border border-zinc-300 rounded-lg p-1 px-2 bg-white">
+                        <span className="text-[10.5px] font-bold text-zinc-450 mr-1">R$</span>
+                        <input type="number" value={tempFgtsInput} onChange={(e) => { setTempFgtsInput(e.target.value); const val = parseFloat(e.target.value) || 0; setFgtsBalance(val); }} className="w-full text-xs font-black text-zinc-800 bg-transparent focus:outline-none" />
+                      </div>
+                    </div>
 
-            {/* Editable Notes Frame */}
-            <div className="space-y-2">
-              <div className="flex justify-between items-center pr-1 select-none">
-                <label className="text-xs font-black text-zinc-900 uppercase tracking-tight flex items-center gap-1.5">
-                  <FileText className="w-4 h-4 text-indigo-600" />
-                  Anotações de Acompanhamento
-                </label>
-                <button
-                  type="button"
-                  onClick={handleNotesSave}
-                  disabled={isSavingNotes}
-                  className="text-[10px] font-black uppercase px-2.5 py-1.5 rounded-lg bg-indigo-600 border-2 border-zinc-950 text-white shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-indigo-700 transition active:translate-y-0.5"
-                >
-                  {isSavingNotes ? 'Aguarde...' : '💾 Salvar Nota'}
-                </button>
-              </div>
-              <textarea
-                value={notesText}
-                onChange={(e) => setNotesText(e.target.value)}
-                placeholder="Insira detalhes sobre conversas, necessidades e próximos passos acordados com o cliente..."
-                rows={6}
-                className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-3 text-xs leading-relaxed text-zinc-900 font-bold focus:bg-white focus:outline-none"
-              />
-            </div>
+                    <div className="space-y-1">
+                      <label className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Idade do Proponente</label>
+                      <input type="number" value={proponentAge} onChange={(e) => setProponentAge(Math.max(18, parseInt(e.target.value) || 18))} className="w-full text-xs font-black text-zinc-800 bg-white border border-zinc-300 rounded-lg p-1.5 focus:outline-none" />
+                    </div>
 
-            {/* AI COPRODUCTION ASSISTANT CARD */}
-            <div className="bg-gradient-to-br from-purple-50 via-white to-indigo-50/50 border-4 border-zinc-950 rounded-2xl p-5 space-y-4 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] select-text">
-              <div className="flex justify-between items-start border-b border-zinc-200 pb-3">
-                <div className="space-y-0.5">
-                  <h3 className="text-xs font-mono font-black text-purple-950 uppercase tracking-tight flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4 text-purple-650 shrink-0" />
-                    Central Coprodutora do Gemini (CRM Direct)
-                  </h3>
-                  <span className="text-[9px] tracking-widest font-black text-zinc-450 font-mono block">GEMINI 3.5 FLASH • CONECTOR SIDERADO CRÉDITO</span>
-                </div>
-                <div className="shrink-0 bg-purple-100 border border-purple-300 text-purple-950 font-mono font-black text-[9px] px-2 py-0.5 rounded-full select-none">
-                  +120 XP REAL
-                </div>
-              </div>
+                    <div className="space-y-1">
+                      <label className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Amortização</label>
+                      <select value={amortizationSystem} onChange={(e: any) => setAmortizationSystem(e.target.value)} className="w-full text-xs font-black text-zinc-800 bg-white border border-zinc-300 rounded-lg p-1.5 focus:outline-none">
+                        <option value="SAC">SAC (Parcelas Decrescentes)</option>
+                        <option value="PRICE">PRICE (Parcelas Constantes)</option>
+                      </select>
+                    </div>
 
-              {/* Sub-tab selectors */}
-              <div className="flex bg-zinc-950/5 p-1 rounded-xl border border-zinc-300/60 gap-1 select-none">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setModalCoproductTab('pitch');
-                    setAiPitchText('');
-                  }}
-                  className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider font-mono transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                    modalCoproductTab === 'pitch'
-                      ? 'bg-purple-600 text-white shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'
-                      : 'text-zinc-650 hover:text-zinc-950'
-                  }`}
-                >
-                  📱 Abordagem Rápida
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setModalCoproductTab('dossier');
-                    setAiPitchText('');
-                  }}
-                  className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider font-mono transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                    modalCoproductTab === 'dossier'
-                      ? 'bg-purple-600 text-white shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'
-                      : 'text-zinc-650 hover:text-zinc-950'
-                  }`}
-                >
-                  🔬 Dossiê Habitacional
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setModalCoproductTab('campaign');
-                    setAiPitchText('');
-                  }}
-                  className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider font-mono transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                    modalCoproductTab === 'campaign'
-                      ? 'bg-purple-600 text-white shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'
-                      : 'text-zinc-650 hover:text-zinc-950'
-                  }`}
-                >
-                  📅 Plano de Campanha
-                </button>
-              </div>
-
-              <div className="text-xs text-zinc-650 leading-relaxed font-sans space-y-3">
-                <p>
-                  {modalCoproductTab === 'pitch' && "Gere um roteiro de abordagem e copywriting ultra persuasivo focado para WhatsApp com o Gemini."}
-                  {modalCoproductTab === 'dossier' && "Gere um Dossiê Digital de Qualificação contendo scorecard de enquadramento, taxas estimativas e plano de ação Caixa."}
-                  {modalCoproductTab === 'campaign' && "Crie um cronograma estratégico de engajamento de 7 dias com gatilhos persuasivos de follow-up."}
-                </p>
-
-                {aiPitchError && (
-                  <div className="p-3 bg-red-100 border border-red-300 rounded-xl text-[10px] text-red-950 font-sans leading-relaxed select-text flex items-start gap-1.5 border-4">
-                    <AlertTriangle className="w-4 h-4 text-red-700 shrink-0 mt-0.5" />
-                    <div>
-                      <strong>Falha de Integração:</strong> {aiPitchError}
+                    <div className="flex items-center justify-between p-2.5 bg-white border border-zinc-200 rounded-lg">
+                      <div className="space-y-0.5">
+                        <span className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Histórico Bacen</span>
+                        <span className="text-[10px] font-extrabold text-zinc-700 font-sans">Nome Limpo?</span>
+                      </div>
+                      <input type="checkbox" checked={hasCleanCredit} onChange={(e) => setHasCleanCredit(e.target.checked)} className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" />
                     </div>
                   </div>
-                )}
 
-                {aiPitchText ? (
-                  <div className="space-y-3">
-                    <div className="bg-zinc-950 text-zinc-100 border-2 border-zinc-950 p-4 rounded-xl shadow-inner text-xs font-mono whitespace-pre-wrap leading-relaxed max-h-[290px] overflow-y-auto select-text">
-                      {aiPitchText}
+                  {/* Resultados Simulados */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="p-3 bg-white border border-zinc-200 rounded-xl space-y-1 text-center">
+                      <span className="text-[8px] uppercase font-bold text-zinc-400 block">Subsídio Caixa</span>
+                      <p className="text-sm font-black font-mono text-indigo-700">R$ {sim.subsidy.toLocaleString('pt-BR')}</p>
                     </div>
-                    <div className="flex flex-wrap gap-2 border-t border-zinc-200 pt-3 select-none">
-                      <button
-                        type="button"
-                        onClick={handleCopyPitch}
-                        className={`px-3 py-2 border-2 border-zinc-950 rounded-lg font-mono font-black text-[9px] uppercase transition cursor-pointer active:translate-y-0.5 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${
-                          isCopied 
-                            ? 'bg-emerald-600 text-white' 
-                            : 'bg-zinc-800 hover:bg-zinc-700 text-white'
-                        }`}
-                      >
-                        {isCopied ? '✓ Copiado!' : 'Copiar Texto 📋'}
-                      </button>
-
-                      {modalCoproductTab === 'pitch' && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const rawMsg = aiPitchText.split('---')[0] || aiPitchText;
-                            const cleanPhone = (leadPhone || lead?.phone || '').replace(/[^0-9]/g, '');
-                            const defaultPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
-                            window.location.href = `whatsapp://send?phone=${defaultPhone}&text=${encodeURIComponent(rawMsg.trim())}`;
-                          }}
-                          className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white border-2 border-zinc-950 rounded-lg font-mono font-black text-[9px] uppercase transition cursor-pointer active:translate-y-0.5 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center gap-1"
-                        >
-                          Enviar WhatsApp Local 📲
-                        </button>
-                      )}
-
-                      {modalCoproductTab === 'dossier' && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!lead || !onUpdateLeadNotes) return;
-                            const updatedNotes = `${lead.notes || ''}\n\n--- 🔬 DOSSIÊ DIGITAL DE QUALIFICAÇÃO (GEMINI DIRECT) ---\n${aiPitchText}`;
-                            onUpdateLeadNotes(lead.id, updatedNotes);
-                            setNotesText(updatedNotes);
-                            if (awardXP) awardXP(120);
-                            alert("Dossiê do Gemini anexado com sucesso na ficha cadastral das anotações do Lead!");
-                          }}
-                          className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white border-2 border-zinc-950 rounded-lg font-mono font-black text-[9px] uppercase transition cursor-pointer active:translate-y-0.5 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center gap-1"
-                        >
-                          Salvar e Anexar ao Lead 🔬
-                        </button>
-                      )}
+                    <div className="p-3 bg-white border border-zinc-200 rounded-xl space-y-1 text-center">
+                      <span className="text-[8px] uppercase font-bold text-zinc-400 block">Juros Efetivos</span>
+                      <p className="text-sm font-black font-mono text-zinc-700">{sim.annualRate}% a.a.</p>
+                    </div>
+                    <div className="p-3 bg-white border border-zinc-200 rounded-xl space-y-1 text-center">
+                      <span className="text-[8px] uppercase font-bold text-zinc-400 block">Financiamento Caixa</span>
+                      <p className="text-sm font-black font-mono text-emerald-700">R$ {sim.approvedLoan.toLocaleString('pt-BR')}</p>
+                    </div>
+                    <div className="p-3 bg-white border border-zinc-200 rounded-xl space-y-1 text-center">
+                      <span className="text-[8px] uppercase font-bold text-zinc-400 block">Aprovação</span>
+                      <p className={`text-sm font-black font-mono ${sim.approvalProbability >= 70 ? 'text-emerald-600' : 'text-red-500'}`}>{sim.approvalProbability}% Prob.</p>
                     </div>
                   </div>
-                ) : (
-                  <div className="pt-1 flex">
-                    <button
-                      type="button"
-                      onClick={() => handleGenerateAiPitch(modalCoproductTab)}
-                      disabled={isGeneratingPitch}
-                      className="w-full py-3 bg-purple-650 hover:bg-purple-750 active:translate-y-0.5 text-white border-2 border-zinc-950 font-mono font-black text-[10px] uppercase rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] cursor-pointer transition flex items-center justify-center gap-2 select-none"
-                    >
-                      {isGeneratingPitch ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full shrink-0 animate-spin" />
-                          <span>Solicitando inteligência ao Gemini...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-4 h-4 shrink-0" />
-                          <span>
-                            {modalCoproductTab === 'pitch' && 'Gerar Abordagem Personalizada'}
-                            {modalCoproductTab === 'dossier' && 'Gerar Dossiê de Qualificação'}
-                            {modalCoproductTab === 'campaign' && 'Gerar Plano de Campanha 7 Dias'}
-                          </span>
-                        </>
-                      )}
+                </div>
+              </div>
+
+              {/* FLOW ASSIGNMENT & SCRIPT LIBRARY */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* FLOW ASSIGNMENT CARD */}
+                <div className="bg-white border-2 border-zinc-950 p-4 rounded-xl space-y-3">
+                  <h4 className="text-xs font-black uppercase text-zinc-900 tracking-tight flex items-center gap-1 font-mono">
+                    <Layers className="w-4 h-4 text-indigo-600" />
+                    Vincular Fluxo Operacional
+                  </h4>
+                  <p className="text-[10px] text-zinc-500">Insira este lead em uma esteira estratégica de timers de vendas:</p>
+
+                  <div className="flex gap-2">
+                    <select value={selectedFlowId} onChange={(e) => setSelectedFlowId(e.target.value)} className="flex-1 bg-white border-2 border-zinc-950 p-1.5 text-xs font-bold text-zinc-800 rounded-lg">
+                      <option value="">Nenhum Fluxo Selecionado</option>
+                      {operationalFlows.map(f => (
+                        <option key={f.id} value={f.id}>{f.name}</option>
+                      ))}
+                    </select>
+                    <button type="button" onClick={() => { updateField('fluxoId', selectedFlowId); setFlowNotification("Fluxo atualizado com sucesso!"); setTimeout(() => setFlowNotification(null), 3000); }} className="px-3 bg-zinc-900 text-white rounded-lg border-2 border-zinc-950 font-mono text-[9px] font-black uppercase">
+                      Vincular
                     </button>
                   </div>
-                )}
-              </div>
-            </div>
-
-            {/* GOOGLE WORKSPACE RAMIFICATIONS PANEL */}
-            <div className="bg-white border-4 border-zinc-950 p-5 rounded-3xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] space-y-4 text-left select-none mt-6">
-              <div className="flex items-center justify-between border-b border-zinc-200 pb-2.5">
-                <div className="space-y-0.5">
-                  <span className="text-[9px] tracking-widest font-black text-indigo-600 font-mono uppercase flex items-center gap-1">
-                    <Cloud className="w-3 h-3  text-indigo-500" />
-                    <span>Google Workspace Ativo</span>
-                  </span>
-                  <h4 className="text-xs font-black text-zinc-900 uppercase font-mono">Conexões Expandidas de Vendas</h4>
-                </div>
-                {workspaceToken ? (
-                  <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 text-[8.5px] px-2 py-0.5 rounded-full font-mono font-black uppercase flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full "></span>
-                    <span>Conectado</span>
-                  </span>
-                ) : (
-                  <span className="bg-zinc-100 text-zinc-500 border border-zinc-300 text-[8.5px] px-2 py-0.5 rounded-full font-mono font-black uppercase">
-                    Desconectado
-                  </span>
-                )}
-              </div>
-
-              {!workspaceToken ? (
-                <div className="bg-zinc-50 border-2 border-dashed border-zinc-200 p-4 rounded-xl text-center space-y-2">
-                  <p className="text-[10.5px] text-zinc-500 leading-snug">
-                    Conecte sua conta Google na aba <strong>"Google Workspace"</strong> para enviar propostas automáticas via Gmail e agendar visitas no Google Calendar real!
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {/* Message Notification alerts */}
-                  {googleWorkspaceSuccess && (
-                     <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded-lg text-[10px] text-emerald-950 font-sans">
-                       ✔ {googleWorkspaceSuccess}
-                     </div>
+                  {flowNotification && (
+                    <p className="text-[9.5px] font-bold text-emerald-600 font-sans">{flowNotification}</p>
                   )}
-                  {googleWorkspaceError && (
-                     <div className="p-2.5 bg-rose-50 border border-rose-300 rounded-lg text-[10px] text-rose-950 font-sans">
-                       ❌ {googleWorkspaceError}
-                     </div>
-                  )}
+                </div>
 
-                  {/* Gmail Rapid Action */}
-                  <div className="space-y-2 group border border-zinc-200 p-3 rounded-xl hover:bg-zinc-50 transition-all duration-200">
-                    <h5 className="text-[10px] uppercase font-black text-zinc-700 tracking-wider font-mono flex items-center gap-1">
-                      <Mail className="w-3.5 h-3.5 text-red-500" />
-                      <span>E-mail Instantâneo (Via Gmail API)</span>
-                    </h5>
-                    <p className="text-[9.5px] text-zinc-500">
-                      Dispare a proposta comercial diretamente do seu Gmail institucional para o lead: <strong className="text-zinc-800 break-all">{lead.email || 'Não cadastrado'}</strong>.
+                {/* SCRIPTS LIBRARY */}
+                <div className="bg-white border-2 border-zinc-950 p-4 rounded-xl space-y-3">
+                  <h4 className="text-xs font-black uppercase text-zinc-900 tracking-tight flex items-center gap-1 font-mono">
+                    <MessageSquare className="w-4 h-4 text-emerald-600" />
+                    Biblioteca de Scripts de Venda
+                  </h4>
+                  <div className="space-y-1.5">
+                    <label className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Selecione o Roteiro de Abordagem</label>
+                    <select value={selectedScriptId} onChange={(e) => setSelectedScriptId(e.target.value)} className="w-full bg-white border-2 border-zinc-950 p-1.5 text-xs font-bold text-zinc-800 rounded-lg">
+                      {SCRIPTS_LIBRARY.map(s => (
+                        <option key={s.id} value={s.id}>{s.title}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {(() => {
+                    const scr = SCRIPTS_LIBRARY.find(s => s.id === selectedScriptId) || SCRIPTS_LIBRARY[0];
+                    const personalizedText = getPersonalizedScript(scr.template);
+                    return (
+                      <div className="pt-2 space-y-2">
+                        <div className="p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg text-[10px] font-mono text-zinc-600 leading-relaxed max-h-24 overflow-y-auto">
+                          {personalizedText}
+                        </div>
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => { navigator.clipboard.writeText(personalizedText); if (awardXP) awardXP(20); }} className="flex-1 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white font-mono font-black text-[9px] uppercase border-2 border-zinc-950 rounded-lg active:translate-y-0.5">
+                            Copiar Texto
+                          </button>
+                          <button type="button" onClick={() => { const cl = (lead?.phone || '').replace(/\D/g, ''); window.location.href = `whatsapp://send?phone=55${cl}&text=${encodeURIComponent(personalizedText)}`; }} className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-black text-[9px] uppercase border-2 border-zinc-950 rounded-lg active:translate-y-0.5">
+                            Disparar Whats
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* TAB 3: AGENDA & WORKSPACE */}
+          {activeTab === 'agenda' && (
+            <>
+              {/* GOOGLE WORKSPACE RAMIFICATIONS PANEL */}
+              <div className="bg-white border-4 border-zinc-950 p-5 rounded-3xl shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] space-y-4 text-left select-none">
+                <div className="flex items-center justify-between border-b border-zinc-200 pb-2.5">
+                  <div className="space-y-0.5">
+                    <span className="text-[9px] tracking-widest font-black text-indigo-600 font-mono uppercase flex items-center gap-1">
+                      <Cloud className="w-3 h-3 text-indigo-500" />
+                      <span>Google Workspace Ativo</span>
+                    </span>
+                    <h4 className="text-xs font-black text-zinc-900 uppercase font-mono">Conexões Expandidas de Vendas</h4>
+                  </div>
+                  {workspaceToken ? (
+                    <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 text-[8.5px] px-2 py-0.5 rounded-full font-mono font-black uppercase flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                      <span>Conectado</span>
+                    </span>
+                  ) : (
+                    <span className="bg-zinc-100 text-zinc-500 border border-zinc-300 text-[8.5px] px-2 py-0.5 rounded-full font-mono font-black uppercase">
+                      Desconectado
+                    </span>
+                  )}
+                </div>
+
+                {!workspaceToken ? (
+                  <div className="bg-zinc-50 border-2 border-dashed border-zinc-200 p-4 rounded-xl text-center space-y-2">
+                    <p className="text-[10.5px] text-zinc-500 leading-snug">
+                      Conecte sua conta Google na aba <strong>"Google Workspace"</strong> na barra lateral para disparar propostas automáticas via Gmail e agendar reuniões no Google Calendar!
                     </p>
-                    <button
-                      type="button"
-                      disabled={isSendingGoogleEmail || !lead.email}
-                      onClick={async () => {
-                        if (!lead.email) return;
-                        setIsSendingGoogleEmail(true);
-                        setGoogleWorkspaceSuccess(null);
-                        setGoogleWorkspaceError(null);
-                        
-                        const subject = `Proposta Comercial Imobiliária | ${lead.name}`;
-                        const messageBody = aiPitchText || `Olá ${lead.name},\n\nTemos novidades excelentes de crédito habitacional e simulação para você.\n\nAtenciosamente,\nSua Assessoria Imobiliária`;
-                        
-                        const ok = await sendGmailMessage(subject, messageBody.replace(/\n/g, '<br/>'), lead.email);
-                        if (ok) {
-                          setGoogleWorkspaceSuccess("E-mail disparado via Gmail API com absoluto sucesso!");
-                          if (awardXP) awardXP(100);
-                        } else {
-                          setGoogleWorkspaceError("Não foi possível disparar o e-mail via Gmail. Verifique as permissões de escopo.");
-                        }
-                        setIsSendingGoogleEmail(false);
-                      }}
-                      className="w-full py-2 bg-zinc-950 hover:bg-zinc-900 text-white rounded-lg text-[9px] font-mono font-black uppercase tracking-wider block transition"
-                    >
-                      {isSendingGoogleEmail ? 'Despachando via Gmail...' : 'Enviar Abordagem pelo seu Gmail'}
-                    </button>
                   </div>
+                ) : (
+                  <div className="space-y-4">
+                    {googleWorkspaceSuccess && (
+                       <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded-lg text-[10px] text-emerald-950 font-sans">
+                         ✔ {googleWorkspaceSuccess}
+                       </div>
+                    )}
+                    {googleWorkspaceError && (
+                       <div className="p-2.5 bg-rose-50 border border-rose-300 rounded-lg text-[10px] text-rose-950 font-sans">
+                         ❌ {googleWorkspaceError}
+                       </div>
+                    )}
 
-                  {/* Google Calendar Event syncing */}
-                  <div className="space-y-2 group border border-zinc-200 p-3 rounded-xl hover:bg-zinc-50 transition-all duration-200">
-                    <h5 className="text-[10px] uppercase font-black text-zinc-700 tracking-wider font-mono flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5 text-blue-500" />
-                      <span>Agendar Visita (Google Calendar)</span>
-                    </h5>
-                    
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[8.5px] uppercase font-bold text-zinc-400 block mb-0.5">Data</label>
+                    {/* Gmail Rapid Action */}
+                    <div className="space-y-2 group border border-zinc-200 p-3 rounded-xl hover:bg-zinc-50 transition-colors">
+                      <h5 className="text-[10px] uppercase font-black text-zinc-700 tracking-wider font-mono flex items-center gap-1">
+                        <Mail className="w-3.5 h-3.5 text-red-500" />
+                        <span>E-mail Instantâneo (Via Gmail API)</span>
+                      </h5>
+                      <p className="text-[9.5px] text-zinc-500">
+                        Dispare a proposta comercial diretamente do seu Gmail institucional para o lead: <strong className="text-zinc-800 break-all">{lead.email || 'Não cadastrado'}</strong>.
+                      </p>
+                      <button
+                        type="button"
+                        disabled={isSendingGoogleEmail || !lead.email}
+                        onClick={async () => {
+                          if (!lead.email) return;
+                          setIsSendingGoogleEmail(true);
+                          setGoogleWorkspaceSuccess(null);
+                          setGoogleWorkspaceError(null);
+                          
+                          const subject = `Proposta Comercial Imobiliária | ${lead.name}`;
+                          const messageBody = aiPitchText || `Olá ${lead.name},\n\nTemos novidades excelentes de crédito habitacional e simulação para você.\n\nAtenciosamente,\nSua Assessoria Imobiliária`;
+                          
+                          const ok = await sendGmailMessage(subject, messageBody.replace(/\n/g, '<br/>'), lead.email);
+                          if (ok) {
+                            setGoogleWorkspaceSuccess("E-mail enviado com sucesso do seu Gmail!");
+                            if (awardXP) awardXP(100);
+                          } else {
+                            setGoogleWorkspaceError("Erro ao despachar Gmail. Verifique o escopo de autorização do Workspace.");
+                          }
+                          setIsSendingGoogleEmail(false);
+                        }}
+                        className="w-full py-2 bg-zinc-900 hover:bg-zinc-850 disabled:bg-zinc-200 text-white rounded-lg text-[9px] font-mono font-black uppercase tracking-wider block transition"
+                      >
+                        {isSendingGoogleEmail ? 'Enviando e-mail...' : 'Disparar Proposta via Gmail'}
+                      </button>
+                    </div>
+
+                    {/* Google Calendar Event syncing */}
+                    <div className="space-y-2 group border border-zinc-200 p-3 rounded-xl hover:bg-zinc-50 transition-colors">
+                      <h5 className="text-[10px] uppercase font-black text-zinc-700 tracking-wider font-mono flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5 text-blue-500" />
+                        <span>Agendar Visita (Google Calendar)</span>
+                      </h5>
+                      
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[8.5px] uppercase font-bold text-zinc-400 block mb-0.5">Data</label>
+                          <input
+                            type="date"
+                            value={googleCalendarDate}
+                            onChange={(e) => setGoogleCalendarDate(e.target.value)}
+                            className="w-full text-[10px] font-semibold border border-zinc-300 p-1.5 rounded bg-white text-zinc-800"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[8.5px] uppercase font-bold text-zinc-400 block mb-0.5">Hora</label>
+                          <input
+                            type="time"
+                            value={googleCalendarTime}
+                            onChange={(e) => setGoogleCalendarTime(e.target.value)}
+                            className="w-full text-[10px] font-semibold border border-zinc-300 p-1.5 rounded bg-white text-zinc-800"
+                          />
+                        </div>
+                      </div>
+
+                      <p className="text-[9.5px] text-zinc-500">
+                        Sincronize automaticamente o evento de visita no seu celular e na agenda de compromissos do Google Workspace.
+                      </p>
+                      
+                      <button
+                        type="button"
+                        disabled={isSchedulingGoogleCalendar}
+                        onClick={async () => {
+                          setIsSchedulingGoogleCalendar(true);
+                          setGoogleWorkspaceSuccess(null);
+                          setGoogleWorkspaceError(null);
+                          
+                          const title = `Visita Técnica & Financiamento - ${lead.name}`;
+                          const description = `Reunião comercial de simulação de crédito e avaliação habitacional.\nTelefone Lead: ${lead.phone || 'Indefinido'}\nEmail: ${lead.email || 'Indefinido'}`;
+                          
+                          const ok = await createGoogleCalendarEvent(title, description, googleCalendarDate, googleCalendarTime, 60);
+                          if (ok) {
+                            setGoogleWorkspaceSuccess("Visita agendada com sucesso no Google Calendar!");
+                            if (awardXP) awardXP(120);
+                          } else {
+                            setGoogleWorkspaceError("Falha ao incluir compromisso. Certifique-se de que a API do Calendar está liberada na autenticação.");
+                          }
+                          setIsSchedulingGoogleCalendar(false);
+                        }}
+                        className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[9px] font-mono font-black uppercase tracking-wider block transition"
+                      >
+                        {isSchedulingGoogleCalendar ? 'Agendando...' : 'Sincronizar no Google Calendar'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Potential Value Card */}
+              <div className="bg-zinc-900 border-4 border-zinc-950 text-white rounded-xl p-5 text-center flex flex-col items-center justify-center space-y-1 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] select-none">
+                <DollarSign className="w-5 h-5 text-indigo-400 mb-0.5" />
+                <span className="text-[10px] uppercase font-black text-indigo-300 tracking-wider font-mono">Potencial Comercial</span>
+                <h4 className="text-2xl font-mono font-black text-white">
+                  {(lead.value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+                </h4>
+              </div>
+
+              {/* DYNAMIC FOLLOW-UPS TABLE */}
+              <div className="bg-white border-2 border-zinc-950 rounded-xl p-5 space-y-4 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+                <div className="flex justify-between items-center border-b border-zinc-200 pb-2">
+                  <h4 className="text-xs font-black uppercase text-zinc-900 tracking-tight flex items-center gap-1.5 font-mono">
+                    <CalendarDays className="w-4 h-4 text-emerald-600" />
+                    Compromissos e Follow-ups ({leadAppointments.length})
+                  </h4>
+                  <span className="text-[9px] uppercase font-mono font-black bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded">
+                    Tabela de Acompanhamento
+                  </span>
+                </div>
+
+                {leadAppointments.length === 0 ? (
+                  <div className="text-center py-6 border-2 border-dashed border-zinc-200 rounded-xl bg-zinc-50">
+                    <p className="text-xs text-zinc-500 font-bold">Nenhum compromisso agendado para este lead.</p>
+                    <p className="text-[10px] text-zinc-400 mt-1">Use o formulário abaixo para registrar e acompanhar o follow-up!</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-lg border-2 border-zinc-950">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-zinc-900 text-white font-mono uppercase text-[9px] border-b-2 border-zinc-950">
+                          <th className="p-2 border-r border-zinc-950">Data / Hora</th>
+                          <th className="p-2 border-r border-zinc-950">Tipo</th>
+                          <th className="p-2 border-r border-zinc-950">Atividade / Titulo</th>
+                          <th className="p-2 border-r border-zinc-950">Status</th>
+                          <th className="p-2 text-center">Ação</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-200">
+                        {leadAppointments.map(apt => (
+                          <tr key={apt.id} className="bg-white hover:bg-zinc-50 font-sans">
+                            <td className="p-2 border-r border-zinc-200 font-mono text-[10px] font-bold text-zinc-800">
+                              {apt.date.split('-').reverse().join('/')} • {apt.time}
+                            </td>
+                            <td className="p-2 border-r border-zinc-200">
+                              <span className={`inline-block font-mono text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${
+                                apt.type === 'reuniao' ? 'bg-purple-100 text-purple-800 border border-purple-300' :
+                                apt.type === 'telefone' ? 'bg-blue-100 text-blue-800 border border-blue-300' :
+                                apt.type === 'proposta' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
+                                'bg-zinc-100 text-zinc-800 border border-zinc-300'
+                              }`}>
+                                {apt.type}
+                              </span>
+                            </td>
+                            <td className="p-2 border-r border-zinc-200 font-bold text-zinc-900 truncate max-w-[150px]" title={apt.title}>
+                              {apt.title}
+                            </td>
+                            <td className="p-2 border-r border-zinc-200">
+                              <span className={`inline-block font-mono text-[8.5px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                apt.status === 'realizado' ? 'bg-emerald-100 text-emerald-800' :
+                                apt.status === 'cancelado' ? 'bg-red-100 text-red-800' :
+                                'bg-amber-100 text-amber-800 animate-pulse'
+                              }`}>
+                                {apt.status}
+                              </span>
+                            </td>
+                            <td className="p-2 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleAppointmentStatus(apt.id)}
+                                className="px-2 py-1 text-[8px] font-mono font-black uppercase border border-zinc-950 rounded bg-zinc-100 hover:bg-zinc-200 transition cursor-pointer"
+                              >
+                                Alternar
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* QUICK INLINE APPOINTMENT CREATION FORM */}
+                <form onSubmit={handleAddNewAppointment} className="bg-zinc-50 p-4 border border-zinc-200 rounded-xl space-y-3">
+                  <span className="text-[10px] font-mono font-black uppercase text-zinc-500 block">Agendar Novo Follow-up no CRM</span>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    <div className="col-span-1 sm:col-span-2 md:col-span-1 space-y-1">
+                      <label className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Descrição do Compromisso</label>
+                      <input
+                        type="text"
+                        required
+                        value={newAptTitle}
+                        onChange={(e) => setNewAptTitle(e.target.value)}
+                        placeholder="Ex: Retorno de Simulação Caixa"
+                        className="w-full text-xs font-bold text-zinc-800 bg-white border border-zinc-300 p-2 rounded-lg focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 col-span-1 sm:col-span-2 md:col-span-2">
+                      <div className="space-y-1">
+                        <label className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Data</label>
                         <input
                           type="date"
-                          value={googleCalendarDate}
-                          onChange={(e) => setGoogleCalendarDate(e.target.value)}
-                          className="w-full text-[10px] font-semibold border border-zinc-300 p-1.5 rounded bg-white text-zinc-800"
+                          value={newAptDate}
+                          onChange={(e) => setNewAptDate(e.target.value)}
+                          className="w-full text-xs font-bold text-zinc-800 bg-white border border-zinc-300 p-1.5 rounded-lg focus:outline-none"
                         />
                       </div>
-                      <div>
-                        <label className="text-[8.5px] uppercase font-bold text-zinc-400 block mb-0.5">Hora</label>
+                      <div className="space-y-1">
+                        <label className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Hora</label>
                         <input
                           type="time"
-                          value={googleCalendarTime}
-                          onChange={(e) => setGoogleCalendarTime(e.target.value)}
-                          className="w-full text-[10px] font-semibold border border-zinc-300 p-1.5 rounded bg-white text-zinc-800"
+                          value={newAptTime}
+                          onChange={(e) => setNewAptTime(e.target.value)}
+                          className="w-full text-xs font-bold text-zinc-800 bg-white border border-zinc-300 p-1.5 rounded-lg focus:outline-none"
                         />
                       </div>
                     </div>
+                  </div>
 
-                    <p className="text-[9.5px] text-zinc-500">
-                      Sincronize automaticamente o evento de visita no seu celular e na agenda de compromissos do Google Workspace.
-                    </p>
-                    
+                  <div className="flex flex-col sm:flex-row gap-3 pt-1 items-end">
+                    <div className="w-full sm:w-1/2 space-y-1">
+                      <label className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Tipo de Ação</label>
+                      <select
+                        value={newAptType}
+                        onChange={(e: any) => setNewAptType(e.target.value)}
+                        className="w-full text-xs font-bold text-zinc-800 bg-white border border-zinc-300 p-2 rounded-lg focus:outline-none"
+                      >
+                        <option value="telefone">📞 Ligação de Retorno</option>
+                        <option value="reuniao">🤝 Reunião / Visita</option>
+                        <option value="proposta">📄 Apresentação de Proposta</option>
+                        <option value="outro">🔹 Outros / WhatsApp</option>
+                      </select>
+                    </div>
+
                     <button
-                      type="button"
-                      disabled={isSchedulingGoogleCalendar}
-                      onClick={async () => {
-                        setIsSchedulingGoogleCalendar(true);
-                        setGoogleWorkspaceSuccess(null);
-                        setGoogleWorkspaceError(null);
-                        
-                        const title = `Visita Técnica & Financiamento - ${lead.name}`;
-                        const description = `Reunião comercial de simulação de crédito e avaliação habitacional.\nTelefone Lead: ${lead.phone || 'Indefinido'}\nEmail: ${lead.email || 'Indefinido'}`;
-                        
-                        const ok = await createGoogleCalendarEvent(title, description, googleCalendarDate, googleCalendarTime, 60);
-                        if (ok) {
-                          setGoogleWorkspaceSuccess("Visita agendada com sucesso no Google Calendar!");
-                          if (awardXP) awardXP(120);
-                        } else {
-                          setGoogleWorkspaceError("Falha ao incluir compromisso. Certifique-se de que a API do Calendar está liberada na autenticação.");
-                        }
-                        setIsSchedulingGoogleCalendar(false);
-                      }}
-                      className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[9px] font-mono font-black uppercase tracking-wider block transition"
+                      type="submit"
+                      className="w-full sm:w-1/2 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] font-mono font-black text-[9.5px] uppercase tracking-wider block transition active:translate-y-0.5 cursor-pointer"
                     >
-                      {isSchedulingGoogleCalendar ? 'Agendando...' : 'Sincronizar no Google Calendar'}
+                      Programar Compromisso
                     </button>
                   </div>
+                </form>
+              </div>
+            </>
+          )}
+
+          {/* TAB 4: HISTÓRICO & NOTAS */}
+          {activeTab === 'historico' && (
+            <>
+              {/* Editable Notes Frame */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center pr-1 select-none">
+                  <label className="text-xs font-black text-zinc-900 uppercase tracking-tight flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-indigo-600" />
+                    Anotações de Acompanhamento
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleNotesSave}
+                    disabled={isSavingNotes}
+                    className="text-[10px] font-black uppercase px-2.5 py-1.5 rounded-lg bg-indigo-600 border-2 border-zinc-950 text-white shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-indigo-700 transition active:translate-y-0.5"
+                  >
+                    {isSavingNotes ? 'Aguarde...' : '💾 Salvar Nota'}
+                  </button>
                 </div>
-              )}
-            </div>
+                <textarea
+                  value={notesText}
+                  onChange={(e) => setNotesText(e.target.value)}
+                  placeholder="Insira detalhes sobre conversas, necessidades e próximos passos acordados com o cliente..."
+                  rows={6}
+                  className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-3 text-xs leading-relaxed text-zinc-900 font-bold focus:bg-white focus:outline-none"
+                />
+              </div>
 
-          </div>
+              {/* Interaction history timeline (Simulated + real logs) */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-black text-zinc-900 uppercase tracking-tight flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-indigo-600" />
+                  Linha do Tempo
+                </h3>
 
-          {/* RIGHT PANEL: History, values, and quick stages transition (5 Columns) */}
-          <div className="md:col-span-5 space-y-6">
-            {/* Value card */}
-            <div className="bg-zinc-900 border-4 border-zinc-950 text-white rounded-xl p-5 text-center flex flex-col items-center justify-center space-y-1 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
-              <DollarSign className="w-5 h-5 text-indigo-400 mb-0.5" />
-              <span className="text-[10px] uppercase font-black text-indigo-300 tracking-wider font-mono">Potencial Comercial</span>
-              <h4 className="text-2xl font-mono font-black text-white">
-                {lead.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
-              </h4>
-            </div>
-
-
-
-            {/* Interaction history timeline (Simulated + real logs) */}
-            <div className="space-y-3">
-              <h3 className="text-xs font-black text-zinc-900 uppercase tracking-tight flex items-center gap-1.5">
-                <Clock className="w-4 h-4 text-indigo-600" />
-                Linha do Tempo
-              </h3>
-
-              <div id="lead-activity-timeline" className="space-y-3 max-h-[190px] overflow-y-auto pr-1">
-                {/* Simulated Creation Event */}
-                <div className="flex gap-2.5 items-start text-xs rounded-xl border-2 border-zinc-950 p-3 bg-zinc-50 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
-                  <CalendarCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="font-extrabold text-zinc-900 uppercase tracking-tight text-[11px]">Lead Cadastrado</h4>
-                    <p className="text-[10px] text-zinc-500 font-semibold">Iniciado de {lead.origin}</p>
-                    <p className="text-[10px] text-zinc-400 font-mono mt-0.5">{new Date(lead.createdAt).toLocaleDateString('pt-BR')}</p>
-                  </div>
-                </div>
-
-                {/* Automation Log integrations matching lead */}
-                {filteredLogs.length === 0 ? (
-                  <div className="text-[10px] font-mono font-bold uppercase text-zinc-400 py-4 text-center border-2 border-dashed border-zinc-200 rounded-xl">
-                    <span>Nenhum e-mail despachado ainda.</span>
-                  </div>
-                ) : (
-                  filteredLogs.map(log => (
-                    <div key={log.id} className="flex gap-2.5 items-start text-xs rounded-xl border-2 border-zinc-950 p-3 bg-indigo-50 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
-                      <Send className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                      <div className="min-w-0">
-                        <h4 className="font-extrabold text-zinc-900 uppercase tracking-tight text-[11px] truncate">E-mail: {log.templateName}</h4>
-                        <p className="text-[10px] text-zinc-500 truncate font-semibold">{log.subject}</p>
-                        <p className="text-[10px] text-zinc-400 font-mono mt-0.5">{log.sentAt}</p>
-                      </div>
+                <div id="lead-activity-timeline" className="space-y-3 max-h-[280px] overflow-y-auto pr-1">
+                  {/* Simulated Creation Event */}
+                  <div className="flex gap-2.5 items-start text-xs rounded-xl border-2 border-zinc-950 p-3 bg-zinc-50 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
+                    <CalendarCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-extrabold text-zinc-900 uppercase tracking-tight text-[11px]">Lead Cadastrado</h4>
+                      <p className="text-[10px] text-zinc-500 font-semibold">Iniciado de {lead.origin}</p>
+                      <p className="text-[10px] text-zinc-400 font-mono mt-0.5">{new Date(lead.createdAt).toLocaleDateString('pt-BR')}</p>
                     </div>
-                  ))
-                )}
+                  </div>
+
+                  {/* Automation Log integrations matching lead */}
+                  {filteredLogs.length === 0 ? (
+                    <div className="text-[10px] font-mono font-bold uppercase text-zinc-400 py-4 text-center border-2 border-dashed border-zinc-200 rounded-xl">
+                      <span>Nenhum e-mail despachado ainda.</span>
+                    </div>
+                  ) : (
+                    filteredLogs.map(log => (
+                      <div key={log.id} className="flex gap-2.5 items-start text-xs rounded-xl border-2 border-zinc-950 p-3 bg-indigo-50 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
+                        <Send className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                        <div className="min-w-0">
+                          <h4 className="font-extrabold text-zinc-900 uppercase tracking-tight text-[11px] truncate">E-mail: {log.templateName}</h4>
+                          <p className="text-[10px] text-zinc-500 truncate font-semibold">{log.subject}</p>
+                          <p className="text-[10px] text-zinc-400 font-mono mt-0.5">{log.sentAt}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
-          </div>
+            </>
+          )}
+
         </div>
-
-        {activeModalSection === 'ficha' && (
-          <div className="p-6 overflow-y-auto flex-1 bg-zinc-50 space-y-6 text-zinc-900 font-sans">
-             {/* Header Info with score */}
-             <div className="p-4 bg-white border-2 border-zinc-950 rounded-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-               <div>
-                 <h3 className="text-sm font-black uppercase text-zinc-900 tracking-tight font-mono">📋 Ficha de Qualificação</h3>
-                 <p className="text-[10px] text-zinc-500 uppercase font-black font-mono">Modifique os parâmetros para recalcular o enquadramento imediatamente</p>
-               </div>
-               <div className={`px-4 py-2 border-2 border-zinc-950 rounded-xl font-mono font-black text-xs uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${scoreBadgeColor()}`}>
-                 🏆 Real-time Score: {lead.score || 40} pts
-               </div>
-             </div>
-
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-               {/* 1. DADOS DE IDENTIFICAÇÃO */}
-               <div className="bg-white border-2 border-zinc-950 p-5 rounded-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] space-y-4">
-                 <div className="flex items-center gap-2 border-b pb-2 mb-2">
-                   <span className="text-sm">👤</span>
-                   <h4 className="font-extrabold text-[11px] uppercase tracking-wider text-zinc-900">Dados de Identificação & Contato</h4>
-                 </div>
-
-                 <div className="space-y-3">
-                   <div>
-                     <label className="block text-[9px] font-black uppercase text-zinc-500 mb-1">Nome Completo</label>
-                     <input
-                       type="text"
-                       value={leadName}
-                       onChange={(e) => {
-                         setLeadName(e.target.value);
-                         updateField('name', e.target.value);
-                       }}
-                       className="w-full text-xs font-bold p-2 border-2 border-zinc-950 rounded-lg focus:outline-none focus:bg-zinc-50 font-sans"
-                     />
-                   </div>
-
-                   <div className="grid grid-cols-2 gap-3">
-                     <div>
-                       <label className="block text-[9px] font-black uppercase text-zinc-500 mb-1">Gênero</label>
-                       <select
-                         value={lead.gender || 'Homem'}
-                         onChange={(e) => updateField('gender', e.target.value)}
-                         className="w-full text-xs font-bold p-1.5 border-2 border-zinc-950 rounded-lg focus:outline-none bg-white font-sans"
-                       >
-                         <option value="Homem">Homem</option>
-                         <option value="Mulher">Mulher</option>
-                         <option value="Outro">Outro</option>
-                         <option value="Prefiro nao informar">Não Informar</option>
-                       </select>
-                     </div>
-                     <div>
-                       <label className="block text-[9px] font-black uppercase text-zinc-500 mb-1">Data de Nascimento</label>
-                       <input
-                         type="date"
-                         value={lead.birthDate || ''}
-                         onChange={(e) => updateField('birthDate', e.target.value)}
-                         className="w-full text-xs font-bold p-1 border-2 border-zinc-950 rounded-lg focus:outline-none font-sans"
-                       />
-                     </div>
-                   </div>
-
-                   <div className="grid grid-cols-2 gap-3">
-                     <div>
-                       <label className="block text-[9px] font-black uppercase text-zinc-500 mb-1">Telefone</label>
-                       <input
-                         type="text"
-                         value={leadPhone}
-                         onChange={(e) => {
-                           setLeadPhone(e.target.value);
-                           updateField('phone', e.target.value);
-                         }}
-                         className="w-full text-xs font-bold p-2 border-2 border-zinc-950 rounded-lg focus:outline-none font-sans font-mono"
-                       />
-                     </div>
-                     <div>
-                       <label className="block text-[9px] font-black uppercase text-zinc-500 mb-1">E-mail</label>
-                       <input
-                         type="email"
-                         value={lead.email || ''}
-                         onChange={(e) => updateField('email', e.target.value)}
-                         className="w-full text-xs font-bold p-2 border-2 border-zinc-950 rounded-lg focus:outline-none font-sans"
-                       />
-                     </div>
-                   </div>
-
-                   <div className="grid grid-cols-2 gap-3">
-                     <div>
-                       <label className="block text-[9px] font-black uppercase text-zinc-500 mb-1">CPF</label>
-                       <input
-                         type="text"
-                         placeholder="000.000.000-00"
-                         value={lead.cpf || ''}
-                         onChange={(e) => updateField('cpf', e.target.value)}
-                         className="w-full text-xs font-bold p-2 border-2 border-zinc-950 rounded-lg focus:outline-none font-mono"
-                       />
-                     </div>
-                     <div>
-                       <label className="block text-[9px] font-black uppercase text-zinc-500 mb-1">Estado Civil</label>
-                       <select
-                         value={lead.maritalStatus || 'Solteiro'}
-                         onChange={(e) => updateField('maritalStatus', e.target.value)}
-                         className="w-full text-xs font-bold p-1.5 border-2 border-zinc-950 rounded-lg focus:outline-none bg-white font-sans"
-                       >
-                         <option value="Solteiro">Solteiro</option>
-                         <option value="Casado">Casado</option>
-                         <option value="Uniao estavel">União Estável</option>
-                         <option value="Divorciado">Divorciado</option>
-                         <option value="Viuvo">Viúvo</option>
-                       </select>
-                     </div>
-                   </div>
-
-                   <div>
-                     <label className="block text-[9px] font-black uppercase text-zinc-500 mb-1">Como nos conheceu?</label>
-                     <select
-                       value={lead.comoSoube || 'Instagram'}
-                       onChange={(e) => updateField('comoSoube', e.target.value)}
-                       className="w-full text-xs font-bold p-1.5 border-2 border-zinc-950 rounded-lg focus:outline-none bg-white font-sans"
-                     >
-                       <option value="Instagram">Instagram</option>
-                       <option value="Facebook">Facebook</option>
-                       <option value="Google">Google Search</option>
-                       <option value="Indicacao">Indicação</option>
-                       <option value="Corretor">Abordagem Física</option>
-                       <option value="Feira">Eventos / Feiras</option>
-                       <option value="Outros">Outras Mídias</option>
-                     </select>
-                   </div>
-                 </div>
-               </div>
-
-               {/* 2. ENQUADRAMENTO E CRÉDITO DE FOMENTO */}
-               <div className="bg-white border-2 border-zinc-950 p-5 rounded-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] space-y-4">
-                 <div className="flex items-center gap-2 border-b pb-2 mb-2">
-                   <span className="text-sm">🧮</span>
-                   <h4 className="font-extrabold text-[11px] uppercase tracking-wider text-zinc-900">Enquadramento & Parâmetros de Crédito</h4>
-                 </div>
-
-                 <div className="space-y-3">
-                   <div>
-                     <label className="block text-[9px] font-black uppercase text-zinc-500 mb-1">Renda Familiar Mensal Bruta (R$)</label>
-                     <input
-                       type="number"
-                       value={lead.familyIncome || 0}
-                       onChange={(e) => {
-                         const numVal = Number(e.target.value) || 0;
-                         setSessionIncome(numVal);
-                         setTempIncomeInput(String(numVal));
-                         updateField('familyIncome', numVal);
-                       }}
-                       className="w-full text-xs font-bold p-2 border-2 border-zinc-950 rounded-lg focus:outline-none font-mono"
-                     />
-                   </div>
-
-                   <div className="grid grid-cols-2 gap-3">
-                     <div>
-                       <label className="block text-[9px] font-black uppercase text-zinc-500 mb-1">Tipo de Comprovação</label>
-                       <select
-                         value={lead.incomeType || 'fixa'}
-                         onChange={(e) => updateField('incomeType', e.target.value)}
-                         className="w-full text-xs font-bold p-1.5 border-2 border-zinc-950 rounded-lg focus:outline-none bg-white font-mono"
-                       >
-                         <option value="fixa">Fixa / CLT</option>
-                         <option value="variavel">Variável / Autôn.</option>
-                       </select>
-                     </div>
-                     <div>
-                       <label className="block text-[9px] font-black uppercase text-zinc-500 mb-1">Saldo do FGTS (R$)</label>
-                       <input
-                         type="number"
-                         value={lead.fgtsSaldo || 0}
-                         onChange={(e) => updateField('fgtsSaldo', Number(e.target.value) || 0)}
-                         className="w-full text-xs font-bold p-2 border-2 border-zinc-950 rounded-lg focus:outline-none font-mono"
-                       />
-                     </div>
-                   </div>
-
-                   <div className="grid grid-cols-2 gap-3">
-                     <div>
-                       <label className="block text-[9px] font-black uppercase text-zinc-500 mb-1">Restrição BACEN / SERASA</label>
-                       <select
-                         value={lead.restricaoBacen || 'Não'}
-                         onChange={(e) => updateField('restricaoBacen', e.target.value)}
-                         className="w-full text-xs font-bold p-1.5 border-2 border-zinc-950 rounded-lg focus:outline-none bg-white font-mono"
-                       >
-                         <option value="Não">Não (Crédito Limpo)</option>
-                         <option value="Sim">Sim (Com restrições)</option>
-                       </select>
-                     </div>
-                     <div>
-                       <label className="block text-[9px] font-black uppercase text-zinc-500 mb-1">Possui Outro Imóvel</label>
-                       <select
-                         value={lead.possuiImovel || 'Não'}
-                         onChange={(e) => updateField('possuiImovel', e.target.value)}
-                         className="w-full text-xs font-bold p-1.5 border-2 border-zinc-950 rounded-lg focus:outline-none bg-white font-mono"
-                       >
-                         <option value="Não">Não (Estilo 1º Apoio)</option>
-                         <option value="Sim">Sim (Não MCMV)</option>
-                         <option value="Em nome de terceiros">Em nome de terceiros</option>
-                       </select>
-                     </div>
-                   </div>
-
-                   <div className="grid grid-cols-2 gap-3">
-                     <div>
-                       <label className="block text-[9px] font-black uppercase text-zinc-500 mb-1">Programa Desejado</label>
-                       <select
-                         value={lead.programaDesejado || 'Indiferente'}
-                         onChange={(e) => updateField('programaDesejado', e.target.value)}
-                         className="w-full text-xs font-bold p-1.5 border-2 border-zinc-950 rounded-lg focus:outline-none bg-white font-mono"
-                       >
-                         <option value="Indiferente">Indiferente</option>
-                         <option value="Minha Casa Minha Vida">MCMV (Minha Casa)</option>
-                         <option value="SBPE">SBPE / Convencional</option>
-                       </select>
-                     </div>
-                     <div>
-                       <label className="block text-[9px] font-black uppercase text-zinc-500 mb-1">Perfil Principal</label>
-                       <select
-                         value={lead.mainProfile || 'Primeiro Imóvel'}
-                         onChange={(e) => updateField('mainProfile', e.target.value)}
-                         className="w-full text-xs font-bold p-1.5 border-2 border-zinc-950 rounded-lg focus:outline-none bg-white font-mono"
-                       >
-                         <option value="Primeiro Imóvel">Primeiro Imóvel</option>
-                         <option value="Investidor">Investidor</option>
-                         <option value="Jovem">Jovem</option>
-                         <option value="Meia idade">Meia Idade</option>
-                         <option value="Idoso">Sênior</option>
-                       </select>
-                     </div>
-                   </div>
-
-                   <div className="grid grid-cols-2 gap-3">
-                     <div>
-                       <label className="block text-[9px] font-black uppercase text-zinc-500 mb-1">Ticket / Valor Máx. (R$)</label>
-                       <input
-                         type="number"
-                         value={lead.value || 0}
-                         onChange={(e) => updateField('value', Number(e.target.value) || 0)}
-                         className="w-full text-xs font-bold p-2 border-2 border-zinc-950 rounded-lg focus:outline-none font-mono"
-                       />
-                     </div>
-                     <div>
-                       <label className="block text-[9px] font-black uppercase text-zinc-500 mb-1">Região Desejada (Zona)</label>
-                       <select
-                         value={lead.region || 'Sul'}
-                         onChange={(e) => updateField('region', e.target.value)}
-                         className="w-full text-xs font-bold p-1.5 border-2 border-zinc-950 rounded-lg focus:outline-none bg-white font-mono"
-                       >
-                         <option value="Sul">Zona Sul</option>
-                         <option value="Leste">Zona Leste</option>
-                         <option value="Norte">Zona Norte</option>
-                         <option value="Oeste">Zona Oeste</option>
-                         <option value="Centro">Região Central</option>
-                         <option value="ABC">Grande ABC / Litoral</option>
-                       </select>
-                     </div>
-                   </div>
-                 </div>
-               </div>
-             </div>
-
-             {/* PREFERÊNCIAS E BAIRRO CARD */}
-             <div className="bg-white border-2 border-zinc-950 p-5 rounded-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] space-y-4">
-               <div className="flex items-center gap-2 border-b pb-2 mb-2">
-                 <span className="text-sm">🏢</span>
-                 <h4 className="font-extrabold text-[11px] uppercase tracking-wider text-zinc-900">Interesse Geográfico & Preferências da Unidade</h4>
-               </div>
-
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 <div className="space-y-3">
-                   <div>
-                     <label className="block text-[9px] font-black uppercase text-zinc-500 mb-1">Bairro Específico</label>
-                     <input
-                       type="text"
-                       placeholder="Ex: Ipiranga, Santana, Pinheiros..."
-                       value={lead.bairroEspecifico || ''}
-                       onChange={(e) => updateField('bairroEspecifico', e.target.value)}
-                       className="w-full text-xs font-bold p-2 border-2 border-zinc-950 rounded-lg focus:outline-none font-sans"
-                     />
-                   </div>
-                   <div>
-                     <label className="block text-[9px] font-black uppercase text-zinc-500 mb-1">CEP de Localização</label>
-                     <input
-                       type="text"
-                       placeholder="00000-000"
-                       value={lead.cep || ''}
-                       onChange={(e) => updateField('cep', e.target.value)}
-                       className="w-full text-xs font-bold p-2 border-2 border-zinc-950 rounded-lg focus:outline-none font-mono"
-                     />
-                   </div>
-                 </div>
-
-                 <div>
-                   <label className="block text-[9px] font-black uppercase text-zinc-500 mb-2">Preferências de Unidades (Clique para marcar)</label>
-                   <div className="flex flex-wrap gap-1.5">
-                     {['1 Dormitório', '2 Dormitórios', 'Suíte integrada', 'Varanda Goumert', 'Vaga de Garagem', 'Lazer Completo', 'Próximo ao Metrô', 'Entrada Zero'].map((item) => {
-                       const activePrefs = lead.preferenciasUnidade || [];
-                       const isSelected = activePrefs.includes(item);
-                       return (
-                         <button
-                           key={item}
-                           type="button"
-                           onClick={() => {
-                             const nextPrefs = isSelected 
-                               ? activePrefs.filter(p => p !== item)
-                               : [...activePrefs, item];
-                             updateField('preferenciasUnidade', nextPrefs);
-                           }}
-                           className={`px-2.5 py-1 text-[9px] font-black uppercase rounded-lg border-2 transition-all cursor-pointer ${
-                             isSelected 
-                               ? 'bg-zinc-900 text-white border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'
-                               : 'bg-zinc-100 text-zinc-700 border-zinc-300 hover:bg-zinc-200'
-                           }`}
-                         >
-                           {isSelected ? '✓ ' : '+ '} {item}
-                         </button>
-                       );
-                     })}
-                   </div>
-                 </div>
-               </div>
-             </div>
-
-             {/* NOTAS E OBSERVAÇÕES RÁPIDAS */}
-             <div className="bg-white border-2 border-zinc-950 p-5 rounded-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
-               <div className="flex items-center justify-between border-b pb-2 mb-2">
-                 <div className="flex items-center gap-1.5">
-                   <span className="text-sm">✍️</span>
-                   <h4 className="font-extrabold text-[11px] uppercase tracking-wider text-zinc-900">Histórico de Observação & Transmissão</h4>
-                 </div>
-                 <div className="text-[9px] font-mono text-zinc-500 font-black uppercase font-bold">Atualização Síncrona Automática com IA</div>
-               </div>
-
-               <div className="space-y-3">
-                 <textarea
-                   rows={3}
-                   value={notesText}
-                   onChange={(e) => {
-                     setNotesText(e.target.value);
-                     onUpdateLeadNotes(lead.id, e.target.value);
-                   }}
-                   placeholder="Anote o andamento da conversa com o cliente para fundamentar o dossiê analítico da Inteligência cicloCRED..."
-                   className="w-full text-xs font-bold p-3 border-2 border-zinc-950 rounded-lg focus:outline-none focus:bg-zinc-50 font-sans"
-                 />
-               </div>
-             </div>
-          </div>
-        )}
-
-        {activeModalSection === 'ficha' && (
-          <div className="px-6 pb-6 bg-zinc-50">
-            <div className="bg-white border-2 border-zinc-950 p-5 rounded-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] space-y-4">
-              <div className="flex items-center gap-2 border-b pb-2 mb-2">
-                <span className="text-sm">👁️</span>
-                <h4 className="font-extrabold text-[11px] uppercase tracking-wider text-zinc-900 font-sans">Visibilidades & Funil do Lead</h4>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 font-sans">
-                <div className="space-y-1.5">
-                  <label className="block text-[9px] font-black uppercase text-zinc-500 font-mono">Status do CRM</label>
-                  <select
-                    value={lead.status || ""}
-                    onChange={(e) => onUpdateLeadFull && onUpdateLeadFull(lead.id, { status: e.target.value as any })}
-                    className="w-full text-xs font-bold p-2 border-2 border-zinc-950 bg-white rounded-lg focus:outline-none focus:bg-zinc-50"
-                  >
-                    {getKanbanColumns("status").map(col => <option key={col.id} value={col.id}>{col.label}</option>)}
-                  </select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="block text-[9px] font-black uppercase text-zinc-500 font-mono">Etapa do Funil</label>
-                  <select
-                    value={lead.stage || ""}
-                    onChange={(e) => onUpdateLeadFull && onUpdateLeadFull(lead.id, { stage: e.target.value })}
-                    className="w-full text-xs font-bold p-2 border-2 border-zinc-950 bg-white rounded-lg focus:outline-none focus:bg-zinc-50"
-                  >
-                    <option value="">-- Selecione Etapa --</option>
-                    {getKanbanColumns("etapas").map(col => <option key={col.id} value={col.id}>{col.label}</option>)}
-                  </select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="block text-[9px] font-black uppercase text-zinc-500 font-mono">Perfil de Qualificação</label>
-                  <select
-                    value={lead.mainProfile || ""}
-                    onChange={(e) => onUpdateLeadFull && onUpdateLeadFull(lead.id, { mainProfile: e.target.value as any })}
-                    className="w-full text-xs font-bold p-2 border-2 border-zinc-950 bg-white rounded-lg focus:outline-none focus:bg-zinc-50"
-                  >
-                    <option value="">-- Selecione Perfil --</option>
-                    {getKanbanColumns("perfil").map(col => <option key={col.id} value={col.id}>{col.label}</option>)}
-                  </select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="block text-[9px] font-black uppercase text-zinc-500 font-mono">Objeção Ativa</label>
-                  <select
-                    value={lead.objection || ""}
-                    onChange={(e) => onUpdateLeadFull && onUpdateLeadFull(lead.id, { objection: e.target.value })}
-                    className="w-full text-xs font-bold p-2 border-2 border-zinc-950 bg-white rounded-lg focus:outline-none focus:bg-zinc-50"
-                  >
-                    <option value="">-- Selecione Objeção --</option>
-                    {getKanbanColumns("objecoes").map(col => <option key={col.id} value={col.id}>{col.label}</option>)}
-                  </select>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* FOOTER AÇÕES */}
         <div className="bg-zinc-100 p-3 border-t-2 border-zinc-950 flex flex-col md:flex-row items-center justify-between gap-3 overflow-x-auto overflow-y-hidden">
           <div className="text-[10px] font-black uppercase text-zinc-500 tracking-widest hidden md:block shrink-0">
-            Ações
+            Ações Rápidas
           </div>
           <div className="flex flex-nowrap items-center gap-[4px] w-auto shrink-0 pb-1">
-            <button onClick={() => handleWhatsAppAction(lead, undefined, () => onUpdateLeadFull?.(lead.id, { lastInteractionAt: new Date().toISOString() }))} title="WhatsApp Inteligente" className="p-2 px-3 bg-white hover:bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center transition border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-[0px_0px_0px_0px_rgba(0,0,0,1)] whitespace-nowrap">
+            <button onClick={() => handleWhatsAppAction(lead, undefined, () => onUpdateLeadFull?.(lead.id, { lastInteractionAt: new Date().toISOString() }))} title="WhatsApp Inteligente" className="p-2 px-3 bg-white hover:bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center transition border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] active:translate-y-0.5 active:shadow-[0px_0px_0px_0px_rgba(24,24,27,1)] whitespace-nowrap cursor-pointer">
               <MessageCircle className="w-4 h-4 mr-1.5" /> <span className="font-black text-xs">Whats</span>
             </button>
-            <button onClick={() => window.open(`tel:${lead.phone.replace(/\D/g, '')}`)} title="Ligar" className="p-2 px-3 bg-white hover:bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center transition border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-[0px_0px_0px_0px_rgba(0,0,0,1)] whitespace-nowrap">
+            <button onClick={() => window.open(`tel:${lead.phone.replace(/\D/g, '')}`)} title="Ligar" className="p-2 px-3 bg-white hover:bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center transition border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] active:translate-y-0.5 active:shadow-[0px_0px_0px_0px_rgba(24,24,27,1)] whitespace-nowrap cursor-pointer">
               <Phone className="w-4 h-4 mr-1.5" /> <span className="font-black text-xs">Ligar</span>
             </button>
-            <button onClick={() => { if (onNavigateToFollowUp) { onNavigateToFollowUp(lead); } else if (onOpenEditModal) { onOpenEditModal(lead); } onClose(); }} title="Follow-Up" className="p-2 px-3 bg-white hover:bg-amber-100 text-amber-600 rounded-lg flex items-center justify-center transition border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-[0px_0px_0px_0px_rgba(0,0,0,1)] whitespace-nowrap">
+            <button onClick={() => { if (onNavigateToFollowUp) { onNavigateToFollowUp(lead); } else if (onOpenEditModal) { onOpenEditModal(lead); } onClose(); }} title="Follow-Up" className="p-2 px-3 bg-white hover:bg-amber-100 text-amber-600 rounded-lg flex items-center justify-center transition border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] active:translate-y-0.5 active:shadow-[0px_0px_0px_0px_rgba(24,24,27,1)] whitespace-nowrap cursor-pointer">
               <Bell className="w-4 h-4 mr-1.5" /> <span className="font-black text-xs">F-UP</span>
             </button>
-            <button onClick={() => { onOpenRuleEngine && onOpenRuleEngine(lead); onClose(); }} title="Automação AI / Regras" className="p-2 px-3 bg-white hover:bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center transition border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-[0px_0px_0px_0px_rgba(0,0,0,1)] whitespace-nowrap">
+            <button onClick={() => { onOpenRuleEngine && onOpenRuleEngine(lead); onClose(); }} title="Automação AI / Regras" className="p-2 px-3 bg-white hover:bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center transition border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] active:translate-y-0.5 active:shadow-[0px_0px_0px_0px_rgba(24,24,27,1)] whitespace-nowrap cursor-pointer">
               <Bot className="w-4 h-4 mr-1.5" /> <span className="font-black text-xs">Auto</span>
             </button>
-            
-            <button
-              onClick={() => setActiveModalSection(activeModalSection === 'ficha' ? 'dossier' : 'ficha')}
-              title={activeModalSection === 'ficha' ? "Ver Checklist & Roteiros IA" : "Ver Ficha Cadastral"}
-              className={`p-2 px-3 rounded-lg flex items-center justify-center transition border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-[0px_0px_0px_0px_rgba(0,0,0,1)] whitespace-nowrap ${
-                activeModalSection === 'ficha'
-                  ? 'bg-zinc-900 text-white hover:bg-zinc-800'
-                  : 'bg-white hover:bg-zinc-100 text-zinc-900'
-              }`}
-            >
-              <FileText className="w-4 h-4 mr-1.5" /> <span className="font-black text-xs">{activeModalSection === 'ficha' ? 'Checklist/Roteiros' : 'Ficha'}</span>
-            </button>
-            <button onClick={() => { onUpdateLeadStatus(lead.id, 'etapas', 'funil'); onClose(); }} title="Mover Funil" className="p-2 px-3 bg-white hover:bg-sky-100 text-sky-600 rounded-lg flex items-center justify-center transition border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-[0px_0px_0px_0px_rgba(0,0,0,1)] whitespace-nowrap">
+            <button onClick={() => { onUpdateLeadStatus(lead.id, 'etapas', 'funil'); onClose(); }} title="Mover Funil" className="p-2 px-3 bg-white hover:bg-sky-100 text-sky-600 rounded-lg flex items-center justify-center transition border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] active:translate-y-0.5 active:shadow-[0px_0px_0px_0px_rgba(24,24,27,1)] whitespace-nowrap cursor-pointer">
               <ChevronDown className="w-4 h-4 mr-1.5" /> <span className="font-black text-xs">Funil</span>
             </button>
             <button onClick={() => {
@@ -2196,10 +2019,10 @@ Gerado inteligentemente pelo Sistema em ${new Date().toLocaleDateString('pt-BR')
                   onDeleteLead && onDeleteLead(lead.id);
                   onClose();
                 }
-              }} title="Excluir" className="p-2 px-3 bg-white hover:bg-red-100 text-red-600 rounded-lg flex items-center justify-center transition border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-[0px_0px_0px_0px_rgba(0,0,0,1)] whitespace-nowrap">
+              }} title="Excluir" className="p-2 px-3 bg-white hover:bg-red-100 text-red-600 rounded-lg flex items-center justify-center transition border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] active:translate-y-0.5 active:shadow-[0px_0px_0px_0px_rgba(24,24,27,1)] whitespace-nowrap cursor-pointer">
               <Trash2 className="w-4 h-4 mr-1.5" /> <span className="font-black text-xs">Excluir</span>
             </button>
-            <button onClick={() => { onOpenAIAssistant && onOpenAIAssistant(lead); onClose(); }} title="Assistente AI" className="p-2 px-3 bg-white hover:bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center transition border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-[0px_0px_0px_0px_rgba(0,0,0,1)] whitespace-nowrap">
+            <button onClick={() => { onOpenAIAssistant && onOpenAIAssistant(lead); onClose(); }} title="Assistente AI" className="p-2 px-3 bg-white hover:bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center transition border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] active:translate-y-0.5 active:shadow-[0px_0px_0px_0px_rgba(24,24,27,1)] whitespace-nowrap cursor-pointer">
               <Sparkles className="w-4 h-4 mr-1.5" /> <span className="font-black text-xs">Assist</span>
             </button>
           </div>

@@ -44,8 +44,8 @@ export default function RuleEnginePanel({ isOpen, onClose, lead }: RuleEnginePan
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex justify-end bg-black/60 backdrop-blur-sm transition-opacity">
-      <div className="w-full max-w-md bg-zinc-900 border-l-4 border-zinc-950 shadow-2xl h-full flex flex-col font-mono animate-in slide-in-from-right duration-300">
+    <div className="fixed inset-0 z-[60] flex justify-end bg-black/60  transition-opacity">
+      <div className="w-full max-w-md bg-zinc-900 border-l-4 border-zinc-950 shadow-lg h-full flex flex-col font-mono   ">
         {/* Header */}
         <div className="p-4 border-b-2 border-zinc-950 flex items-center justify-between bg-zinc-800">
           <div className="flex items-center gap-3">
@@ -101,7 +101,7 @@ export default function RuleEnginePanel({ isOpen, onClose, lead }: RuleEnginePan
                   {/* Toggle */}
                   <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
                     <input type="checkbox" className="sr-only peer" defaultChecked={rule.active} />
-                    <div className="w-8 h-4 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                    <div className="w-8 h-4 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-colors peer-checked:bg-emerald-500"></div>
                   </label>
                 </div>
               </div>

@@ -118,7 +118,7 @@ export default function Inventory({
             <span className="text-[10px] tracking-wider uppercase font-black text-red-600 font-mono">⚠️ Alerta Crítico</span>
             <h3 className="text-2xl font-black font-mono tracking-tight">{alertItems.length} Baixo estoque</h3>
           </div>
-          <div className="p-2 border-2 border-zinc-950 rounded-xl bg-white animate-pulse">
+          <div className="p-2 border-2 border-zinc-950 rounded-xl bg-white ">
             <AlertTriangle className="w-6 h-6 text-red-600" />
           </div>
         </div>
@@ -339,7 +339,7 @@ export default function Inventory({
               return (
                 <div 
                   key={item.id} 
-                  className={`border-4 border-zinc-950 rounded-2xl p-5 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] flex flex-col justify-between transition-all hover:bg-zinc-50 ${
+                  className={`border-4 border-zinc-950 rounded-2xl p-5 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] flex flex-col justify-between transition-colors hover:bg-zinc-50 ${
                     isBelowThreshold ? 'bg-red-50/40 border-red-900 shadow-[3px_3px_0px_0px_rgba(239,68,68,1)]' : 'bg-white'
                   }`}
                 >
@@ -399,7 +399,7 @@ export default function Inventory({
 
                     {/* Low stock indicators warning banner */}
                     {isBelowThreshold && (
-                      <div className="flex items-center gap-1.5 text-red-700 bg-red-100/50 p-2 border border-red-300 rounded-lg text-[10px] uppercase font-mono font-extrabold animate-pulse">
+                      <div className="flex items-center gap-1.5 text-red-700 bg-red-100/50 p-2 border border-red-300 rounded-lg text-[10px] uppercase font-mono font-extrabold ">
                         <AlertTriangle className="w-3.5 h-3.5 text-red-600 shrink-0" />
                         <span>Atenção: Margem crítica (Mín. {item.minQuantity})</span>
                       </div>

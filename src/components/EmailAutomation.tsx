@@ -184,7 +184,7 @@ export default function EmailAutomation({
       .replace(
         /\{\{valor\}\}/g,
         lead.value
-          ? lead.value.toLocaleString("pt-BR", {
+          ? (lead.value || 0).toLocaleString("pt-BR", {
               style: "currency",
               currency: "BRL",
               maximumFractionDigits: 0,
@@ -194,7 +194,7 @@ export default function EmailAutomation({
       .replace(
         /\{\{budget\}\}/g,
         lead.value
-          ? lead.value.toLocaleString("pt-BR", {
+          ? (lead.value || 0).toLocaleString("pt-BR", {
               style: "currency",
               currency: "BRL",
               maximumFractionDigits: 0,
@@ -912,7 +912,7 @@ Gostaria de te enviar algumas fotos sem compromisso?`;
 
       {/* MODAL CRIAR FILA */}
       {isQueueCreationModalOpen && (
-        <div className="fixed inset-0 bg-zinc-950/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-zinc-950/80  z-[100] flex items-center justify-center p-4">
           <div className="bg-white border-4 border-zinc-950 rounded-2xl p-6 shadow-[8px_8px_0px_0px_rgba(24,24,27,1)] max-w-xl w-full">
             <div className="flex justify-between items-center border-b-2 border-zinc-900 pb-3 mb-4">
               <h3 className="font-black text-lg uppercase tracking-tight text-zinc-900">
@@ -1028,7 +1028,7 @@ Gostaria de te enviar algumas fotos sem compromisso?`;
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] active:translate-y-px active:shadow-none transition-all"
+                  className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] active:translate-y-px active:shadow-none transition-colors"
                 >
                   Iniciar Lote 🚀
                 </button>
@@ -1311,7 +1311,7 @@ Gostaria de te enviar algumas fotos sem compromisso?`;
                 <RotateCcw className="w-3" />
               </button>
               {isQueueRunning && (
-                <span className="text-[9px] bg-emerald-950 text-emerald-400 border border-emerald-950 px-1.5 py-0.5 rounded font-bold animate-pulse">
+                <span className="text-[9px] bg-emerald-950 text-emerald-400 border border-emerald-950 px-1.5 py-0.5 rounded font-bold ">
                   {countdown}s
                 </span>
               )}
@@ -1381,7 +1381,7 @@ Gostaria de te enviar algumas fotos sem compromisso?`;
                         if (queueItem.status === "idle")
                           statusGfx = <span className="text-zinc-500 font-mono text-[9px] uppercase font-bold">Fila</span>;
                         if (queueItem.status === "sending")
-                          statusGfx = <span className="text-indigo-400 font-mono font-black animate-pulse text-[9px] uppercase">Processando</span>;
+                          statusGfx = <span className="text-indigo-400 font-mono font-black  text-[9px] uppercase">Processando</span>;
                         if (queueItem.status === "waiting")
                           statusGfx = <span className="text-amber-500 font-mono text-[9px] uppercase">Espera({countdown}s)</span>;
                         if (queueItem.status === "done")
@@ -1461,8 +1461,8 @@ Gostaria de te enviar algumas fotos sem compromisso?`;
 
                   {/* Status Indicator */}
                   {isQueueRunning && (
-                    <div className="flex items-center gap-2 px-3.5 py-1.5 bg-emerald-950/50 border-2 border-emerald-500 text-emerald-400 font-mono font-black text-xs uppercase rounded-xl animate-pulse">
-                      <Clock className="w-4 h-4 animate-spin" />
+                    <div className="flex items-center gap-2 px-3.5 py-1.5 bg-emerald-950/50 border-2 border-emerald-500 text-emerald-400 font-mono font-black text-xs uppercase rounded-xl ">
+                      <Clock className="w-4 h-4 " />
                       <span>
                         Estágio Ativo • {countdown}s
                       </span>
@@ -1705,13 +1705,13 @@ Gostaria de te enviar algumas fotos sem compromisso?`;
                               );
                             if (queueItem.status === "sending")
                               statusGfx = (
-                                <span className="text-indigo-400 font-mono animate-pulse uppercase text-[10px] font-black flex items-center gap-1">
-                                  <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-ping"></span> processando...
+                                <span className="text-indigo-400 font-mono  uppercase text-[10px] font-black flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full "></span> processando...
                                 </span>
                               );
                             if (queueItem.status === "waiting")
                               statusGfx = (
-                                <span className="text-amber-400 font-mono animate-pulse font-black uppercase text-[10px] flex items-center gap-1">
+                                <span className="text-amber-400 font-mono  font-black uppercase text-[10px] flex items-center gap-1">
                                   <Clock className="w-3 h-3" /> Em contagem({countdown}s)
                                 </span>
                               );

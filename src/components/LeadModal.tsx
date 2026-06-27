@@ -236,7 +236,7 @@ export default function LeadModal({ isOpen, lead, defaultStatus, operationalFlow
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/60 p-4 overflow-y-auto backdrop-blur-xs select-none">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/60 p-4 overflow-y-auto  select-none">
       <div 
         id="lead-edit-modal-frame"
         className="bg-white border-4 border-zinc-950 rounded-2xl w-full max-w-2xl shadow-[6px_6px_0px_0px_rgba(24,24,27,1)] overflow-hidden animate-scaleIn max-h-[90vh] flex flex-col"

@@ -1,6 +1,6 @@
 {
-  "name": "cicloCRED CRM",
-  "description": "Plataforma de CRM inteligente para gestão de leads, esteira de fomento habitacional e simulador financeiro integrado.",
+  "name": "Cury Constelação",
+  "description": "Ecossistema de vendas e CRM de alta performance para a carteira comercial de apartamentos na planta da Cury Construtora.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -13,9 +13,9 @@ export default defineConfig(() => {
         registerType: 'autoUpdate',
         includeAssets: ['pwa-192x192.svg', 'pwa-512x512.svg'],
         manifest: {
-          name: 'cicloCRED CRM',
-          short_name: 'cicloCRED',
-          description: 'Sistema integrado de CRM inteligente, Esteira de Crédito e Fomento Imobiliário.',
+          name: 'Cury Constelação CRM',
+          short_name: 'Constelação',
+          description: 'Ecossistema de vendas e CRM de alta performance para a carteira comercial de apartamentos na planta da Cury Construtora.',
           theme_color: '#4f46e5',
           background_color: '#18181b',
           display: 'fullscreen',

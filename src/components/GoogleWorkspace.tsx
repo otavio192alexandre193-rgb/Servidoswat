@@ -769,7 +769,7 @@ export default function GoogleWorkspace({
     setIsLoadingSheets(true);
     try {
       // 1. Create the base Spreadsheet
-      const title = `Exportação CRM cicloCRED - ${new Date().toLocaleDateString('pt-BR')}`;
+      const title = `Exportação CRM Cury Constelação - ${new Date().toLocaleDateString('pt-BR')}`;
       const createRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets`, {
         method: 'POST',
         headers: {
@@ -1533,7 +1533,7 @@ export default function GoogleWorkspace({
   );
 
   return (
-    <div className="w-full bg-zinc-900 border-4 border-zinc-950 rounded-3xl p-6.5 text-zinc-100 shadow-[6px_6px_0px_0px_rgba(24,24,27,1)] space-y-6">
+    <div className="w-full bg-zinc-900/40 backdrop-blur-lg border border-zinc-800/40 rounded-3xl p-6.5 text-zinc-100 shadow-2xl space-y-6">
       
       {/* Tab select headers */}
       <div className="flex border-b-4 border-zinc-950 pb-1.5 overflow-x-auto gap-2">

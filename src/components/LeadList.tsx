@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Lead, LeadStatus, Appointment } from '../types';
 import ScheduleFollowUpModal from './ScheduleFollowUpModal';
+import FinanceSimulatorTab from './FinanceSimulatorTab';
 import { getKanbanColumns } from '../utils/kanban';
 import { triggerSensoryFeedback, AccessibilitySettings, INITIAL_ACCESSIBILITY_SETTINGS } from '../utils/sensory';
 import { auth } from '../firebase';
@@ -46,6 +47,7 @@ import {
 } from 'lucide-react';
 import { handleWhatsAppAction, autoGenerateScript as advancedAutoGenerateScript } from '../utils/whatsapp';
 import { cn } from '../lib/utils';
+import { useVirtualizer } from '@tanstack/react-virtual';
 
 interface LeadListProps {
   leads: Lead[];
@@ -97,6 +99,7 @@ interface LeadListProps {
   isCompactColumns?: boolean;
   maxRows?: number;
   theme?: 'claro' | 'escuro' | 'galatico';
+  renderInlineLeadDetails?: (lead: Lead) => React.ReactNode;
 }
 
 export function isFictitiousPhone(phone: string | undefined | null): boolean {
@@ -625,7 +628,29 @@ export function processFileOrPasteContent(text: string, origin: string): { parse
   }
 }
 
-export default function LeadList({
+export function safeFormatLocaleString(dateVal: any, options?: Intl.DateTimeFormatOptions): string {
+  if (!dateVal) return "-";
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return "-";
+    return d.toLocaleString("pt-BR", options);
+  } catch (_) {
+    return "-";
+  }
+}
+
+export function safeFormatDateString(dateVal: any, options?: Intl.DateTimeFormatOptions): string {
+  if (!dateVal) return "-";
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return "-";
+    return d.toLocaleDateString("pt-BR", options);
+  } catch (_) {
+    return "-";
+  }
+}
+
+export default React.memo(function LeadList({
   leads,
   tableHeaderComponent,
   onOpenLeadDetails,
@@ -674,9 +699,11 @@ export default function LeadList({
   isActiveLeadsView = false,
   isCompactColumns = false,
   maxRows,
-  theme = 'escuro'
+  theme = 'escuro',
+  renderInlineLeadDetails
 }: LeadListProps) {
   const localSearchState = useState('');
+  const [expandedPanel, setExpandedPanel] = useState<{ leadId: string; type: 'simulator' | 'details' | 'schedule' } | null>(null);
   const [hideFictitiousWarning, setHideFictitiousWarning] = useState(false);
   const [isBulkScheduleModalOpen, setIsBulkScheduleModalOpen] = useState(false);
   const [scheduleSingleLead, setScheduleSingleLead] = useState<Lead | null>(null);
@@ -733,6 +760,9 @@ export default function LeadList({
   const [batchLog, setBatchLog] = useState<string[]>([]);
   const [activeBatchIndex, setActiveBatchIndex] = useState<number>(0);
   const [batchCountdownSeconds, setBatchCountdownSeconds] = useState<number>(0);
+
+  const parentRef = React.useRef<HTMLDivElement>(null);
+
   const [campaignIsAssistedMode, setCampaignIsAssistedMode] = useState<boolean>(true);
   
   // Custom Campaign Batch parameters
@@ -740,6 +770,7 @@ export default function LeadList({
   const [campaignDispatchDelay, setCampaignDispatchDelay] = useState<number>(5);
   const batchTimerRef = React.useRef<NodeJS.Timeout | null>(null);
   const batchCleanupRef = React.useRef<(() => void) | null>(null);
+  const waWindowRef = React.useRef<Window | null>(null);
 
   // Advanced Gemini-Powered Bulk Lead Campaign Active Planner and Metrics Calculator
   const [plannerLeadCount, setPlannerLeadCount] = useState<number>(30);
@@ -808,15 +839,71 @@ export default function LeadList({
     if (selectedLeads.length === 0) return;
     
     setIsDispatchingBatch(true);
-    setActiveBatchIndex(0);
     setBatchProgress(0);
-    setBatchCountdownSeconds(3); // 3-second warm-up delay
     setBatchLog([
       `🚀 [SETUP] Iniciando Transmissora de Lote...`,
       `🔌 Canal: ${campaignWhatsappChannel === 'app' ? 'WhatsApp Desktop (Local)' : 'WhatsApp Web'}`,
       `⏱️ Intervalo Base: ${campaignDispatchDelay}s`,
       `🎯 Total: ${selectedLeads.length} leads selecionados`
     ]);
+
+    // Open first lead immediately under user gesture to establish window focus and bypass popup blocker!
+    const leadItem = selectedLeads[0];
+    const rawBody = customCampaignText || (CAMPAIGN_TEMPLATES[selectedCampaignTemplate] ? CAMPAIGN_TEMPLATES[selectedCampaignTemplate].body : '');
+    const resolvedText = resolveTemplateText(rawBody, leadItem);
+    const cleanPhone = (leadItem.phone || '').replace(/[^0-9]/g, '');
+    const defaultPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+    
+    const waLink = campaignWhatsappChannel === 'web' 
+      ? `https://web.whatsapp.com/send?phone=${defaultPhone}&text=${encodeURIComponent(resolvedText)}`
+      : `whatsapp://send?phone=${defaultPhone}&text=${encodeURIComponent(resolvedText)}`;
+
+    if (leadItem.phone) {
+      try {
+        const win = window.open(waLink, 'whatsapp_window');
+        if (win) {
+          waWindowRef.current = win;
+        }
+        setBatchLog(prev => [
+          `[${new Date().toLocaleTimeString()}] ✅ Disparado para ${leadItem.name} (${leadItem.phone}) ✔️`,
+          ...prev
+        ]);
+        setMessagedLeads(prev => ({ ...prev, [leadItem.id]: true }));
+        if (awardXP) awardXP(50);
+      } catch (err) {
+        setBatchLog(prev => [
+          `[${new Date().toLocaleTimeString()}] ❌ Erro ao abrir contato de ${leadItem.name}.`,
+          ...prev
+        ]);
+      }
+    } else {
+      setBatchLog(prev => [
+        `[${new Date().toLocaleTimeString()}] ⚠️ Pulado: ${leadItem.name} - Telefone ausente.`,
+        ...prev
+      ]);
+    }
+
+    if (selectedLeads.length === 1) {
+      // Finished campaign immediately if only 1 lead was selected
+      setIsDispatchingBatch(false);
+      setShowCampaignModal(false);
+      setSelectedLeadIds([]);
+      if (awardXP) awardXP(130);
+      if (addNotification) {
+        addNotification(
+          '🚀 CAMPANHA ENVIADA', 
+          `Disparo concluído com sucesso para o lead selecionado!`, 
+          'success'
+        );
+      }
+      alert(`Campanha disparada com sucesso para o lead selecionado!`);
+      return;
+    }
+
+    // Set index for the NEXT item in batch (index 1)
+    setActiveBatchIndex(1);
+    setBatchProgress(Math.floor((1 / selectedLeads.length) * 100));
+    setBatchCountdownSeconds(campaignDispatchDelay || 3);
   };
 
   const executeBatchItemDispatch = (index: number) => {
@@ -837,21 +924,47 @@ export default function LeadList({
 
     if (leadItem.phone) {
       try {
-        if (campaignWhatsappChannel === 'web') {
-           const a = document.createElement('a');
-           a.href = waLink;
-           a.target = '_blank';
-           a.click();
+        let openedSuccessfully = false;
+
+        // Try using pre-opened window reference first to completely bypass popup blocker
+        if (waWindowRef.current && !waWindowRef.current.closed) {
+          try {
+            waWindowRef.current.location.href = waLink;
+            waWindowRef.current.focus();
+            openedSuccessfully = true;
+          } catch (domErr) {
+            // In case of cross-origin or other browser block, fallback to target name window
+            const win = window.open(waLink, 'whatsapp_window');
+            if (win) {
+              waWindowRef.current = win;
+              openedSuccessfully = true;
+            }
+          }
         } else {
-           // Use iframe for protocol handler to avoid navigation cancellation
-           let iframe = document.getElementById('wa-dispatch-iframe') as HTMLIFrameElement;
-           if (!iframe) {
-             iframe = document.createElement('iframe');
-             iframe.id = 'wa-dispatch-iframe';
-             iframe.style.display = 'none';
-             document.body.appendChild(iframe);
-           }
-           iframe.src = waLink;
+          const win = window.open(waLink, 'whatsapp_window');
+          if (win) {
+            waWindowRef.current = win;
+            openedSuccessfully = true;
+          }
+        }
+
+        if (!openedSuccessfully) {
+          if (campaignWhatsappChannel === 'web') {
+             const a = document.createElement('a');
+             a.href = waLink;
+             a.target = 'whatsapp_window';
+             a.click();
+          } else {
+             // Use iframe for protocol handler to avoid navigation cancellation
+             let iframe = document.getElementById('wa-dispatch-iframe') as HTMLIFrameElement;
+             if (!iframe) {
+               iframe = document.createElement('iframe');
+               iframe.id = 'wa-dispatch-iframe';
+               iframe.style.display = 'none';
+               document.body.appendChild(iframe);
+             }
+             iframe.src = waLink;
+          }
         }
         
         setBatchLog(prev => [
@@ -1372,7 +1485,8 @@ export default function LeadList({
     document.body.removeChild(link);
   };
 
-  const handleGenerateCampaignPlan = async () => {
+  const handleGenerateCampaignPlan = useCallback(async () => {
+    if (isGeneratingPlan) return;
     setIsGeneratingPlan(true);
     setGeneratedPlanMarkdown('');
     if (awardXP) awardXP(30);
@@ -1451,7 +1565,7 @@ export default function LeadList({
     } finally {
       setIsGeneratingPlan(false);
     }
-  };
+  }, [isGeneratingPlan, plannerLeadCount, plannerLeadOrigin, plannerAverageValue, plannerCustomNiches, awardXP, addNotification]);
 
   const handleScheduleCampaignTasks = () => {
     if (!setAppointments) {
@@ -1534,52 +1648,59 @@ export default function LeadList({
   };
 
   // Filter & Sort
-  const processedLeads = leads
-    .filter(lead => {
-      const matchesSearch = 
-        String(lead.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        String(lead.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        String(lead.phone || '').includes(searchTerm) ||
-        String(lead.company || '').toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = statusFilter === 'todos' || lead.status === statusFilter;
-      const matchesOrigin = originFilter === 'todos' || lead.origin === originFilter;
-      
-      const matchesInitial = 
-        initialLetterFilter === 'todos' ||
-        lead.name.trim().charAt(0).toUpperCase() === initialLetterFilter.toUpperCase();
+  const processedLeads = useMemo(() => {
+    return leads
+      .filter(lead => {
+        const matchesSearch = 
+          String(lead.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+          String(lead.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+          String(lead.phone || '').includes(searchTerm) ||
+          String(lead.company || '').toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesStatus = statusFilter === 'todos' || lead.status === statusFilter;
+        const matchesOrigin = originFilter === 'todos' || lead.origin === originFilter;
+        
+        const matchesInitial = 
+          initialLetterFilter === 'todos' ||
+          lead.name.trim().charAt(0).toUpperCase() === initialLetterFilter.toUpperCase();
 
-      const matchesRegion = !regionFilter || regionFilter === 'todos' || lead.region === regionFilter;
-      const matchesProfile = !profileFilter || profileFilter === 'todos' || lead.mainProfile === profileFilter;
-      const matchesStage = !stageFilter || stageFilter === 'todos' || lead.stage === stageFilter;
-      const matchesObjection = !objectionFilter || objectionFilter === 'todos' || lead.objection === objectionFilter;
-      const matchesPrograma = !programaDesejadoFilter || programaDesejadoFilter === 'todos' || lead.programaDesejado === programaDesejadoFilter;
-      const matchesBacen = !restricaoBacenFilter || restricaoBacenFilter === 'todos' || lead.restricaoBacen === restricaoBacenFilter;
-      const matchesGender = !genderFilter || genderFilter === 'todos' || lead.gender === genderFilter;
-      
-      const matchesFamilyIncome = !familyIncomeFilter || familyIncomeFilter === 'todos' || 
-        (familyIncomeFilter === 'Faixa 1' && (lead.familyIncome || 0) <= 2640) ||
-        (familyIncomeFilter === 'Faixa 2' && (lead.familyIncome || 0) > 2640 && (lead.familyIncome || 0) <= 4400) ||
-        (familyIncomeFilter === 'Faixa 3' && (lead.familyIncome || 0) > 4400 && (lead.familyIncome || 0) <= 8000) ||
-        (familyIncomeFilter === 'Acima do Teto' && (lead.familyIncome || 0) > 8000);
+        const matchesRegion = !regionFilter || regionFilter === 'todos' || lead.region === regionFilter;
+        const matchesProfile = !profileFilter || profileFilter === 'todos' || lead.mainProfile === profileFilter;
+        const matchesStage = !stageFilter || stageFilter === 'todos' || lead.stage === stageFilter;
+        const matchesObjection = !objectionFilter || objectionFilter === 'todos' || lead.objection === objectionFilter;
+        const matchesPrograma = !programaDesejadoFilter || programaDesejadoFilter === 'todos' || lead.programaDesejado === programaDesejadoFilter;
+        const matchesBacen = !restricaoBacenFilter || restricaoBacenFilter === 'todos' || lead.restricaoBacen === restricaoBacenFilter;
+        const matchesGender = !genderFilter || genderFilter === 'todos' || lead.gender === genderFilter;
+        
+        const matchesFamilyIncome = !familyIncomeFilter || familyIncomeFilter === 'todos' || 
+          (familyIncomeFilter === 'Faixa 1' && (lead.familyIncome || 0) <= 2640) ||
+          (familyIncomeFilter === 'Faixa 2' && (lead.familyIncome || 0) > 2640 && (lead.familyIncome || 0) <= 4400) ||
+          (familyIncomeFilter === 'Faixa 3' && (lead.familyIncome || 0) > 4400 && (lead.familyIncome || 0) <= 8000) ||
+          (familyIncomeFilter === 'Acima do Teto' && (lead.familyIncome || 0) > 8000);
 
-      const matchesIncomeType = !incomeTypeFilter || incomeTypeFilter === 'todos' || lead.incomeType === incomeTypeFilter;
-      const matchesDelivery = !deliveryExpectedFilter || deliveryExpectedFilter === 'todos' || lead.deliveryExpected === deliveryExpectedFilter;
+        const matchesIncomeType = !incomeTypeFilter || incomeTypeFilter === 'todos' || lead.incomeType === incomeTypeFilter;
+        const matchesDelivery = !deliveryExpectedFilter || deliveryExpectedFilter === 'todos' || lead.deliveryExpected === deliveryExpectedFilter;
 
-      return matchesSearch && matchesStatus && matchesOrigin && matchesInitial && 
-             matchesRegion && matchesProfile && matchesStage && matchesObjection && matchesPrograma && matchesBacen && 
-             matchesGender && matchesFamilyIncome && matchesIncomeType && matchesDelivery;
-    })
-    .sort((a, b) => {
-      let comparison = 0;
-      if (sortBy === 'name') {
-        comparison = a.name.localeCompare(b.name);
-      } else if (sortBy === 'value') {
-        comparison = a.value - b.value;
-      } else if (sortBy === 'createdAt') {
-        comparison = a.createdAt.localeCompare(b.createdAt);
-      }
-      return sortOrder === 'asc' ? comparison : -comparison;
-    });
+        return matchesSearch && matchesStatus && matchesOrigin && matchesInitial && 
+              matchesRegion && matchesProfile && matchesStage && matchesObjection && matchesPrograma && matchesBacen && 
+              matchesGender && matchesFamilyIncome && matchesIncomeType && matchesDelivery;
+      })
+      .sort((a, b) => {
+        let comparison = 0;
+        if (sortBy === 'name') {
+          comparison = a.name.localeCompare(b.name);
+        } else if (sortBy === 'value') {
+          comparison = a.value - b.value;
+        } else if (sortBy === 'createdAt') {
+          comparison = a.createdAt.localeCompare(b.createdAt);
+        }
+        return sortOrder === 'asc' ? comparison : -comparison;
+      });
+  }, [
+    leads, searchTerm, statusFilter, originFilter, initialLetterFilter,
+    regionFilter, profileFilter, stageFilter, objectionFilter, programaDesejadoFilter,
+    restricaoBacenFilter, genderFilter, familyIncomeFilter, incomeTypeFilter,
+    deliveryExpectedFilter, sortBy, sortOrder
+  ]);
 
   // Reset pagination on filter adjustments
   useEffect(() => {
@@ -1613,30 +1734,22 @@ export default function LeadList({
 
   const visibleLeads = maxRows 
     ? processedLeads.slice(0, maxRows) 
-    : processedLeads.slice(0, visibleCount);
+    : processedLeads; // We will virtualize instead of paginating
 
-  // Lazy loading observer hook
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setVisibleCount(prev => Math.min(prev + 15, processedLeads.length));
-        }
-      },
-      { threshold: 0.1, rootMargin: '100px' }
-    );
+  const rowVirtualizer = useVirtualizer({
+    count: visibleLeads.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => isActiveLeadsView ? 150 : 50,
+    overscan: 5,
+  });
 
-    const sentinel = document.getElementById('infinite-scroll-sentinel');
-    if (sentinel) {
-      observer.observe(sentinel);
-    }
+  const virtualItems = rowVirtualizer.getVirtualItems();
+  const paddingTop = virtualItems.length > 0 ? virtualItems[0]?.start || 0 : 0;
+  const paddingBottom = virtualItems.length > 0 
+    ? rowVirtualizer.getTotalSize() - (virtualItems[virtualItems.length - 1]?.end || 0) 
+    : 0;
 
-    return () => {
-      if (sentinel) {
-        observer.unobserve(sentinel);
-      }
-    };
-  }, [visibleLeads.length, processedLeads.length]);
+  // Lazy loading observer hook (removed since we are using virtualization)
 
   // Bulk operation helpers
   const handleToggleSelectOne = (id: string) => {
@@ -1700,6 +1813,20 @@ export default function LeadList({
       selectedLeadIds.forEach(id => onMoveLead(id, status));
       setSelectedLeadIds([]);
     }
+  };
+
+  const handleBulkMoveStage = (stage: string) => {
+    if (selectedLeadIds.length === 0) return;
+    selectedLeadIds.forEach(id => {
+      onMoveLead(id, stage, "etapas");
+      if (onUpdateLeadField) {
+        onUpdateLeadField(id, { stage: stage });
+      }
+    });
+    if (addNotification) {
+      addNotification("Sucesso em Lote", `${selectedLeadIds.length} leads foram atualizados para a etapa: ${stage}`, "success");
+    }
+    setSelectedLeadIds([]);
   };
 
   const handleBulkExportSelected = () => {
@@ -2486,6 +2613,22 @@ export default function LeadList({
               ))}
             </select>
 
+            {/* Stage Select Option */}
+            <select
+              onChange={(e) => {
+                if (e.target.value) {
+                  handleBulkMoveStage(e.target.value);
+                  e.target.value = '';
+                }
+              }}
+              className="bg-white text-zinc-950 border-2 border-zinc-950 px-2 py-1 rounded-lg text-[9px] font-black uppercase cursor-pointer focus:outline-none"
+            >
+              <option value="">-- Editar Etapa --</option>
+              {dynColsAtivos.map(col => (
+                <option key={col.id} value={col.id}>{col.label}</option>
+              ))}
+            </select>
+
             {/* Exportar Leads Action */}
             <button
               onClick={handleBulkExportSelected}
@@ -2528,8 +2671,8 @@ export default function LeadList({
             {typeof tableHeaderComponent === 'function' ? tableHeaderComponent(selectedLeadIds, { openCampaignModal: () => setShowCampaignModal(true), openBulkScheduleModal: () => setIsBulkScheduleModalOpen(true) }) : tableHeaderComponent}
           </div>
         )}
-        <div id="lead-table-scroll-container" className="flex-1 bg-white relative overflow-auto max-h-[600px] custom-scrollbar">
-          <div className={`${isActiveLeadsView ? 'min-w-[1650px]' : isTodosView ? 'min-w-[1250px]' : 'min-w-[1100px]'} w-full`}>
+        <div id="lead-table-scroll-container" ref={parentRef} className="flex-1 bg-white relative overflow-auto max-h-[600px] custom-scrollbar">
+          <div className={`${isActiveLeadsView ? 'min-w-[1450px]' : isTodosView ? 'min-w-[1250px]' : 'min-w-[1100px]'} w-full`}>
             <table className="w-full table-fixed border-separate border-spacing-0 text-left text-zinc-800 relative z-10">
             <thead className="sticky top-0 z-50 bg-zinc-100 shadow-[0_2px_10px_rgba(0,0,0,0.05)] border-b-2 border-zinc-200">
               {isActiveLeadsView ? (
@@ -2541,10 +2684,9 @@ export default function LeadList({
                     <th className="px-3 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[12%]">C</th>
                     <th className="px-3 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[14%]">D</th>
                     <th className="px-3 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[14%]">E</th>
-                    <th className="px-3 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[12%]">F</th>
-                    <th className="px-3 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[14%]">G</th>
-                    <th className="px-2 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[8%]">H</th>
-                    <th className="px-3 py-1 bg-zinc-100 border-b border-zinc-300 text-center font-bold text-zinc-500 w-[6%]">I</th>
+                    <th className="px-3 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[10%]">F</th>
+                    <th className="px-2 py-1 bg-zinc-100 border-r border-b border-zinc-300 text-center font-bold text-zinc-500 w-[10%]">G</th>
+                    <th className="px-3 py-1 bg-zinc-100 border-b border-zinc-300 text-center font-bold text-zinc-500 w-[8%]">H</th>
                   </tr>
                   <tr className="bg-zinc-200 border-b-2 border-zinc-400 select-none whitespace-nowrap text-zinc-800">
                     <th className="px-1.5 py-2 bg-zinc-150 border-r border-zinc-300 text-center text-[10px] font-mono font-bold text-zinc-600">1</th>
@@ -2554,7 +2696,6 @@ export default function LeadList({
                     <th className="px-3 py-2 border-r border-zinc-300 font-black text-xs text-zinc-950 uppercase tracking-wider text-left">Qualificação</th>
                     <th className="px-3 py-2 border-r border-zinc-300 font-black text-xs text-zinc-950 uppercase tracking-wider text-left">Preferências</th>
                     <th className="px-3 py-2 border-r border-zinc-300 font-black text-xs text-zinc-950 uppercase tracking-wider text-left">Financeiro</th>
-                    <th className="px-3 py-2 border-r border-zinc-300 font-black text-xs text-zinc-950 uppercase tracking-wider text-left text-indigo-700">Simulação e Propostas</th>
                     <th className="px-2 py-2 border-r border-zinc-300 font-black text-xs text-zinc-950 text-center uppercase tracking-wider">ações</th>
                     <th className="px-3 py-2 font-black text-xs text-zinc-950 text-center uppercase tracking-wider text-left">atividades</th>
                   </tr>
@@ -2603,20 +2744,32 @@ export default function LeadList({
                   </td>
                 </tr>
               ) : (
-                visibleLeads.map((lead, idx) => {
-                  if (isActiveLeadsView) {
-                    const startRowIdx = 2 + (idx * 4);
-                    const calculatedAge = lead.birthDate ? (new Date().getFullYear() - new Date(lead.birthDate).getFullYear()) : 35;
-                    const formattedValue = lead.value ? (lead.value || 0).toLocaleString('pt-BR') : '500.000';
-                    const financedValue = (lead.value ? lead.value * 0.8 : 400000).toLocaleString('pt-BR');
-                    const installmentValue = (lead.value ? lead.value * 0.005 : 2500).toLocaleString('pt-BR');
-                    const familyIncomeFormatted = lead.familyIncome ? lead.familyIncome.toLocaleString('pt-BR') : '15.000';
+                <>
+                  {paddingTop > 0 && <tr><td style={{ height: `${paddingTop}px` }} colSpan={10} /></tr>}
+                  {virtualItems.map((virtualRow) => {
+                    const idx = virtualRow.index;
+                    const lead = visibleLeads[idx];
+                    if (!lead) return null;
+                    
+                    if (isActiveLeadsView) {
+                      const startRowIdx = 2 + (idx * 4);
+                      let calculatedAge = 35;
+                      if (lead.birthDate) {
+                        const parsedYr = new Date(lead.birthDate).getFullYear();
+                        if (!isNaN(parsedYr)) {
+                          calculatedAge = new Date().getFullYear() - parsedYr;
+                        }
+                      }
+                      const formattedValue = lead.value ? (lead.value || 0).toLocaleString('pt-BR') : '500.000';
+                      const financedValue = (lead.value ? lead.value * 0.8 : 400000).toLocaleString('pt-BR');
+                      const installmentValue = (lead.value ? lead.value * 0.005 : 2500).toLocaleString('pt-BR');
+                      const familyIncomeFormatted = lead.familyIncome ? lead.familyIncome.toLocaleString('pt-BR') : '15.000';
 
-                    return (
-                      <React.Fragment key={lead.id}>
-                        {/* ROW 1 */}
-                        <tr className="hover:bg-zinc-50/50 border-b border-zinc-200">
-                          <td className="px-1.5 py-2 bg-zinc-150 border-r border-zinc-300 text-center text-[10px] font-mono font-black text-zinc-500 w-10">
+                      return (
+                        <React.Fragment key={lead.id}>
+                          {/* ROW 1 */}
+                          <tr ref={rowVirtualizer.measureElement} data-index={virtualRow.index} className="hover:bg-zinc-50/50 border-b border-zinc-200">
+                            <td className="px-1.5 py-2 bg-zinc-150 border-r border-zinc-300 text-center text-[10px] font-mono font-black text-zinc-500 w-10">
                             {startRowIdx}
                           </td>
                           <td className="px-3 py-2 border-r border-zinc-200 font-sans text-xs w-[14%]">
@@ -2638,21 +2791,11 @@ export default function LeadList({
                           <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[14%]">
                             Região: {lead.region || 'Sul'}, Metragem: {lead.propertyInterest || '80m²'}, Dorm: {lead.preferenciasUnidade?.includes('3 dorm.') ? '3' : '3'}
                           </td>
-                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[12%]">
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[10%]">
                             Valor imóvel: R$ {formattedValue}
                           </td>
-                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[14%] flex items-center gap-1">
-                            <span>V. Imóvel: R$</span>
-                            <input 
-                              type="number"
-                              defaultValue={lead.valorImovel || ''}
-                              onBlur={(e) => { if (Number(e.target.value) !== lead.valorImovel) onUpdateLeadField?.(lead.id, { valorImovel: Number(e.target.value) }) }}
-                              className="font-black text-zinc-950 bg-transparent border-b border-transparent focus:border-indigo-500 focus:bg-white focus:outline-none w-full"
-                              placeholder="250000"
-                            />
-                          </td>
-                          {/* Column H - Ações (rowSpan=3) */}
-                          <td className="px-2 py-4 border-r border-zinc-200 text-center w-[8%] bg-zinc-50/30" rowSpan={3}>
+                          {/* Column G - Ações (rowSpan=3) */}
+                          <td className="px-2 py-4 border-r border-zinc-200 text-center w-[10%] bg-zinc-50/30" rowSpan={3}>
                             <div className="flex flex-col gap-1.5 items-center justify-center">
                               <div className="flex items-center gap-1">
                                 <button
@@ -2674,7 +2817,7 @@ export default function LeadList({
                               </div>
                               <div className="flex items-center gap-1">
                                 <button
-                                  onClick={() => onOpenLeadDetails(lead)}
+                                  onClick={() => setExpandedPanel(prev => prev?.leadId === lead.id && prev?.type === 'details' ? null : { leadId: lead.id, type: 'details' })}
                                   className="p-1 px-1.5 bg-zinc-100 hover:bg-zinc-200 text-[10px] rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(24,24,27,1)] cursor-pointer"
                                   title="Ficha do Lead"
                                 >
@@ -2726,7 +2869,7 @@ export default function LeadList({
                             Bairro: {lead.bairroEspecifico || 'Vila Mariana'}
                           </td>
                           <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[12%]">
-                            perfil: {lead.mainProfile || 'Médio'} | entrada: {lead.createdAt ? new Date(lead.createdAt).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}) : '30/04'}
+                            perfil: {lead.mainProfile || 'Médio'} | entrada: {lead.createdAt ? safeFormatDateString(lead.createdAt, {day:'2-digit', month:'2-digit'}) : '30/04'}
                           </td>
                           <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[14%]">
                             Aprovado: Sim
@@ -2734,18 +2877,8 @@ export default function LeadList({
                           <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[14%]">
                             Estágio: {lead.stage || 'Saída'}
                           </td>
-                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[12%]">
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[10%]">
                             Valor financiado: R$ {financedValue}
-                          </td>
-                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[14%] flex items-center gap-1">
-                            <span>Sinal: R$</span>
-                            <input 
-                              type="number"
-                              defaultValue={lead.valorAto || ''}
-                              onBlur={(e) => { if (Number(e.target.value) !== lead.valorAto) onUpdateLeadField?.(lead.id, { valorAto: Number(e.target.value) }) }}
-                              className="font-black text-zinc-950 bg-transparent border-b border-transparent focus:border-indigo-500 focus:bg-white focus:outline-none w-full"
-                              placeholder="5000"
-                            />
                           </td>
                         </tr>
 
@@ -2766,26 +2899,16 @@ export default function LeadList({
                             Gênero: {lead.gender || 'M'}, Idade: {calculatedAge}, EC: {lead.maritalStatus || 'Casado'}
                           </td>
                           <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[12%]">
-                            objetivos: {lead.company || 'Preço'} | Alt. int.: {lead.lastContactAt ? new Date(lead.lastContactAt).toLocaleDateString('pt-BR', {day:'2-digit', month: '2-digit'}) : '15/06'}
+                            objetivos: {lead.company || 'Preço'} | Alt. int.: {lead.lastContactAt ? safeFormatDateString(lead.lastContactAt, {day:'2-digit', month: '2-digit'}) : '15/06'}
                           </td>
                           <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[14%]">
-                            Renda: R$ {familyIncomeFormatted}, Programa: {lead.programaDesejado || 'MCMV'}, Redutor: 5%
+                            R.Liq: R$ {familyIncomeFormatted} | R.Bruta: R$ {lead.familyGrossIncome ? lead.familyGrossIncome.toLocaleString('pt-BR') : '-'}, Programa: {lead.programaDesejado || 'MCMV'}
                           </td>
                           <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[14%]">
                             Suíte: {lead.preferenciasUnidade?.includes('Suíte') ? 'Sim' : 'Sim'}, Varanda: {lead.preferenciasUnidade?.includes('Varanda') ? 'Sim' : 'Sim'}, Vaga: 2
                           </td>
-                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[12%]">
+                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[10%]">
                             Parcelas: R$ {installmentValue}
-                          </td>
-                          <td className="px-3 py-2 border-r border-zinc-200 font-mono text-[11px] text-zinc-650 w-[14%] flex items-center gap-1">
-                            <span>Mensal: R$</span>
-                            <input 
-                              type="number"
-                              defaultValue={lead.valorParcela || ''}
-                              onBlur={(e) => { if (Number(e.target.value) !== lead.valorParcela) onUpdateLeadField?.(lead.id, { valorParcela: Number(e.target.value) }) }}
-                              className="font-black text-zinc-950 bg-transparent border-b border-transparent focus:border-indigo-500 focus:bg-white focus:outline-none w-full"
-                              placeholder="1200"
-                            />
                           </td>
                         </tr>
 
@@ -2794,8 +2917,79 @@ export default function LeadList({
                           <td className="px-1.5 py-1.5 bg-zinc-200 border-r border-zinc-300 text-center text-[10px] font-mono font-bold text-zinc-500 w-10 select-none">
                             {startRowIdx + 3}
                           </td>
-                          <td colSpan={9} className="bg-zinc-150 h-3 border-y border-zinc-250 select-none"></td>
+                          <td colSpan={8} className="bg-zinc-150 h-3 border-y border-zinc-250 select-none"></td>
                         </tr>
+
+                        {expandedPanel?.leadId === lead.id && expandedPanel.type === 'simulator' && (
+                          <tr className="bg-indigo-50 border-y-4 border-indigo-950">
+                            <td colSpan={10} className="p-4 relative">
+                              <button 
+                                onClick={() => setExpandedPanel(null)}
+                                className="absolute top-4 right-4 p-1 bg-white hover:bg-zinc-100 border-2 border-zinc-950 rounded-lg shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] z-50 text-xs font-black cursor-pointer"
+                              >
+                                Fechar Simulação ✕
+                              </button>
+                              <div className="bg-white border-2 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] rounded-xl overflow-hidden relative max-w-full">
+                                <FinanceSimulatorTab 
+                                  leads={[lead]}
+                                  theme={theme}
+                                  accSettings={accSettings}
+                                  addNotification={addNotification}
+                                  awardXP={awardXP}
+                                  isInline={true}
+                                />
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+
+                        {expandedPanel?.leadId === lead.id && expandedPanel.type === 'details' && renderInlineLeadDetails && (
+                          <tr className="bg-indigo-50 border-y-4 border-indigo-950">
+                            <td colSpan={10} className="p-4 relative">
+                              <button 
+                                onClick={() => setExpandedPanel(null)}
+                                className="absolute top-4 right-4 p-1 bg-white hover:bg-zinc-100 border-2 border-zinc-950 rounded-lg shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] z-50 text-xs font-black cursor-pointer"
+                              >
+                                Fechar Ficha ✕
+                              </button>
+                              <div className="bg-white border-2 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] rounded-xl overflow-hidden relative max-w-full">
+                                {renderInlineLeadDetails(lead)}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+
+                        {expandedPanel?.leadId === lead.id && expandedPanel.type === 'schedule' && (
+                          <tr className="bg-indigo-50 border-y-4 border-indigo-950">
+                            <td colSpan={10} className="p-4 relative">
+                              <button 
+                                onClick={() => setExpandedPanel(null)}
+                                className="absolute top-4 right-4 p-1 bg-white hover:bg-zinc-100 border-2 border-zinc-950 rounded-lg shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] z-50 text-xs font-black cursor-pointer"
+                              >
+                                Fechar Agendador ✕
+                              </button>
+                              <div className="bg-white border-2 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] rounded-xl overflow-hidden relative max-w-full">
+                                <ScheduleFollowUpModal
+                                  isOpen={true}
+                                  onClose={() => setExpandedPanel(null)}
+                                  leads={leads}
+                                  initialLead={lead}
+                                  initialLeads={null}
+                                  onAddAppointment={(newAppt) => {
+                                    if (setAppointments && appointments) {
+                                      const updated = [...appointments, newAppt];
+                                      setAppointments(updated);
+                                      localStorage.setItem('ciclocred_crm_appointments', JSON.stringify(updated));
+                                    }
+                                  }}
+                                  awardXP={awardXP}
+                                  addNotification={addNotification}
+                                  isInline={true}
+                                />
+                              </div>
+                            </td>
+                          </tr>
+                        )}
                       </React.Fragment>
                     );
                   }
@@ -2830,15 +3024,17 @@ export default function LeadList({
                     : [];
 
                   return (
-                    <tr 
-                      key={lead.id} 
-                      className={cn(
-                        "hover:bg-zinc-50/80 transition-colors border-b-2",
-                        theme === 'claro' ? 'border-zinc-100' : 'border-zinc-900',
-                        selectedLeadIds.includes(lead.id) && (theme === 'claro' ? 'bg-indigo-50/50' : 'bg-indigo-900/20')
-                      )}
-                      id={`lead-row-${lead.id}`}
-                    >
+                    <React.Fragment key={lead.id}>
+                      <tr 
+                        ref={rowVirtualizer.measureElement}
+                        data-index={virtualRow.index}
+                        className={cn(
+                          "hover:bg-zinc-50/80 transition-colors border-b-2",
+                          theme === 'claro' ? 'border-zinc-100' : 'border-zinc-900',
+                          selectedLeadIds.includes(lead.id) && (theme === 'claro' ? 'bg-indigo-50/50' : 'bg-indigo-900/20')
+                        )}
+                        id={`lead-row-${lead.id}`}
+                      >
                       {/* Selection Checkbox */}
                       <td className="px-2 py-2 text-[10px] text-center">
                         <input
@@ -2958,11 +3154,30 @@ export default function LeadList({
 
                           {/* Data de Entrada */}
                           <td className="px-2 py-2 text-[10px] font-mono text-xs text-zinc-650 whitespace-nowrap">
-                            <div className="bg-indigo-50 border border-indigo-200 rounded px-1.5 py-1 inline-block shadow-sm">
-                              <span className="text-[8px] text-indigo-500 font-black uppercase block leading-none mb-0.5">🗓️ ENTRADA</span>
-                              <span className="text-[9px] font-black text-indigo-800">
-                                {lead.createdAt ? new Date(lead.createdAt).toLocaleDateString("pt-BR") : "-"}
-                              </span>
+                            <div className="flex flex-col gap-1">
+                              <div className="bg-indigo-50 border border-indigo-200/80 rounded px-1.5 py-0.5 inline-block shadow-sm w-fit">
+                                <span className="text-[7.5px] text-indigo-500 font-black uppercase block leading-none mb-0.5">🗓️ ENTRADA</span>
+                                <span className="text-[9px] font-bold text-indigo-800">
+                                  {lead.createdAt ? safeFormatDateString(lead.createdAt) : "-"}
+                                </span>
+                              </div>
+                              {lead.lastInteractionAt || lead.lastContactAt ? (
+                                <div className="bg-emerald-50 border border-emerald-200/80 rounded px-1.5 py-0.5 inline-block shadow-sm w-fit">
+                                  <span className="text-[7.5px] text-emerald-500 font-black uppercase block leading-none mb-0.5">⚡ INTERAÇÃO</span>
+                                  <span className="text-[9px] font-bold text-emerald-800">
+                                    {safeFormatLocaleString(lead.lastInteractionAt || lead.lastContactAt, {
+                                      day: '2-digit',
+                                      month: '2-digit',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    })}
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="bg-zinc-100 border border-zinc-200 rounded px-1.5 py-0.5 inline-block shadow-sm w-fit">
+                                  <span className="text-[7.5px] text-zinc-500 font-black uppercase block leading-none mb-0.5">⏳ SEM INTERAÇÃO</span>
+                                </div>
+                              )}
                             </div>
                           </td>
 
@@ -2997,9 +3212,9 @@ export default function LeadList({
                               <button
                                 onClick={() => {
                                   onUpdateLeadField?.(lead.id, { lastInteractionAt: new Date().toISOString() });
-                                  setScheduleSingleLead(lead);
+                                  setExpandedPanel(prev => (prev?.leadId === lead.id && prev?.type === 'schedule') ? null : { leadId: lead.id, type: 'schedule' });
                                 }}
-                                className="p-1 px-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 border border-zinc-950 rounded text-[10px] font-mono font-black uppercase flex items-center gap-0.5 transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)]"
+                                className={`p-1 px-1.5 ${expandedPanel?.leadId === lead.id && expandedPanel?.type === 'schedule' ? 'bg-amber-300' : 'bg-amber-100 hover:bg-amber-200'} text-amber-800 border border-zinc-950 rounded text-[10px] font-mono font-black uppercase flex items-center gap-0.5 transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)]`}
                                 title="Agendar Follow-up"
                               >
                                 <span>🚨</span>
@@ -3023,8 +3238,10 @@ export default function LeadList({
                                 {/* Ficha */}
                                 <button 
                                   type="button"
-                                  onClick={() => onOpenLeadDetails(lead)}
-                                  className="w-7 h-7 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 text-xs rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] text-zinc-850 cursor-pointer"
+                                  onClick={() => {
+                                    setExpandedPanel(prev => (prev?.leadId === lead.id && prev?.type === 'details') ? null : { leadId: lead.id, type: 'details' });
+                                  }}
+                                  className={`w-7 h-7 flex items-center justify-center ${expandedPanel?.leadId === lead.id && expandedPanel?.type === 'details' ? 'bg-zinc-300' : 'bg-zinc-100 hover:bg-zinc-200'} text-xs rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] text-zinc-850 cursor-pointer`}
                                   title="Ver Ficha Cadastral"
                                 >
                                   📑
@@ -3048,12 +3265,8 @@ export default function LeadList({
                                 {/* Simulador */}
                                 <button 
                                   type="button"
-                                  onClick={() => {
-                                    if ((window as any).setActiveTab) {
-                                      (window as any).setActiveTab("simulador");
-                                    }
-                                  }}
-                                  className="w-7 h-7 flex items-center justify-center bg-indigo-50 hover:bg-indigo-100 text-xs rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] text-indigo-800 cursor-pointer"
+                                  onClick={() => setExpandedPanel(prev => (prev?.leadId === lead.id && prev?.type === 'simulator') ? null : { leadId: lead.id, type: 'simulator' })}
+                                  className={`w-7 h-7 flex items-center justify-center ${expandedPanel?.leadId === lead.id && expandedPanel?.type === 'simulator' ? 'bg-indigo-200 hover:bg-indigo-300' : 'bg-indigo-50 hover:bg-indigo-100'} text-xs rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] text-indigo-800 cursor-pointer`}
                                   title="Abrir Simulador de Crédito"
                                 >
                                   🧮
@@ -3117,13 +3330,13 @@ export default function LeadList({
                               <div className="bg-zinc-150 border border-zinc-300 rounded px-1.5 py-1 shadow-sm">
                                 <span className="text-[8px] text-zinc-500 font-mono font-bold block leading-none mb-0.5">🗓️ ENTRADA</span>
                                 <div className="text-[10px] font-mono font-black text-indigo-700">
-                                   {lead.createdAt ? new Date(lead.createdAt).toLocaleDateString("pt-BR") + " " + new Date(lead.createdAt).toLocaleTimeString("pt-BR", {hour: '2-digit', minute:'2-digit'}) : "-"}
+                                   {lead.createdAt ? safeFormatDateString(lead.createdAt) + " " + safeFormatLocaleString(lead.createdAt, {hour: '2-digit', minute:'2-digit'}) : "-"}
                                 </div>
                               </div>
                               <div className="bg-emerald-50/50 border border-emerald-200 rounded px-1.5 py-1 shadow-sm">
                                 <span className="text-[8px] text-emerald-600 font-mono font-bold block leading-none mb-0.5">⚡ INTERAÇÃO</span>
                                 <div className="text-[10px] font-mono font-black text-emerald-800">
-                                   {lead.lastInteractionAt ? new Date(lead.lastInteractionAt).toLocaleDateString("pt-BR") + " " + new Date(lead.lastInteractionAt).toLocaleTimeString("pt-BR", {hour: '2-digit', minute:'2-digit'}) : "-"}
+                                   {lead.lastInteractionAt ? safeFormatDateString(lead.lastInteractionAt) + " " + safeFormatLocaleString(lead.lastInteractionAt, {hour: '2-digit', minute:'2-digit'}) : "-"}
                                 </div>
                               </div>
                             </div>
@@ -3162,7 +3375,7 @@ export default function LeadList({
                                 <button
                                   onClick={() => {
                                     onUpdateLeadField?.(lead.id, { lastInteractionAt: new Date().toISOString() });
-                                    setScheduleSingleLead(lead);
+                                    setExpandedPanel(prev => (prev?.leadId === lead.id && prev?.type === 'schedule') ? null : { leadId: lead.id, type: 'schedule' });
                                   }}
                                   className="p-1 px-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 border border-zinc-950 rounded text-[10px] font-mono font-black uppercase flex items-center gap-0.5 transition shadow-[1px_1px_0px_0px_rgba(24,24,27,1)]"
                                   title="Agendar Follow-up"
@@ -3325,7 +3538,7 @@ export default function LeadList({
                                 {/* Ficha */}
                                 <button 
                                   type="button"
-                                  onClick={() => onOpenLeadDetails(lead)}
+                                  onClick={() => setExpandedPanel(prev => prev?.leadId === lead.id && prev?.type === 'details' ? null : { leadId: lead.id, type: 'details' })}
                                   className="w-7 h-7 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 text-xs rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] text-zinc-850 cursor-pointer"
                                   title="Ver Ficha Cadastral"
                                 >
@@ -3350,12 +3563,8 @@ export default function LeadList({
                                 {/* Simulador */}
                                 <button 
                                   type="button"
-                                  onClick={() => {
-                                    if ((window as any).setActiveTab) {
-                                      (window as any).setActiveTab("simulador");
-                                    }
-                                  }}
-                                  className="w-7 h-7 flex items-center justify-center bg-indigo-50 hover:bg-indigo-100 text-xs rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] text-indigo-800 cursor-pointer"
+                                  onClick={() => setExpandedPanel(prev => (prev?.leadId === lead.id && prev?.type === 'simulator') ? null : { leadId: lead.id, type: 'simulator' })}
+                                  className={`w-7 h-7 flex items-center justify-center ${expandedPanel?.leadId === lead.id && expandedPanel?.type === 'simulator' ? 'bg-indigo-200 hover:bg-indigo-300' : 'bg-indigo-50 hover:bg-indigo-100'} text-xs rounded border border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] text-indigo-800 cursor-pointer`}
                                   title="Abrir Simulador de Crédito"
                                 >
                                   🧮
@@ -3402,27 +3611,82 @@ export default function LeadList({
                         </>
                       )}
                     </tr>
+                    {expandedPanel?.leadId === lead.id && expandedPanel.type === 'simulator' && (
+                      <tr className="bg-indigo-50 border-y-4 border-indigo-950">
+                        <td colSpan={10} className="p-4 relative">
+                          <button 
+                            onClick={() => setExpandedPanel(null)}
+                            className="absolute top-4 right-4 p-1 bg-white hover:bg-zinc-100 border-2 border-zinc-950 rounded-lg shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] z-50 text-xs font-black cursor-pointer"
+                          >
+                            Fechar Simulação ✕
+                          </button>
+                          <div className="bg-white border-2 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] rounded-xl overflow-hidden relative max-w-full">
+                            <FinanceSimulatorTab 
+                              leads={[lead]}
+                              theme={theme}
+                              accSettings={accSettings}
+                              addNotification={addNotification}
+                              awardXP={awardXP}
+                              isInline={true}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+
+                    {expandedPanel?.leadId === lead.id && expandedPanel.type === 'details' && renderInlineLeadDetails && (
+                      <tr className="bg-indigo-50 border-y-4 border-indigo-950">
+                        <td colSpan={10} className="p-4 relative">
+                          <button 
+                            onClick={() => setExpandedPanel(null)}
+                            className="absolute top-4 right-4 p-1 bg-white hover:bg-zinc-100 border-2 border-zinc-950 rounded-lg shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] z-50 text-xs font-black cursor-pointer"
+                          >
+                            Fechar Ficha ✕
+                          </button>
+                          <div className="bg-white border-2 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] rounded-xl overflow-hidden relative max-w-full">
+                            {renderInlineLeadDetails(lead)}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+
+                    {expandedPanel?.leadId === lead.id && expandedPanel.type === 'schedule' && (
+                      <tr className="bg-indigo-50 border-y-4 border-indigo-950">
+                        <td colSpan={10} className="p-4 relative">
+                          <button 
+                            onClick={() => setExpandedPanel(null)}
+                            className="absolute top-4 right-4 p-1 bg-white hover:bg-zinc-100 border-2 border-zinc-950 rounded-lg shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] z-50 text-xs font-black cursor-pointer"
+                          >
+                            Fechar Agendador ✕
+                          </button>
+                          <div className="bg-white border-2 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] rounded-xl overflow-hidden relative max-w-full">
+                            <ScheduleFollowUpModal
+                              isOpen={true}
+                              onClose={() => setExpandedPanel(null)}
+                              leads={leads}
+                              initialLead={lead}
+                              initialLeads={null}
+                              onAddAppointment={(newAppt) => {
+                                if (setAppointments && appointments) {
+                                  const updated = [...appointments, newAppt];
+                                  setAppointments(updated);
+                                  localStorage.setItem('ciclocred_crm_appointments', JSON.stringify(updated));
+                                }
+                              }}
+                              awardXP={awardXP}
+                              addNotification={addNotification}
+                              isInline={true}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                   );
-                })
+                })}
+                </>
               )}
-              {/* Infinite Scroll sentinel tracker element */}
-              <tr id="infinite-scroll-sentinel" className="h-4">
-                <td colSpan={isTodosView ? 9 : 9} className="p-0 border-0"></td>
-              </tr>
-              
-              {/* Manual Load more backup button */}
-              {visibleCount < processedLeads.length && (
-                <tr>
-                  <td colSpan={isTodosView ? 9 : 9} className="p-4 text-center bg-zinc-50 border-t">
-                    <button
-                      onClick={() => setVisibleCount(prev => Math.min(prev + 15, processedLeads.length))}
-                      className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-400 text-indigo-800 font-mono text-[9px] font-black uppercase rounded-lg shadow-sm"
-                    >
-                      Carregar Mais Contatos... (Mostrando {visibleCount} de {processedLeads.length})
-                    </button>
-                  </td>
-                </tr>
-              )}
+              {paddingBottom > 0 && <tr><td style={{ height: `${paddingBottom}px` }} colSpan={10} /></tr>}
             </tbody>
           </table>
           </div>
@@ -4530,4 +4794,4 @@ export default function LeadList({
       )}
     </div>
   );
-}
+});

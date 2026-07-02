@@ -31,6 +31,8 @@ export const INITIAL_ACCESSIBILITY_SETTINGS: AccessibilitySettings = {
 
 export type SensoryAction = 'click' | 'success' | 'warning' | 'alarm' | 'complete' | 'chime';
 
+let audioCtx: AudioContext | null = null;
+
 export function triggerSensoryFeedback(action: SensoryAction, config: AccessibilitySettings = INITIAL_ACCESSIBILITY_SETTINGS) {
   // 1. PHYSICAL NAVIGATION VIBRATION
   const finalVibe = config.enableVibration && config.hapticsEnabled !== false;
@@ -38,22 +40,22 @@ export function triggerSensoryFeedback(action: SensoryAction, config: Accessibil
     try {
       switch (action) {
         case 'click':
-          navigator.vibrate(10);
+          navigator.vibrate(5); // Shorter vibe
           break;
         case 'success':
-          navigator.vibrate([40, 30, 40]);
+          navigator.vibrate([20, 20, 20]);
           break;
         case 'warning':
-          navigator.vibrate(120);
+          navigator.vibrate(80);
           break;
         case 'alarm':
-          navigator.vibrate([150, 100, 150, 100, 200]);
+          navigator.vibrate([100, 50, 100, 50, 100]);
           break;
         case 'complete':
-          navigator.vibrate([60, 45, 100]);
+          navigator.vibrate([40, 30, 60]);
           break;
         case 'chime':
-          navigator.vibrate([20, 20, 20, 20]);
+          navigator.vibrate([10, 10, 10, 10]);
           break;
       }
     } catch (e) {
@@ -67,33 +69,36 @@ export function triggerSensoryFeedback(action: SensoryAction, config: Accessibil
     try {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       if (AudioContextClass) {
-        const audioCtx = new AudioContextClass();
+        if (!audioCtx) {
+          audioCtx = new AudioContextClass();
+        }
+        const ctx = audioCtx;
         const mainVolume = config.soundVolume;
 
         const playTone = (freq: number, startDelay: number, duration: number, type: OscillatorType = 'sine') => {
           setTimeout(() => {
             try {
-              if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
+              if (ctx.state === 'suspended') {
+                ctx.resume();
               }
-              const osc = audioCtx.createOscillator();
-              const gain = audioCtx.createGain();
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
 
               osc.type = type;
-              osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+              osc.frequency.setValueAtTime(freq, ctx.currentTime);
 
               // Linear envelope to avoid clicking pops
-              gain.gain.setValueAtTime(0, audioCtx.currentTime);
-              gain.gain.linearRampToValueAtTime(mainVolume * 0.15, audioCtx.currentTime + 0.02);
-              gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+              gain.gain.setValueAtTime(0, ctx.currentTime);
+              gain.gain.linearRampToValueAtTime(mainVolume * 0.1, ctx.currentTime + 0.01);
+              gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
 
               osc.connect(gain);
-              gain.connect(audioCtx.destination);
+              gain.connect(ctx.destination);
 
               osc.start();
-              osc.stop(audioCtx.currentTime + duration);
+              osc.stop(ctx.currentTime + duration);
             } catch (err) {
-              // Fail silently (user interaction required for AudioContext)
+              // Fail silently
             }
           }, startDelay);
         };
@@ -141,22 +146,22 @@ export function triggerSensoryFeedback(action: SensoryAction, config: Accessibil
   }
 
   // 3. VISUAL FLASH PULSE EMITTER
-  if (config.visualPulse) {
+  if (config.visualPulse && action !== 'click') { // Skip visual pulse for standard clicks for performance
     const flashEl = document.createElement('div');
     flashEl.style.position = 'fixed';
     flashEl.style.inset = '0';
     flashEl.style.pointerEvents = 'none';
     flashEl.style.zIndex = '9999';
-    flashEl.style.transition = 'all 0.35s ease-out';
+    flashEl.style.transition = 'all 0.15s ease-out'; // Faster transition
     
-    let color = 'rgba(99, 102, 241, 0.25)'; // indigo standard
+    let color = 'rgba(99, 102, 241, 0.15)'; // indigo standard
     if (action === 'success' || action === 'complete' || action === 'chime') {
-      color = 'rgba(16, 185, 129, 0.3)'; // emerald green
+      color = 'rgba(16, 185, 129, 0.2)'; // emerald green
     } else if (action === 'warning' || action === 'alarm') {
-      color = 'rgba(239, 68, 68, 0.32)'; // rose red
+      color = 'rgba(239, 68, 68, 0.25)'; // rose red
     }
     
-    flashEl.style.boxShadow = `inset 0 0 40px 10px ${color}`;
+    flashEl.style.boxShadow = `inset 0 0 20px 5px ${color}`;
     document.body.appendChild(flashEl);
     
     // Quick fadeout
@@ -164,8 +169,10 @@ export function triggerSensoryFeedback(action: SensoryAction, config: Accessibil
       flashEl.style.boxShadow = 'inset 0 0 0px 0px transparent';
       flashEl.style.opacity = '0';
       setTimeout(() => {
-        document.body.removeChild(flashEl);
-      }, 350);
-    }, 150);
+        if (document.body.contains(flashEl)) {
+          document.body.removeChild(flashEl);
+        }
+      }, 150);
+    }, 80);
   }
 }

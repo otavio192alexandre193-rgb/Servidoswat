@@ -1,0 +1,597 @@
+1:/**
+4: */
+7:import { Lead, LeadStatus, EmailLog, OperationalFlow, Appointment } from '../types';
+8:import { handleWhatsAppAction } from '../utils/whatsapp';
+9:import { getKanbanColumns } from '../utils/kanban';
+47:} from './GoogleWorkspace';
+84:  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+112:    imageBg: 'from-cyan-100 to-blue-50/50'
+124:    imageBg: 'from-violet-100 to-purple-50/50'
+136:    imageBg: 'from-sky-100 to-blue-50/50'
+148:    imageBg: 'from-emerald-100 to-teal-50/50'
+160:    imageBg: 'from-amber-100 to-yellow-50/50'
+227:      title: '🔵 Apresentação de Parcelas Médias / SBPE',
+228:      category: 'Médio/Alto Padrão',
+249:      .replace(/\[Nome\]/g, lead.name)
+250:      .replace(/\[Corretor\]/g, agentName)
+251:      .replace(/\[Renda\]/g, formattedIncome)
+252:      .replace(/\[Imovel\]/g, imovelName);
+274:    let sc = 10; // Base score
+282:    if (imovel === 'Não') sc += 15; // Primeiro imóvel gets a boost
+284:    if (cpfVal && cpfVal.length >= 11) sc += 10; // Documents provided
+297:  // Core editable fields
+313:  // --- Advanced Configurable Variables ---
+328:  // Checklist de Qualificação (Financiamento & Simulação)
+331:  // Inline appointment creation state
+347:    imageBg: 'from-blue-100 to-indigo-50/50'
+384:  // Google Workspace direct branch states
+412:      const res = await fetch('/api/ai/coproduct', {
+414:        headers: { 'Content-Type': 'application/json' },
+425:          propertyInterest: activeProperty?.title || 'Terrenos e Portfólio Geral Cury/Minha Casa Minha Vida'
+469:      // Deduce co-buyer and dependents based on value/notes if they matched
+477:  // Filter logs associated ONLY to this lead
+505:  // Advanced predictive calculation engine
+512:    // Pagamento máximo tolerável = 30% da renda familiar bruta
+516:    let rate = 4.25; // Default interest rate
+521:    // Caso geral de enquadramento idêntico ao simulador consolidado
+525:      const factor = (grossIncome - 1412) / (2640 - 1412);
+531:      const factor = (grossIncome - 2640) / (4400 - 2640);
+555:    // Calcula proposta de financiamento necessária
+560:    // Limites de idade e prazo máximo Caixa
+564:    const monthlyRate = (rate / 100) / 12;
+571:        const factor = (monthlyRate * Math.pow(1 + monthlyRate, maxTermMonths)) / (Math.pow(1 + monthlyRate, maxTermMonths) - 1);
+576:        const priceAmortization = requiredLoan / maxTermMonths;
+581:      // Se a parcela bruta simular acima da capacidade real de 30% da renda, reduzimos o valor do financiamento aprovável
+583:        ? requiredLoan * ((monthlyRate * Math.pow(1 + monthlyRate, maxTermMonths)) / (Math.pow(1 + monthlyRate, maxTermMonths) - 1))
+584:        : (requiredLoan / maxTermMonths) + (requiredLoan * monthlyRate);
+587:        // Reduz financiamento aprovado para caber na capacidade exata
+588:        const allowableFinancing = paymentCapacity / ( (1 / maxTermMonths) + (monthlyRate * 0.75) );
+591:        // Recalcula parcelas com base no financiamento refinado
+593:          const factor = (monthlyRate * Math.pow(1 + monthlyRate, maxTermMonths)) / (Math.pow(1 + monthlyRate, maxTermMonths) - 1);
+598:          const priceAmortization = finalFinanced / maxTermMonths;
+610:    // Obras em 36 meses padrão construtora
+611:    const constructionInstallment = workBalanceToInstall / 36;
+613:    // Suitability Match percentage
+620:        const diffRatio = grossIncome / minIncome;
+626:        const overRatio = constructionInstallment / budgetForWork;
+645:    // Calculate score probability
+669:  // Find current selected property simulation
+673:  // Map developments to show live fitting score
+688:    const num = value.replace(/\D/g, '');
+689:    return num ? Number(num) / 100 : 0;
+726:    // Clear form and award XP
+747:  // Find active scheduled follow-ups for this lead
+755:      {/* Header containing name and current status badge */}
+758:          <span className="text-[10px] uppercase font-black tracking-widest text-indigo-400 font-mono">Ficha de Qualificação e Dossiê</span>
+759:          <h2 className="font-sans font-black text-xl text-white truncate">{lead.name}</h2>
+764:            </span>
+765:            <span className="text-xs text-zinc-300 font-bold font-mono">Origem: {lead.origin}</span>
+768:                <AlertTriangle className="w-3.5 h-3.5 text-red-600 shrink-0" />
+769:                <span>Atenção: Sem Contato há {daysSinceContact} dias</span>
+770:              </span>
+772:          </div>
+773:        </div>
+780:          <X className="w-5 h-5" />
+781:        </button>
+783:      </div>
+785:      {/* Sticky Tab Selector */}
+797:          </button>
+808:          </button>
+819:          </button>
+830:          </button>
+831:        </div>
+833:        {/* Main Unified Content */}
+836:          {/* TAB 1: FICHA & CHECKLIST */}
+839:              {/* Header Info */}
+842:                  <h3 className="text-sm font-black uppercase text-zinc-900 tracking-tight font-mono">📋 Ficha Cadastral</h3>
+843:                  <p className="text-[10px] text-zinc-500 uppercase font-black font-mono">Totalmente integrada com blocos, fluxos e propostas.</p>
+844:                </div>
+847:                </div>
+848:              </div>
+852:                {/* 1. PESSOAL */}
+855:                    <h4 className="font-black text-xs uppercase tracking-wider text-blue-950 font-mono">👤 PESSOAL</h4>
+856:                    <p className="text-[8.5px] text-blue-900/70 font-bold uppercase tracking-widest mt-0.5">Identificação e Contato</p>
+857:                  </div>
+860:                    {/* Sub-header 1 */}
+863:                    </div>
+866:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Nome Completo">Nome Completo</span>
+868:                        <input type="text" value={leadName} onChange={(e) => { setLeadName(e.target.value); updateField('name', e.target.value); }} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+869:                      </div>
+870:                    </div>
+873:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Telefone">Telefone</span>
+875:                        <input type="text" value={leadPhone} onChange={(e) => { setLeadPhone(e.target.value); updateField('phone', e.target.value); }} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+876:                      </div>
+877:                    </div>
+880:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="E-mail">E-mail</span>
+882:                        <input type="text" defaultValue={lead.email || ''} onBlur={(e) => updateField('email', e.target.value)} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+883:                      </div>
+884:                    </div>
+887:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="CPF">CPF</span>
+889:                        <input type="text" defaultValue={lead.cpf || ''} onBlur={(e) => updateField('cpf', e.target.value)} placeholder="000.000.000-00" className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+890:                      </div>
+891:                    </div>
+894:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Nascimento">Nascimento</span>
+896:                        <input type="date" defaultValue={lead.birthDate || ''} onBlur={(e) => updateField('birthDate', e.target.value)} className="font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full text-right" />
+897:                      </div>
+898:                    </div>
+901:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Estado Civil">Estado Civil</span>
+904:                          <option value="Solteiro">Solteiro</option>
+905:                          <option value="Casado">Casado</option>
+906:                          <option value="Uniao estavel">União Estável</option>
+907:                          <option value="Divorciado">Divorciado</option>
+908:                          <option value="Viuvo">Viúvo</option>
+909:                        </select>
+910:                      </div>
+911:                    </div>
+914:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Gênero">Gênero</span>
+917:                          <option value="Homem">Homem</option>
+918:                          <option value="Mulher">Mulher</option>
+919:                          <option value="Outro">Outro</option>
+920:                        </select>
+921:                      </div>
+922:                    </div>
+924:                    {/* Sub-header 2 */}
+927:                    </div>
+930:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="CEP">CEP</span>
+932:                        <input type="text" defaultValue={lead.cep || ''} onBlur={(e) => updateField('cep', e.target.value)} placeholder="00000-000" className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+933:                      </div>
+934:                    </div>
+937:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Endereço">Endereço</span>
+939:                        <input type="text" defaultValue={lead.address || ''} onBlur={(e) => updateField('address', e.target.value)} placeholder="Rua, Número" className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+940:                      </div>
+941:                    </div>
+942:                  </div>
+943:                </div>
+945:                {/* 2. QUALIFICAÇÃO */}
+948:                    <h4 className="font-black text-xs uppercase tracking-wider text-amber-950 font-mono">🎯 QUALIFICAÇÃO</h4>
+949:                    <p className="text-[8.5px] text-amber-900/70 font-bold uppercase tracking-widest mt-0.5">Perfil, Parâmetros & Preferências</p>
+950:                  </div>
+953:                    {/* Sub-header 1 */}
+956:                    </div>
+959:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Profissão">Profissão</span>
+961:                        <input type="text" defaultValue={lead.profession || ''} onBlur={(e) => updateField('profession', e.target.value)} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+962:                      </div>
+963:                    </div>
+966:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Como Soube">Como Soube</span>
+969:                          <option value="Instagram">Instagram</option>
+970:                          <option value="Facebook">Facebook</option>
+971:                          <option value="Google">Google</option>
+972:                          <option value="Indicacao">Indicação</option>
+973:                          <option value="Corretor">Corretor</option>
+974:                          <option value="Feira">Feira</option>
+975:                          <option value="Outros">Outros</option>
+976:                        </select>
+977:                      </div>
+978:                    </div>
+981:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Dependentes">Dependentes</span>
+983:                        <input type="number" defaultValue={lead.dependents || 0} onBlur={(e) => updateField('dependents', e.target.value)} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full" />
+984:                      </div>
+985:                    </div>
+988:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Perfil Atendimento">Perfil Atend.</span>
+991:                          <option value="Primeiro Imóvel">Primeiro Imóvel</option>
+992:                          <option value="Investidor">Investidor</option>
+993:                          <option value="Jovem">Público Jovem</option>
+994:                          <option value="Meia idade">Meia idade</option>
+995:                          <option value="Idoso">Aposentado / Idoso</option>
+996:                        </select>
+997:                      </div>
+998:                    </div>
+1000:                    {/* Sub-header 2 */}
+1003:                    </div>
+1006:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Região Preferida">Região Pref.</span>
+1009:                          <option value="Sul">Sul</option>
+1010:                          <option value="Leste">Leste</option>
+1011:                          <option value="Oeste">Oeste</option>
+1012:                          <option value="Norte">Norte</option>
+1013:                          <option value="Centro">Centro / ABC</option>
+1014:                        </select>
+1015:                      </div>
+1016:                    </div>
+1019:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Bairro Desejado">Bairro</span>
+1021:                        <input type="text" defaultValue={lead.bairroEspecifico || ''} onBlur={(e) => updateField('bairroEspecifico', e.target.value)} placeholder="Ex: Cambuci" className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+1022:                      </div>
+1023:                    </div>
+1026:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Área M² Desejada">M² Desejado</span>
+1028:                        <input type="number" defaultValue={lead.desiredSqm || ''} onBlur={(e) => updateField('desiredSqm', e.target.value)} placeholder="Ex: 55" className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full" />
+1029:                      </div>
+1030:                    </div>
+1033:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Dormitórios">Dormitórios</span>
+1035:                        <input type="number" defaultValue={lead.bedrooms || ''} onBlur={(e) => updateField('bedrooms', e.target.value)} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full" />
+1036:                      </div>
+1037:                    </div>
+1040:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Suítes">Suítes</span>
+1042:                        <input type="number" defaultValue={lead.suites || ''} onBlur={(e) => updateField('suites', e.target.value)} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full" />
+1043:                      </div>
+1044:                    </div>
+1047:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Varanda">Varanda</span>
+1050:                          <option value="nao">Não</option>
+1051:                          <option value="sim">Sim</option>
+1052:                        </select>
+1053:                      </div>
+1054:                    </div>
+1057:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Vagas">Vagas</span>
+1059:                        <input type="number" defaultValue={lead.parkingSpots || ''} onBlur={(e) => updateField('parkingSpots', e.target.value)} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full" />
+1060:                      </div>
+1061:                    </div>
+1064:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Estação Próxima">Estação Próx.</span>
+1066:                        <input type="text" defaultValue={lead.nearestStation || ''} onBlur={(e) => updateField('nearestStation', e.target.value)} placeholder="Ex: Metrô" className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+1067:                      </div>
+1068:                    </div>
+1071:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Tipologia do Imóvel">Tipologia</span>
+1073:                        <input type="text" defaultValue={lead.unitTypology || ''} onBlur={(e) => updateField('unitTypology', e.target.value)} placeholder="Ex: Padrão" className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+1074:                      </div>
+1075:                    </div>
+1078:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Programa Habitacional">Prog. Habit.</span>
+1081:                          <option value="Indiferente">Indiferente</option>
+1082:                          <option value="Minha Casa Minha Vida">Minha Casa Minha Vida</option>
+1083:                          <option value="SBPE">SBPE (Tradicional)</option>
+1084:                        </select>
+1085:                      </div>
+1086:                    </div>
+1087:                  </div>
+1088:                </div>
+1090:                {/* 3. FINANCEIRO */}
+1093:                    <h4 className="font-black text-xs uppercase tracking-wider text-emerald-950 font-mono">💵 FINANCEIRO</h4>
+1094:                    <p className="text-[8.5px] text-emerald-900/70 font-bold uppercase tracking-widest mt-0.5">Análise de Crédito & Valores</p>
+1095:                  </div>
+1098:                    {/* Sub-header 1 */}
+1101:                    </div>
+1104:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Renda Familiar Bruta/Conjunta">Renda Fam.</span>
+1106:                        <span className="text-zinc-500 font-bold text-xs">R$</span>
+1107:                        <input type="number" value={tempIncomeInput} onChange={(e) => setTempIncomeInput(e.target.value)} onBlur={handleUpdateIncomeClick} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+1108:                      </div>
+1109:                    </div>
+1112:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Saldo FGTS Disponível">FGTS</span>
+1114:                        <span className="text-zinc-500 font-bold text-xs">R$</span>
+1115:                        <input type="number" defaultValue={lead.fgtsSaldo || 0} onBlur={(e) => { const v = parseFloat(e.target.value) || 0; updateField('fgtsSaldo', v); }} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+1116:                      </div>
+1117:                    </div>
+1120:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Restrição BACEN / Crédito">BACEN</span>
+1123:                          <option value="Não">Não</option>
+1124:                          <option value="Sim">Sim (Prejudica)</option>
+1125:                        </select>
+1126:                      </div>
+1127:                    </div>
+1130:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Possui Imóvel Ativo">Possui Imóvel</span>
+1133:                          <option value="Não">Não (MCMV)</option>
+1134:                          <option value="Sim">Sim (SBPE)</option>
+1135:                        </select>
+1136:                      </div>
+1137:                    </div>
+1139:                    {/* Sub-header 2 */}
+1142:                    </div>
+1145:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Valor do Imóvel de Interesse">Vlr Imóvel</span>
+1147:                        <span className="text-zinc-500 font-bold text-xs">R$</span>
+1148:                        <input type="number" defaultValue={lead.propertyValue || ''} onBlur={(e) => { const v = parseFloat(e.target.value) || 0; updateField('propertyValue', v); }} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+1149:                      </div>
+1150:                    </div>
+1153:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Financiamento Estimado CEF">Financ. Est.</span>
+1155:                        <span className="text-zinc-500 font-bold text-xs">R$</span>
+1156:                        <input type="number" defaultValue={lead.financedValue || ''} onBlur={(e) => { const v = parseFloat(e.target.value) || 0; updateField('financedValue', v); }} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+1157:                      </div>
+1158:                    </div>
+1161:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Valor Estimado da Parcela">Vlr Parcela</span>
+1163:                        <span className="text-zinc-500 font-bold text-xs">R$</span>
+1164:                        <input type="number" defaultValue={lead.installmentValue || ''} onBlur={(e) => { const v = parseFloat(e.target.value) || 0; updateField('installmentValue', v); }} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+1165:                      </div>
+1166:                    </div>
+1169:                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Entrada Total de Financiamento">Entrada</span>
+1171:                        <span className="text-zinc-500 font-bold text-xs">R$</span>
+1172:                        <input type="number" defaultValue={lead.downPaymentValue || ''} onBlur={(e) => { const v = parseFloat(e.target.value) || 0; updateField('downPaymentValue', v); }} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
+1173:                      </div>
+1174:                    </div>
+1175:                  </div>
+1176:                </div>
+1178:              </div>
+1180:              {/* CHECKLIST DE QUALIFICAÇÃO */}
+1185:                  </h3>
+1188:                  </span>
+1189:                </div>
+1193:                </p>
+1196:                  {/* Seção 1: Documentação Pessoal */}
+1199:                      <span>🪪 Doc. Pessoal</span>
+1200:                    </h4>
+1204:                      { key: 'doc_est_civil', label: 'Certidão de Nascimento/Casamento' },
+1208:                        <input type="checkbox" checked={!!checklist[item.key]} onChange={() => handleToggleChecklistItem(item.key)} className="rounded border-zinc-350 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" />
+1209:                        <span>{item.label}</span>
+1210:                      </label>
+1212:                  </div>
+1214:                  {/* Seção 2: Comprovação de Renda */}
+1217:                      <span>💵 Comprovação de Renda</span>
+1218:                    </h4>
+1226:                        <input type="checkbox" checked={!!checklist[item.key]} onChange={() => handleToggleChecklistItem(item.key)} className="rounded border-zinc-350 text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer" />
+1227:                        <span>{item.label}</span>
+1228:                      </label>
+1230:                  </div>
+1231:                </div>
+1233:                {/* Progress bar */}
+1237:                  const percent = Math.round((checkedCount / totalCount) * 100);
+1241:                        <span>Status de Qualificação Documental</span>
+1242:                        <span>{percent}% Completo ({checkedCount}/{totalCount})</span>
+1243:                      </div>
+1245:                        <div className="bg-indigo-600 h-full transition-all duration-300" style={{ width: `${percent}%` }} />
+1246:                      </div>
+1247:                    </div>
+1250:              </div>
+1251:            </>
+1254:          {/* TAB 2: DOSSIÊS & FLUXOS */}
+1257:              {/* GEMINI AI DOSSIÊ */}
+1258:              <div className="bg-gradient-to-br from-purple-50 via-white to-indigo-50/50 border-4 border-zinc-950 rounded-2xl p-5 space-y-4 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] select-text">
+1262:                      <Sparkles className="w-4 h-4 text-purple-650 shrink-0" />
+1264:                    </h3>
+1265:                    <span className="text-[9px] tracking-widest font-black text-zinc-455 font-mono block">GEMINI 2.5 FLASH • CONECTOR SIDERADO CRÉDITO</span>
+1266:                  </div>
+1269:                  </div>
+1270:                </div>
+1272:                {/* Sub-tab selectors */}
+1273:                <div className="flex bg-zinc-950/5 p-1 rounded-xl border border-zinc-300/60 gap-1 select-none">
+1276:                  </button>
+1279:                  </button>
+1282:                  </button>
+1283:                </div>
+1290:                  </p>
+1294:                      <strong>Falha de Integração:</strong> {aiPitchError}
+1295:                    </div>
+1300:                      <label className="text-[8.5px] uppercase font-black text-zinc-500 block mb-1">Selecione o Imóvel Referência</label>
+1305:                          </option>
+1307:                      </select>
+1308:                    </div>
+1312:                    </button>
+1313:                  </div>
+1318:                        <span className="text-[9px] uppercase font-mono font-black text-purple-900 tracking-wider">Texto de Coprodução Gerado</span>
+1321:                        </button>
+1322:                      </div>
+1323:                      <textarea readOnly value={aiPitchText} rows={8} className="w-full bg-zinc-950 text-purple-200 border-2 border-zinc-950 font-mono text-[10px] p-3 rounded-xl select-all focus:outline-none leading-relaxed" />
+1324:                    </div>
+1326:                </div>
+1327:              </div>
+1329:              {/* INTELIGÊNCIA PREDITIVA DE CRÉDITO */}
+1330:              <div className="bg-gradient-to-br from-indigo-50/40 via-white to-zinc-50 border-2 border-zinc-950 rounded-xl p-5 space-y-5 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] select-none">
+1334:                      <Sparkles className="w-4 h-4 text-indigo-600  shrink-0" />
+1336:                    </h3>
+1337:                    <span className="text-[9px] tracking-widest font-bold text-zinc-400 font-mono block mt-0.5">ESTOQUE PARCEIRO CONSTRUTORA</span>
+1338:                  </div>
+1341:                      <Percent className="w-3.5 h-3.5 text-emerald-600" />
+1343:                    </span>
+1344:                  </div>
+1345:                </div>
+1348:                  {/* Controles Avançados */}
+1352:                        <span className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Coobrigado / Compositor</span>
+1353:                        <span className="text-[10px] font-extrabold text-zinc-700 font-sans">Compõe renda?</span>
+1354:                      </div>
+1355:                      <input type="checkbox" checked={hasCoBuyer} onChange={(e) => setHasCoBuyer(e.target.checked)} className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" />
+1356:                    </div>
+1360:                        <label className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Renda do Compositor</label>
+1362:                          <span className="text-[10.5px] font-bold text-zinc-450 mr-1">R$</span>
+1363:                          <input type="number" value={tempCoBuyerIncomeInput} onChange={(e) => { setTempCoBuyerIncomeInput(e.target.value); const val = parseFloat(e.target.value) || 0; setCoBuyerIncome(val); }} className="w-full text-xs font-black text-zinc-800 bg-transparent focus:outline-none" />
+1364:                        </div>
+1365:                      </div>
+1370:                        <span className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Dependentes</span>
+1371:                        <span className="text-[10px] font-extrabold text-zinc-700 font-sans">Possui dependentes?</span>
+1372:                      </div>
+1373:                      <input type="checkbox" checked={hasDependents} onChange={(e) => setHasDependents(e.target.checked)} className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" />
+1374:                    </div>
+1378:                        <span className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Vínculo de fomento</span>
+1379:                        <span className="text-[10px] font-extrabold text-zinc-700 font-sans">CLT &gt; 3 anos (FGTS)?</span>
+1380:                      </div>
+1381:                      <input type="checkbox" checked={hasThreeYearsCLT} onChange={(e) => setHasThreeYearsCLT(e.target.checked)} className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" />
+1382:                    </div>
+1385:                      <label className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Saldo do FGTS</label>
+1387:                        <span className="text-[10.5px] font-bold text-zinc-450 mr-1">R$</span>
+1388:                        <input type="number" value={tempFgtsInput} onChange={(e) => { setTempFgtsInput(e.target.value); const val = parseFloat(e.target.value) || 0; setFgtsBalance(val); }} className="w-full text-xs font-black text-zinc-800 bg-transparent focus:outline-none" />
+1389:                      </div>
+1390:                    </div>
+1393:                      <label className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Idade do Proponente</label>
+1394:                      <input type="number" value={proponentAge} onChange={(e) => setProponentAge(Math.max(18, parseInt(e.target.value) || 18))} className="w-full text-xs font-black text-zinc-800 bg-white border border-zinc-300 rounded-lg p-1.5 focus:outline-none" />
+1395:                    </div>
+1398:                      <label className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Amortização</label>
+1400:                        <option value="SAC">SAC (Parcelas Decrescentes)</option>
+1401:                        <option value="PRICE">PRICE (Parcelas Constantes)</option>
+1402:                      </select>
+1403:                    </div>
+1407:                        <span className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Histórico Bacen</span>
+1408:                        <span className="text-[10px] font-extrabold text-zinc-700 font-sans">Nome Limpo?</span>
+1409:                      </div>
+1410:                      <input type="checkbox" checked={hasCleanCredit} onChange={(e) => setHasCleanCredit(e.target.checked)} className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" />
+1411:                    </div>
+1412:                  </div>
+1414:                  {/* Resultados Simulados */}
+1417:                      <span className="text-[8px] uppercase font-bold text-zinc-400 block">Subsídio Caixa</span>
+1418:                      <p className="text-sm font-black font-mono text-indigo-700">R$ {sim.subsidy.toLocaleString('pt-BR')}</p>
+1419:                    </div>
+1421:                      <span className="text-[8px] uppercase font-bold text-zinc-400 block">Juros Efetivos</span>
+1422:                      <p className="text-sm font-black font-mono text-zinc-700">{sim.annualRate}% a.a.</p>
+1423:                    </div>
+1425:                      <span className="text-[8px] uppercase font-bold text-zinc-400 block">Financiamento Caixa</span>
+1426:                      <p className="text-sm font-black font-mono text-emerald-700">R$ {sim.approvedLoan.toLocaleString('pt-BR')}</p>
+1427:                    </div>
+1429:                      <span className="text-[8px] uppercase font-bold text-zinc-400 block">Aprovação</span>
+1430:                      <p className={`text-sm font-black font-mono ${sim.approvalProbability >= 70 ? 'text-emerald-600' : 'text-red-500'}`}>{sim.approvalProbability}% Prob.</p>
+1431:                    </div>
+1432:                  </div>
+1433:                </div>
+1434:              </div>
+1436:              {/* FLOW ASSIGNMENT & SCRIPT LIBRARY */}
+1438:                {/* FLOW ASSIGNMENT CARD */}
+1441:                    <Layers className="w-4 h-4 text-indigo-600" />
+1443:                  </h4>
+1444:                  <p className="text-[10px] text-zinc-500">Insira este lead em uma esteira estratégica de timers de vendas:</p>
+1448:                      <option value="">Nenhum Fluxo Selecionado</option>
+1450:                        <option key={f.id} value={f.id}>{f.name}</option>
+1452:                    </select>
+1455:                    </button>
+1456:                  </div>
+1458:                    <p className="text-[9.5px] font-bold text-emerald-600 font-sans">{flowNotification}</p>
+1460:                </div>
+1462:                {/* SCRIPTS LIBRARY */}
+1465:                    <MessageSquare className="w-4 h-4 text-emerald-600" />
+1467:                  </h4>
+1469:                    <label className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Selecione o Roteiro de Abordagem</label>
+1472:                        <option key={s.id} value={s.id}>{s.title}</option>
+1474:                    </select>
+1475:                  </div>
+1484:                        </div>
+1488:                          </button>
+1489:                          <button type="button" onClick={() => { const cl = (lead?.phone || '').replace(/\D/g, ''); window.location.href = `whatsapp://send?phone=55${cl}&text=${encodeURIComponent(personalizedText)}`; }} className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-black text-[9px] uppercase border-2 border-zinc-950 rounded-lg active:translate-y-0.5">
+1491:                          </button>
+1492:                        </div>
+1493:                      </div>
+1496:                </div>
+1497:              </div>
+1498:            </>
+1501:          {/* TAB 3: AGENDA & WORKSPACE */}
+1504:              {/* GOOGLE WORKSPACE RAMIFICATIONS PANEL */}
+1509:                      <Cloud className="w-3 h-3 text-indigo-500" />
+1510:                      <span>Google Workspace Ativo</span>
+1511:                    </span>
+1512:                    <h4 className="text-xs font-black text-zinc-900 uppercase font-mono">Conexões Expandidas de Vendas</h4>
+1513:                  </div>
+1516:                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+1517:                      <span>Conectado</span>
+1518:                    </span>
+1522:                    </span>
+1524:                </div>
+1529:                      Conecte sua conta Google na aba <strong>"Google Workspace"</strong> na barra lateral para disparar propostas automáticas via Gmail e agendar reuniões no Google Calendar!
+1530:                    </p>
+1531:                  </div>
+1537:                       </div>
+1542:                       </div>
+1545:                    {/* Gmail Rapid Action */}
+1548:                        <Mail className="w-3.5 h-3.5 text-red-500" />
+1549:                        <span>E-mail Instantâneo (Via Gmail API)</span>
+1550:                      </h5>
+1552:                        Dispare a proposta comercial diretamente do seu Gmail institucional para o lead: <strong className="text-zinc-800 break-all">{lead.email || 'Não cadastrado'}</strong>.
+1553:                      </p>
+1566:                          const ok = await sendGmailMessage(subject, messageBody.replace(/\n/g, '<br/>'), lead.email);
+1578:                      </button>
+1579:                    </div>
+1581:                    {/* Google Calendar Event syncing */}
+1584:                        <Calendar className="w-3.5 h-3.5 text-blue-500" />
+1585:                        <span>Agendar Visita (Google Calendar)</span>
+1586:                      </h5>
+1590:                          <label className="text-[8.5px] uppercase font-bold text-zinc-400 block mb-0.5">Data</label>
+1596:                          />
+1597:                        </div>
+1599:                          <label className="text-[8.5px] uppercase font-bold text-zinc-400 block mb-0.5">Hora</label>
+1605:                          />
+1606:                        </div>
+1607:                      </div>
+1611:                      </p>
+1636:                      </button>
+1637:                    </div>
+1638:                  </div>
+1640:              </div>
+1642:              {/* Potential Value Card */}
+1644:                <DollarSign className="w-5 h-5 text-indigo-400 mb-0.5" />
+1645:                <span className="text-[10px] uppercase font-black text-indigo-300 tracking-wider font-mono">Potencial Comercial</span>
+1648:                </h4>
+1649:              </div>
+1651:              {/* DYNAMIC FOLLOW-UPS TABLE */}
+1655:                    <CalendarDays className="w-4 h-4 text-emerald-600" />
+1657:                  </h4>
+1660:                  </span>
+1661:                </div>
+1665:                    <p className="text-xs text-zinc-500 font-bold">Nenhum compromisso agendado para este lead.</p>
+1666:                    <p className="text-[10px] text-zinc-400 mt-1">Use o formulário abaixo para registrar e acompanhar o follow-up!</p>
+1667:                  </div>
+1673:                          <th className="p-2 border-r border-zinc-950">Data / Hora</th>
+1674:                          <th className="p-2 border-r border-zinc-950">Tipo</th>
+1675:                          <th className="p-2 border-r border-zinc-950">Atividade / Titulo</th>
+1676:                          <th className="p-2 border-r border-zinc-950">Status</th>
+1677:                          <th className="p-2 text-center">Ação</th>
+1678:                        </tr>
+1679:                      </thead>
+1684:                              {apt.date.split('-').reverse().join('/')} • {apt.time}
+1685:                            </td>
+1694:                              </span>
+1695:                            </td>
+1698:                            </td>
+1706:                              </span>
+1707:                            </td>
+1715:                              </button>
+1716:                            </td>
+1717:                          </tr>
+1719:                      </tbody>
+1720:                    </table>
+1721:                  </div>
+1724:                {/* QUICK INLINE APPOINTMENT CREATION FORM */}
+1726:                  <span className="text-[10px] font-mono font-black uppercase text-zinc-500 block">Agendar Novo Follow-up no CRM</span>
+1730:                      <label className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Descrição do Compromisso</label>
+1738:                      />
+1739:                    </div>
+1743:                        <label className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Data</label>
+1749:                        />
+1750:                      </div>
+1752:                        <label className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Hora</label>
+1758:                        />
+1759:                      </div>
+1760:                    </div>
+1761:                  </div>
+1764:                    <div className="w-full sm:w-1/2 space-y-1">
+1765:                      <label className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Tipo de Ação</label>
+1771:                        <option value="telefone">📞 Ligação de Retorno</option>
+1772:                        <option value="reuniao">🤝 Reunião / Visita</option>
+1773:                        <option value="proposta">📄 Apresentação de Proposta</option>
+1774:                        <option value="outro">🔹 Outros / WhatsApp</option>
+1775:                      </select>
+1776:                    </div>
+1780:                      className="w-full sm:w-1/2 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] font-mono font-black text-[9.5px] uppercase tracking-wider block transition active:translate-y-0.5 cursor-pointer"
+1783:                    </button>
+1784:                  </div>
+1785:                </form>
+1786:              </div>
+1787:            </>
+1790:          {/* TAB 4: HISTÓRICO & NOTAS */}
+1793:              {/* Editable Notes Frame */}
+1797:                    <FileText className="w-4 h-4 text-indigo-600" />
+1799:                  </label>
+1807:                  </button>
+1808:                </div>
+1815:                />
+1816:              </div>
+1818:              {/* Interaction history timeline (Simulated + real logs) */}
+1821:                  <Clock className="w-4 h-4 text-indigo-600" />
+1823:                </h3>
+1826:                  {/* Simulated Creation Event */}
+1828:                    <CalendarCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+1830:                      <h4 className="font-extrabold text-zinc-900 uppercase tracking-tight text-[11px]">Lead Cadastrado</h4>
+1831:                      <p className="text-[10px] text-zinc-500 font-semibold">Iniciado de {lead.origin}</p>
+1832:                      <p className="text-[10px] text-zinc-400 font-mono mt-0.5">{new Date(lead.createdAt).toLocaleDateString('pt-BR')}</p>
+1833:                    </div>
+1834:                  </div>
+1836:                  {/* Automation Log integrations matching lead */}
+1839:                      <span>Nenhum e-mail despachado ainda.</span>
+1840:                    </div>
+1844:                        <Send className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+1846:                          <h4 className="font-extrabold text-zinc-900 uppercase tracking-tight text-[11px] truncate">E-mail: {log.templateName}</h4>
+1847:                          <p className="text-[10px] text-zinc-500 truncate font-semibold">{log.subject}</p>
+1848:                          <p className="text-[10px] text-zinc-400 font-mono mt-0.5">{log.sentAt}</p>
+1849:                        </div>
+1850:                      </div>
+1853:                </div>
+1854:              </div>
+1855:            </>
+1858:        </div>
+1860:        {/* FOOTER AÇÕES */}
+1864:          </div>
+1867:              <MessageCircle className="w-4 h-4 mr-1.5" /> <span className="font-black text-xs">Whats</span>
+1868:            </button>
+1870:              <Phone className="w-4 h-4 mr-1.5" /> <span className="font-black text-xs">Ligar</span>
+1871:            </button>
+1873:              <Bell className="w-4 h-4 mr-1.5" /> <span className="font-black text-xs">F-UP</span>
+1874:            </button>
+1875:            <button onClick={() => { onOpenRuleEngine && onOpenRuleEngine(lead); onClose(); }} title="Automação AI / Regras" className="p-2 px-3 bg-white hover:bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center transition border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] active:translate-y-0.5 active:shadow-[0px_0px_0px_0px_rgba(24,24,27,1)] whitespace-nowrap cursor-pointer">
+1876:              <Bot className="w-4 h-4 mr-1.5" /> <span className="font-black text-xs">Auto</span>
+1877:            </button>
+1879:              <ChevronDown className="w-4 h-4 mr-1.5" /> <span className="font-black text-xs">Funil</span>
+1880:            </button>
+1887:              <Trash2 className="w-4 h-4 mr-1.5" /> <span className="font-black text-xs">Excluir</span>
+1888:            </button>
+1890:              <Sparkles className="w-4 h-4 mr-1.5" /> <span className="font-black text-xs">Assist</span>
+1891:            </button>
+1892:          </div>
+1893:        </div>
+1894:      </div>
+1895:    </div>
+1904:      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-zinc-950/80 backdrop-blur-xs overflow-hidden"
+1911:    </div>

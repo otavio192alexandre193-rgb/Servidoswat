@@ -18,10 +18,12 @@ import {
   Info,
   Search,
   Trash2,
-  Cloud
+  Cloud,
+  Globe
 } from 'lucide-react';
 import { triggerSensoryFeedback, AccessibilitySettings } from '../utils/sensory';
 import GoogleWorkspace from './GoogleWorkspace';
+import { WorkspaceTab } from './WorkspaceTab';
 
 interface AIConfig {
   active: boolean;
@@ -838,70 +840,6 @@ export default function GeminiServerTab({
 
   return (
     <div className="space-y-8 pb-16">
-      {/* Dynamic Network / Server Core Health Header */}
-      <div className="bg-zinc-900 border-4 border-zinc-950 p-6 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden">
-        <div className="absolute right-0 top-0 h-full w-1/3 bg-radial from-indigo-500/10 via-transparent to-transparent pointer-events-none" />
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-indigo-500/15 border border-indigo-400 rounded-xl flex items-center justify-center text-indigo-400 shrink-0">
-              <Sparkles className="w-6 h-6 " />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl font-black uppercase text-white font-mono">Motor Inteligente de Vendas</h2>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold font-mono bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 " />
-                  SERVIDOR ONLINE
-                </span>
-              </div>
-              <p className="text-sm text-zinc-400 mt-1">
-                Conecte seu WhatsApp com o Gemini 3.5 pelo webhook Whatauto e deixe o assistente capturar e responder clientes com maestria.
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={fetchConfigAndLogs}
-            disabled={isLoadingConfig}
-            className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-white font-mono text-xs font-black uppercase tracking-wider py-2.5 px-4 rounded-xl border-2 border-zinc-950 transition active:translate-y-0.5 disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoadingConfig ? '' : ''}`} />
-            Sincronizar Painel
-          </button>
-        </div>
-
-        {/* Server Real-time Webhook Metrics Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-8 border-t-2 border-zinc-950 pt-6">
-          <div className="bg-zinc-950/40 border-2 border-zinc-950 p-4 rounded-xl">
-            <span className="text-[10px] uppercase font-black tracking-widest text-zinc-400 font-mono block">Mensagens Recebidas</span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-black text-white font-mono">{totalCalls}</span>
-              <span className="text-[10px] text-zinc-500 font-semibold font-mono">requisições</span>
-            </div>
-          </div>
-          <div className="bg-zinc-950/40 border-2 border-zinc-950 p-4 rounded-xl">
-            <span className="text-[10px] uppercase font-black tracking-widest text-zinc-400 font-mono block">Taxa de Resposta</span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-black text-emerald-400 font-mono">{successRate}%</span>
-              <span className="text-[10px] text-zinc-500 font-semibold font-mono">sucesso</span>
-            </div>
-          </div>
-          <div className="bg-zinc-950/40 border-2 border-zinc-950 p-4 rounded-xl">
-            <span className="text-[10px] uppercase font-black tracking-widest text-zinc-400 font-mono block">Latência Média</span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-black text-amber-400 font-mono">{avgLatency}ms</span>
-              <span className="text-[10px] text-zinc-500 font-semibold font-mono">tempo do gemini</span>
-            </div>
-          </div>
-          <div className="bg-zinc-950/40 border-2 border-zinc-950 p-4 rounded-xl">
-            <span className="text-[10px] uppercase font-black tracking-widest text-zinc-400 font-mono block">Origem do Webhook</span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-xs font-bold text-indigo-400 font-mono truncate max-w-full">Whatauto App</span>
-              <span className="text-[10px] text-zinc-500 font-semibold font-mono">android</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* INTEGRAÇÃO DE ABAS: ASSISTENTE AI & GOOGLE WORKSPACE */}
       <div className="flex flex-wrap bg-zinc-900 p-1.5 border-4 border-zinc-950 rounded-2xl w-full sm:w-max select-none text-left gap-2">
         <button
@@ -938,549 +876,164 @@ export default function GeminiServerTab({
       </div>
 
       <div className={`grid grid-cols-1 xl:grid-cols-12 gap-8 ${innerTab === 'ai' ? 'block' : 'hidden'}`}>
-        
-        {/* Column Left: Server Configurations (Config e Instruções) */}
-        <div className="xl:col-span-7 space-y-8">
-          
-          {/* 🧠 CENTRO DE COPRODUÇÃO E INTELIGÊNCIA DE LEADS (GEMINI DIRECT) */}
-          <div className="bg-zinc-900 border-4 border-zinc-950 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-            <div className="p-4 bg-zinc-950 flex items-center justify-between border-b-2 border-zinc-950">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-400 " />
-                <span className="font-mono text-xs font-black uppercase text-white">Central de Inteligência & Coprodução de Leads (Gemini Direct)</span>
-              </div>
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold font-mono bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">
-                GEMINI 3.5 CONECTADO
-              </span>
+        {/* Restored Column Left: AI Parameters & Configuration */}
+        <div className="xl:col-span-5 space-y-8">
+          {/* 1. Main Configuration Panel */}
+          <div className="bg-zinc-900 border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none select-none">
+              <Settings className="w-24 h-24 text-white" />
             </div>
-
-            <div className="p-6 space-y-6">
-              <div className="space-y-2">
-                <label className="text-xs font-black text-zinc-300 uppercase tracking-wider block font-mono">
-                  Selecione um cliente para atendimento inteligente:
-                </label>
-                <select
-                  value={selectedLeadId}
-                  onChange={(e) => {
-                    const nextId = e.target.value;
-                    setSelectedLeadId(nextId);
-                    setCoproductOutput('');
-                    if (nextId) {
-                      handleFetchCoproduct(nextId, coproductTab);
-                    }
-                  }}
-                  className="w-full p-3.5 rounded-xl bg-zinc-950 text-white text-xs border-2 border-zinc-950 focus:border-indigo-500 focus:outline-none font-mono"
-                >
-                  <option value="">Selecione um Lead do CRM...</option>
-                  {leads.map(lead => (
-                    <option key={lead.id} value={lead.id}>
-                      👤 {lead.name} {lead.income ? ` - Renda: R$ ${Number(lead.income).toLocaleString('pt-BR')}` : ''} ({lead.status || 'Sem status'})
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[10px] text-zinc-500">
-                  Qualquer atividade ou simulação selecionada abaixo operará em conexão instantânea com o motor generativo do Gemini.
+            
+            <div className="relative z-10 space-y-6">
+              <div className="border-b-2 border-zinc-800 pb-4 mb-4">
+                <h3 className="text-sm font-black uppercase italic tracking-tighter text-indigo-400 flex items-center gap-2">
+                  <Flame className="w-4 h-4" />
+                  Parâmetros de Produção do Assistente AI
+                </h3>
+                <p className="text-[10px] text-zinc-500 font-mono mt-1 font-bold uppercase tracking-widest">
+                  Calibragem do Motor Generativo {config.model_name.toUpperCase()}
                 </p>
               </div>
 
-              {selectedLeadId && (() => {
-                const lead = leads.find(l => l.id === selectedLeadId);
-                if (!lead) return null;
+              {/* Model Selector */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block ml-1">Modelo de Processamento</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'gemini-3.5-flash', label: 'Flash (Rápido)', icon: Zap },
+                    { id: 'gemini-3.5-pro', label: 'Pro (Poderoso)', icon: Sparkles }
+                  ].map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => setConfig({ ...config, model_name: m.id })}
+                      className={`px-3 py-2.5 rounded-xl border-2 font-bold text-[10px] uppercase transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                        config.model_name === m.id
+                          ? 'bg-indigo-600 border-zinc-950 text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] -translate-y-0.5'
+                          : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-700'
+                      }`}
+                    >
+                      <m.icon className="w-3 h-3" />
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-                return (
-                  <div className="space-y-6 border-t-2 border-zinc-950/60 pt-6">
-                    {/* Ficha compacta block */}
-                    <div className="bg-zinc-950/40 border-2 border-zinc-950 p-4 rounded-xl grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <span className="text-[9px] uppercase font-mono text-zinc-500 font-bold block">Valor Pretendido</span>
-                        <span className="text-sm font-black text-white font-mono">
-                          R$ {lead.value ? Number(lead.value).toLocaleString('pt-BR') : 'Não informado'}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[9px] uppercase font-mono text-zinc-500 font-bold block">Interesse</span>
-                        <span className="text-xs font-bold text-zinc-300 truncate block">
-                          {lead.propertyInterest || lead.interest || 'Portfólio Geral / Minha Casa Minha Vida'}
-                        </span>
-                      </div>
-                      <div className="md:col-span-2 border-t border-zinc-850/60 pt-2 mt-1">
-                        <span className="text-[9px] uppercase font-mono text-zinc-500 font-bold block">Anotações Internas do Lead</span>
-                        <p className="text-xs text-zinc-400 italic line-clamp-2">
-                          "{lead.notes || 'Nenhum histórico cadastrado para este cliente.'}"
-                        </p>
-                      </div>
-                    </div>
+              {/* Temperature Slider */}
+              <div className="space-y-4 pt-2">
+                <div className="flex justify-between items-center px-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Criatividade (Temperatura)</label>
+                  <span className="text-xs font-mono font-black text-indigo-400 bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800 shadow-inner">
+                    {config.temperature}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={config.temperature}
+                  onChange={(e) => setConfig({ ...config, temperature: parseFloat(e.target.value) })}
+                  className="w-full h-1.5 bg-zinc-950 rounded-lg appearance-none cursor-pointer accent-indigo-500 border border-zinc-800"
+                />
+                <div className="flex justify-between text-[8px] font-black uppercase text-zinc-600 px-1">
+                  <span>Mais Conservador</span>
+                  <span>Mais Criativo</span>
+                </div>
+              </div>
 
-                    {/* Coproduction tab switchers */}
-                    <div className="flex bg-zinc-950 p-1 rounded-xl border border-zinc-950 gap-1 select-none">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCoproductTab('pitch');
-                          handleFetchCoproduct(selectedLeadId, 'pitch');
-                        }}
-                        className={`flex-1 py-3 rounded-lg text-[9px] font-black uppercase tracking-wider font-mono transition-colors flex items-center justify-center gap-1.5 ${
-                          coproductTab === 'pitch'
-                            ? 'bg-indigo-600 text-white'
-                            : 'text-zinc-400 hover:text-white'
-                        }`}
-                      >
-                        📱 Abordagem Rápida
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCoproductTab('dossier');
-                          handleFetchCoproduct(selectedLeadId, 'dossier');
-                        }}
-                        className={`flex-1 py-3 rounded-lg text-[9px] font-black uppercase tracking-wider font-mono transition-colors flex items-center justify-center gap-1.5 ${
-                          coproductTab === 'dossier'
-                            ? 'bg-indigo-600 text-white'
-                            : 'text-zinc-400 hover:text-white'
-                        }`}
-                      >
-                        🔬 Dossiê Habitacional
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCoproductTab('campaign');
-                          handleFetchCoproduct(selectedLeadId, 'campaign');
-                        }}
-                        className={`flex-1 py-3 rounded-lg text-[9px] font-black uppercase tracking-wider font-mono transition-colors flex items-center justify-center gap-1.5 ${
-                          coproductTab === 'campaign'
-                            ? 'bg-indigo-600 text-white'
-                            : 'text-zinc-400 hover:text-white'
-                        }`}
-                      >
-                        📅 Plano de Campanha
-                      </button>
-                    </div>
+              {/* Behavior Settings */}
+              <div className="pt-2">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-zinc-400 flex items-center gap-1.5">
+                    <MessageSquare className="w-3 h-3" />
+                    Prompt Central de Comportamento
+                  </h3>
+                  <button 
+                    onClick={() => setConfig({ ...config, system_instruction: "Você é o assistente oficial da cicloCRED, especializado em crédito habitacional e vendas imobiliárias. Sua missão é triar leads, explicar financiamentos (MCMV e SBPE) e ser extremamente prestativo, porém direto. Use um tom comercial elegante e persuasivo." })}
+                    className="text-[9px] font-black text-indigo-500 hover:text-indigo-400 uppercase tracking-tighter transition-colors underline cursor-pointer"
+                  >
+                    Resetar para Padrão
+                  </button>
+                </div>
+                <textarea
+                  value={config.system_instruction}
+                  onChange={(e) => setConfig({ ...config, system_instruction: e.target.value })}
+                  placeholder="Defina aqui como o robô deve se comportar, qual o tom de voz e quais são as regras de ouro do atendimento..."
+                  className="w-full h-64 bg-zinc-950 border-2 border-zinc-800 rounded-2xl p-4 text-xs font-medium text-zinc-300 focus:outline-none focus:border-indigo-600 transition-colors resize-none placeholder-zinc-700 custom-scrollbar leading-relaxed"
+                />
+              </div>
 
-                    {/* Output display section */}
-                    <div className="bg-zinc-950 border-2 border-zinc-950 p-5 rounded-2xl relative min-h-[160px] flex flex-col justify-between">
-                      {coproductLoading ? (
-                        <div className="py-12 flex flex-col items-center justify-center gap-3 my-auto w-full">
-                          <RefreshCw className="w-8 h-8 text-indigo-400 " />
-                          <span className="text-xs text-zinc-400 font-mono uppercase tracking-widest ">
-                            Gemini 3.5 interpretando ficha cadastral...
-                          </span>
-                        </div>
-                      ) : coproductOutput ? (
-                        <div className="space-y-4">
-                          <div className="prose text-zinc-200 text-xs leading-relaxed max-h-72 overflow-y-auto pr-2">
-                            {coproductOutput.split('\n').map((line, idx) => {
-                              let content = line;
-                              let valClass = "text-zinc-300 mb-2 leading-relaxed text-xs block";
-                              
-                              if (line.startsWith('###')) {
-                                content = line.replace('###', '').trim();
-                                valClass = "text-xs font-black uppercase text-indigo-400 mt-4 mb-2 tracking-wide font-mono block";
-                              } else if (line.startsWith('##')) {
-                                content = line.replace('##', '').trim();
-                                valClass = "text-sm font-black uppercase text-white mt-5 mb-3 border-b border-zinc-800 pb-1 font-mono block";
-                              } else if (line.startsWith('#')) {
-                                content = line.replace('#', '').trim();
-                                valClass = "text-md font-black italic uppercase text-emerald-400 mt-6 mb-4 block";
-                              } else if (line.startsWith('-') || line.startsWith('*')) {
-                                content = '• ' + line.substring(1).trim();
-                                valClass = "text-zinc-300 ml-4 mb-1.5 text-xs block";
-                              }
-                              
-                              const parts = [];
-                              const boldRegex = /\*\*([^*]+)\*\*/g;
-                              let lastIndex = 0;
-                              let match;
-                              
-                              while ((match = boldRegex.exec(content)) !== null) {
-                                if (match.index > lastIndex) {
-                                  parts.push(content.substring(lastIndex, match.index));
-                                }
-                                parts.push(<strong key={match.index} className="font-extrabold text-[#4E9F3D]">{match[1]}</strong>);
-                                lastIndex = boldRegex.lastIndex;
-                              }
-                              if (lastIndex < content.length) {
-                                parts.push(content.substring(lastIndex));
-                              }
-
-                              return <span key={idx} className={valClass}>{parts.length > 0 ? parts : content}</span>;
-                            })}
-                          </div>
-
-                          {/* ACTION BUTTON PACK */}
-                          <div className="border-t border-zinc-850 pt-4 flex flex-wrap gap-2.5">
-                            {coproductTab === 'pitch' && (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(coproductOutput);
-                                    if (addNotification) addNotification("Copiado!", "Roteiro de Abordagem copiado para a área de transferência.", "success");
-                                  }}
-                                  className="py-2.5 px-4 bg-zinc-800 hover:bg-zinc-700 text-white border-2 border-zinc-950 font-mono text-[10px] font-black uppercase rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition cursor-pointer"
-                                >
-                                  Copiar Roteiro 📋
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const rawMsg = coproductOutput.split('---')[0] || coproductOutput;
-                                    const cleanPhone = (lead.phone || '').replace(/[^0-9]/g, '');
-                                    const defaultPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
-                                    window.location.href = `whatsapp://send?phone=${defaultPhone}&text=${encodeURIComponent(rawMsg.trim())}`;
-                                  }}
-                                  className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-white border-2 border-zinc-950 font-mono text-[10px] font-black uppercase rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition cursor-pointer"
-                                >
-                                  Enviar no WhatsApp Local 📲
-                                </button>
-                              </>
-                            )}
-
-                            {coproductTab === 'dossier' && (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(coproductOutput);
-                                    if (addNotification) addNotification("Copiado!", "Dossiê Habitacional copiado para a área de transferência.", "success");
-                                  }}
-                                  className="py-2.5 px-4 bg-zinc-800 hover:bg-zinc-700 text-white border-2 border-zinc-950 font-mono text-[10px] font-black uppercase rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition cursor-pointer"
-                                >
-                                  Copiar Dossiê 📋
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleSaveDossierToLeadDoc(selectedLeadId, coproductOutput)}
-                                  className="py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white border-2 border-zinc-950 font-mono text-[10px] font-black uppercase rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition shrink-0 cursor-pointer"
-                                >
-                                  Salvar e Anexar na Ficha do CRM 🔬
-                                </button>
-                              </>
-                            )}
-
-                            {coproductTab === 'campaign' && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                    navigator.clipboard.writeText(coproductOutput);
-                                    if (addNotification) addNotification("Copiado!", "Plano de Campanha copiado para a área de transferência.", "success");
-                                }}
-                                className="py-2.5 px-4 bg-zinc-800 hover:bg-zinc-700 text-white border-2 border-zinc-950 font-mono text-[10px] font-black uppercase rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition cursor-pointer"
-                              >
-                                Copiar Planejamento 📋
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="py-8 flex flex-col items-center justify-center text-center text-zinc-500 font-mono text-[11px] my-auto">
-                          <span>Clique em uma das opções acima para solicitar a inteligência direta ao Gemini.</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
+              {/* Save Button */}
+              <button
+                onClick={handleSaveConfig}
+                disabled={isSavingConfig}
+                className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase italic tracking-widest rounded-2xl border-4 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-2px] active:translate-y-px transition-all cursor-pointer flex items-center justify-center gap-3 disabled:opacity-50"
+              >
+                {isSavingConfig ? (
+                  <>
+                    <RefreshCw className="w-5 h-5 animate-spin" />
+                    <span>Salvando Calibragem...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-5 h-5" />
+                    <span>Gravar Instruções no Motor</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
-          
-          <div className="bg-zinc-900 border-4 border-zinc-950 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-            <div className="p-4 bg-zinc-950/30 border-b-2 border-zinc-950 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Settings className="w-4 h-4 text-indigo-400" />
-                <span className="font-mono text-xs font-black uppercase text-zinc-300">Parâmetros de Produção do Assistente AI</span>
-              </div>
-            </div>
 
-            <div className="p-6 space-y-6">
-              {isLoadingConfig ? (
-                <div className="py-12 flex flex-col items-center justify-center gap-3">
-                  <RefreshCw className="w-8 h-8 text-indigo-400 " />
-                  <span className="text-xs text-zinc-400 font-mono uppercase tracking-wider">Carregando parâmetros...</span>
+          {/* 2. Webhook Setup Helper */}
+          <div className="bg-zinc-950 border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] relative overflow-hidden">
+             <div className="border-b border-zinc-800 pb-3 mb-4">
+                <h3 className="text-xs font-black uppercase italic tracking-tighter text-emerald-400 flex items-center gap-2">
+                  <Zap className="w-4 h-4" />
+                  Como Integrar o Robô no seu WhatsApp Grátis
+                </h3>
+             </div>
+             <div className="space-y-4">
+                <p className="text-[10px] text-zinc-400 font-bold uppercase leading-relaxed tracking-tight">
+                  Siga estes passos para conectar a inteligência do CRM diretamente no seu celular em menos de 1 minuto:
+                </p>
+                <div className="space-y-3">
+                  {[
+                    { step: 1, text: "Baixe o aplicativo Whatauto na Google Play Store." },
+                    { step: 2, text: "Vá em Menu > Servidor e ative o botão do Servidor." },
+                    { step: 3, text: "Cole o link abaixo no campo 'URL do Servidor'." },
+                    { step: 4, text: "Ative a opção 'JSON' e salve a configuração." }
+                  ].map((s) => (
+                    <div key={s.step} className="flex gap-3 items-start">
+                      <span className="w-5 h-5 bg-zinc-900 border border-zinc-700 text-[10px] font-black text-white rounded flex items-center justify-center shrink-0">{s.step}</span>
+                      <p className="text-[11px] text-zinc-300 font-semibold">{s.text}</p>
+                    </div>
+                  ))}
                 </div>
-              ) : (
-                <>
-                  {/* Active / Inactive Switchers */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-zinc-950/30 border-2 border-zinc-950 p-4 rounded-xl flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <label className="text-xs font-black text-white uppercase tracking-wider font-mono">IA Geral Ativa</label>
-                        <p className="text-[10px] text-zinc-400 block">Ativa ou suspende o motor de respostas da inteligência artificial.</p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          triggerSensoryFeedback('click', accSettings);
-                          setConfig(prev => ({ ...prev, active: !prev.active }));
-                        }}
-                        className={`w-12 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors ${
-                          config.active ? 'bg-indigo-600 justify-end' : 'bg-zinc-800 justify-start'
-                        } border border-zinc-950`}
-                      >
-                        <span className="w-4 h-4 rounded-full bg-white transition-colors shadow-md" />
-                      </button>
-                    </div>
 
-                    <div className="bg-zinc-950/30 border-2 border-zinc-950 p-4 rounded-xl flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <label className="text-xs font-black text-white uppercase tracking-wider font-mono">Auto Enviar no WhatsApp</label>
-                        <p className="text-[10px] text-zinc-400 block">Autoriza responder diretamente as chamadas de webhook do Whatauto.</p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          triggerSensoryFeedback('click', accSettings);
-                          setConfig(prev => ({ ...prev, whatsapp_enabled: !prev.whatsapp_enabled }));
-                        }}
-                        className={`w-12 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors ${
-                          config.whatsapp_enabled ? 'bg-indigo-600 justify-end' : 'bg-zinc-800 justify-start'
-                        } border border-zinc-950`}
-                      >
-                        <span className="w-4 h-4 rounded-full bg-white transition-colors shadow-md" />
-                      </button>
-                    </div>
-
-                    <div className="bg-zinc-950/30 border-2 border-zinc-950 p-4 rounded-xl flex items-center justify-between col-span-1 md:col-span-2">
-                      <div className="space-y-0.5">
-                        <label className="text-xs font-black text-white uppercase tracking-wider font-mono">Novo Lead Automático no CRM</label>
-                        <p className="text-[10px] text-zinc-400 block">
-                          Se um número de WhatsApp não cadastrado mandar mensagem, a IA cria e insere ele de imediato com a tag <span className="text-indigo-400 font-mono">WhatsApp Webhook</span> no Funil de Leads.
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          triggerSensoryFeedback('click', accSettings);
-                          setConfig(prev => ({ ...prev, leads_auto_creation_enabled: !prev.leads_auto_creation_enabled }));
-                        }}
-                        className={`w-12 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors ${
-                          config.leads_auto_creation_enabled ? 'bg-indigo-600 justify-end' : 'bg-zinc-800 justify-start'
-                        } border border-zinc-950`}
-                      >
-                        <span className="w-4 h-4 rounded-full bg-white transition-colors shadow-md" />
-                      </button>
-                    </div>
+                <div className="mt-6 p-4 bg-zinc-900 rounded-2xl border-2 border-zinc-800 relative">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">Sua URL do Webhook Direct:</span>
+                    <span className="text-[8px] bg-emerald-500/10 text-emerald-500 px-2 py-0.5 rounded-full font-bold">ATIVA</span>
                   </div>
-
-                    {/* Brand Customization & Neutrality Options */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t-2 border-zinc-950 pt-6">
-                      <div>
-                        <label className="text-xs font-black text-zinc-300 uppercase tracking-wider block font-mono">Identidade da Empresa (Nome da Construtora / Imobiliária)</label>
-                        <input
-                          type="text"
-                          value={config.company_name || ''}
-                          onChange={(e) => {
-                            setConfig(prev => ({ ...prev, company_name: e.target.value }));
-                          }}
-                          placeholder="Ex: Construtora Real, Imobiliária Aliança"
-                          className="w-full mt-1.5 p-3 rounded-lg bg-zinc-950 text-white text-xs border-2 border-zinc-950 focus:border-indigo-500 focus:outline-none font-mono"
-                        />
-                        <p className="text-[9px] text-zinc-400 mt-1">A IA utilizará este nome para se apresentar e rejeitará herança dos termos cicloCRED.</p>
-                      </div>
-
-                      <div>
-                        <label className="text-xs font-black text-zinc-300 uppercase tracking-wider block font-mono">Nome da Central ou Sistema de Atendimento</label>
-                        <input
-                          type="text"
-                          value={config.system_name || ''}
-                          onChange={(e) => {
-                            setConfig(prev => ({ ...prev, system_name: e.target.value }));
-                          }}
-                          placeholder="Ex: Central de Vendas, assistente virtual"
-                          className="w-full mt-1.5 p-3 rounded-lg bg-zinc-950 text-white text-xs border-2 border-zinc-950 focus:border-indigo-500 focus:outline-none font-mono"
-                        />
-                        <p className="text-[9px] text-zinc-400 mt-1">Identificação do sistema nas respostas (Ex: Robô do Chat, Atendente Virtual).</p>
-                      </div>
-                    </div>
-
-                    {/* Operating Mode & Response Length restrictions */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t-2 border-zinc-950 pt-6">
-                      <div>
-                        <label className="text-xs font-black text-zinc-300 uppercase tracking-wider block font-mono">Modo de Operação (Lógica do Assistente AI)</label>
-                        <select
-                          value={config.response_mode || 'hybrid'}
-                          onChange={(e) => {
-                            triggerSensoryFeedback('click', accSettings);
-                            setConfig(prev => ({ ...prev, response_mode: e.target.value as any }));
-                          }}
-                          className="w-full mt-1.5 p-3 rounded-lg bg-zinc-950 text-white text-xs border-2 border-zinc-950 focus:border-indigo-500 focus:outline-none font-mono"
-                        >
-                          <option value="ai">🤖 IA 100% Automática (Responde tudo via Gemini)</option>
-                          <option value="hybrid">🤝 Híbrido Inteligente (Primeiro busca Scripts do CRM, fallback na IA)</option>
-                          <option value="scripts">⚡ Autônomo via Scripts (Apenas triggers/scripts do CRM, SEM Gemini)</option>
-                          <option value="manual">👤 Manual de Atendimento (Quiet Mode, sem auto-resposta)</option>
-                        </select>
-                        <p className="text-[9px] text-zinc-400 mt-1">Defina Autônomo via Scripts para impedir que a IA (Gemini) intervenha ou gere custos.</p>
-                      </div>
-
-                      <div>
-                        <label className="text-xs font-black text-zinc-300 uppercase tracking-wider block font-mono">Restrição de Tamanho da Resposta (Gemini)</label>
-                        <select
-                          value={config.answer_length || 'short'}
-                          onChange={(e) => {
-                            triggerSensoryFeedback('click', accSettings);
-                            setConfig(prev => ({ ...prev, answer_length: e.target.value as any }));
-                          }}
-                          className="w-full mt-1.5 p-3 rounded-lg bg-zinc-950 text-white text-xs border-2 border-zinc-950 focus:border-indigo-500 focus:outline-none font-mono"
-                        >
-                          <option value="short">⚡ Resposta Curta (1 a 2 parágrafos pequenos, ideal para mobile)</option>
-                          <option value="medium">📏 Resposta Média (2 a 3 parágrafos equilibrados)</option>
-                          <option value="long">📖 Resposta Longa/Completa (Até 4 parágrafos bem explicados)</option>
-                        </select>
-                        <p className="text-[9px] text-zinc-400 mt-1">Evita textos excessivamente complexos ou extensos para chats móveis.</p>
-                      </div>
-                    </div>
-
-                    {/* Model Name & Temperature */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t-2 border-zinc-950 pt-6">
-                      <div>
-                        <label className="text-xs font-black text-zinc-300 uppercase tracking-wider block font-mono">Modelo Gemini Recomendado</label>
-                        <select
-                          value={config.model_name}
-                          onChange={(e) => {
-                            triggerSensoryFeedback('click', accSettings);
-                            setConfig(prev => ({ ...prev, model_name: e.target.value }));
-                          }}
-                          className="w-full mt-1.5 p-3 rounded-lg bg-zinc-950 text-white text-xs border-2 border-zinc-950 focus:border-indigo-500 focus:outline-none font-mono"
-                        >
-                          <option value="gemini-3.5-flash">Gemini 3.5 Flash (Veloz / Recomendado)</option>
-                          <option value="gemini-1.5-pro">Gemini 1.5 Pro (Ultra Raciocínio)</option>
-                        </select>
-                      </div>
-
-                    <div>
-                      <div className="flex justify-between items-center">
-                        <label className="text-xs font-black text-zinc-300 uppercase tracking-wider font-mono">Temperatura: {config.temperature}</label>
-                        <span className="text-[9px] text-indigo-400 font-bold uppercase font-mono">
-                          {config.temperature < 0.4 ? 'Focado / Rígido' : config.temperature > 0.8 ? 'Criativo / Despojado' : 'Equilibrado'}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.1"
-                        value={config.temperature}
-                        onChange={(e) => {
-                          setConfig(prev => ({ ...prev, temperature: parseFloat(e.target.value) }));
-                        }}
-                        className="w-full mt-3 h-2 bg-zinc-950 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                      />
-                    </div>
-                  </div>
-
-                  {/* AI Persona System Instruction Prompt */}
-                  <div className="border-t-2 border-zinc-950 pt-6 space-y-2">
-                    <div className="flex justify-between items-center">
-                      <label className="text-xs font-black text-zinc-300 uppercase tracking-wider font-mono">Prompt Central de Comportamento (Instruções de Sistema)</label>
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-950 text-indigo-400 font-black font-mono">PERSONA PRINCIPAL</span>
-                    </div>
-                    <textarea
-                      rows={10}
-                      value={config.system_instruction}
-                      onChange={(e) => setConfig(prev => ({ ...prev, system_instruction: e.target.value }))}
-                      placeholder="Descreva as regras operacionais, tom de voz e como o robô deve contornar objeções dos compradores..."
-                      className="w-full p-4 rounded-xl bg-zinc-950 text-white text-xs border-2 border-zinc-950 focus:border-indigo-500 focus:outline-none font-mono leading-relaxed resize-none"
-                    />
-                    <div className="bg-indigo-950/20 border border-indigo-500/20 p-3 rounded-lg flex gap-2.5 items-start">
-                      <Info className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
-                      <p className="text-[10px] text-zinc-300 leading-normal">
-                        <strong>Dica comercial:</strong> Deixe claro que no final de qualquer conversa o robô deve convidar o lead para simular o financiamento CEF ou Cury com o consultor correspondente via formulário. Isso aumenta sua taxa de leads ativos!
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Save Configuration Action Bar */}
-                  <div className="border-t-2 border-zinc-950 pt-4 flex justify-end">
-                    <button
-                      onClick={handleSaveConfig}
-                      disabled={isSavingConfig}
-                      className="w-full sm:w-auto flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black uppercase tracking-wider py-3 px-6 rounded-xl border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition active:translate-y-0.5 disabled:opacity-50"
+                  <div className="flex gap-2">
+                    <code className="flex-1 text-[10px] font-mono text-indigo-400 break-all bg-zinc-950 p-2 rounded border border-zinc-800 select-all overflow-hidden whitespace-nowrap">
+                      {webhookUrl}
+                    </code>
+                    <button 
+                      onClick={copyToClipboard}
+                      className="p-2 bg-zinc-950 border border-zinc-700 text-zinc-400 hover:text-white rounded-lg transition-colors cursor-pointer"
                     >
-                      {isSavingConfig ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 " />
-                          Gravando Servidor...
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle className="w-3.5 h-3.5" />
-                          Salvar e Aplicar Alterações
-                        </>
-                      )}
+                      {copiedUrl ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                     </button>
                   </div>
-                </>
-              )}
-            </div>
+                </div>
+             </div>
           </div>
-
-          {/* Whatauto Webhook Integration Tutorial Card */}
-          <div className="bg-zinc-900 border-4 border-zinc-950 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-            <div className="p-4 bg-zinc-950/30 border-b-2 border-zinc-950 flex items-center gap-2">
-              <Cpu className="w-4 h-4 text-amber-400" />
-              <span className="font-mono text-xs font-black uppercase text-zinc-300">Como Integrar o Robô no seu WhatsApp Grátis</span>
-            </div>
-
-            <div className="p-6 space-y-4 text-xs text-zinc-300 leading-relaxed">
-              <p>
-                Utilizamos o aplicativo Android gratuito <strong>Whatauto</strong> para encaminhar as mensagens recebidas no seu WhatsApp Business para o nosso servidor inteligente em tempo real. Siga o roteiro passo a passo:
-              </p>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-4">
-                <div className="p-3 bg-zinc-950/40 border-2 border-zinc-950 rounded-xl space-y-1">
-                  <span className="text-[10px] font-black font-mono text-indigo-400 block uppercase">Passo 1</span>
-                  <p className="text-[11px] leading-snug">Instale o app <strong>Whatauto</strong> na Play Store em um dispositivo com WhatsApp ativo.</p>
-                </div>
-                <div className="p-3 bg-zinc-950/40 border-2 border-zinc-950 rounded-xl space-y-1">
-                  <span className="text-[10px] font-black font-mono text-indigo-400 block uppercase">Passo 2</span>
-                  <p className="text-[11px] leading-snug">Ative a chave <strong>Auto Resposta</strong> e limpe os textos padrões. Acesse o menu <strong>Menu Lateral &gt; Servidor API</strong>.</p>
-                </div>
-                <div className="p-3 bg-zinc-950/40 border-2 border-zinc-950 rounded-xl space-y-1">
-                  <span className="text-[10px] font-black font-mono text-indigo-400 block uppercase">Passo 3</span>
-                  <p className="text-[11px] leading-snug">Habilite o <strong>Servidor API</strong> e cole a URL do webhook correspondente no campo URL.</p>
-                </div>
-              </div>
-
-              {/* Box showing core Webhook URL to copy */}
-              <div className="bg-zinc-950 border-2 border-zinc-950 p-4 rounded-xl flex items-center justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <span className="text-[9px] font-black font-mono text-zinc-500 uppercase block">Sua URL de Webhook Exclusiva (Whatauto)</span>
-                  <span className="text-xs font-mono font-bold text-emerald-400 block truncate select-all">{webhookUrl}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={copyToClipboard}
-                  className="bg-zinc-800 hover:bg-zinc-700 text-white p-2 rounded-lg border border-zinc-950 shrink-0 relative transition active:scale-95"
-                  title="Copiar URL para Área de Transferência"
-                >
-                  {copiedUrl ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                </button>
-              </div>
-
-              <div className="bg-amber-950/20 border border-amber-500/20 p-3 rounded-xl flex gap-2.5 items-start mt-4">
-                <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                <p className="text-[10px] text-amber-300/90 leading-normal">
-                  <strong>IMPORTANTE:</strong> No painel de configurações do app Whatauto, marque o formato de parâmetros como <strong>JSON</strong> para garantir o envio correto do nome do cliente (`sender`), mensagem (`message`) e telefone (`phone`).
-                </p>
-              </div>
-
-              <div className="bg-rose-950/20 border border-rose-500/20 p-3.5 rounded-xl flex gap-3 items-start mt-3">
-                <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0 mt-0.5 " />
-                <div className="text-[10.5px] text-zinc-300 leading-normal space-y-1">
-                  <p className="font-extrabold uppercase tracking-wide text-rose-400 font-mono text-[9.5px]">🔒 Barreira de Cookie Sandbox (Ambiente Protegido do Google AI Studio)</p>
-                  <p>
-                    Por estar rodando em um servidor de visualização e desenvolvimento privado do AI Studio, o proxy do Google requer cookies de autenticação do seu navegador para liberar o acesso. Dispositivos externos físicos (como o seu celular com o aplicativo <strong>Whatauto</strong>, Postman ou curl) não possuem esses cookies do seu login e, por isso, <strong>recebem a página de "Cookie check / Action required" do Google</strong>.
-                  </p>
-                  <p className="text-zinc-400 font-medium">
-                    🎯 <strong>Como Testar Agora:</strong> Use a aba <strong>📲 Simulador de Webhook</strong> na coluna da direita! Ela simula a entrada de mensagens enviando requisições com os seus cookies ativos do navegador, permitindo que as mensagens de teste sejam processadas pela IA e apareçam na <strong>Central de Conversas</strong> instantaneamente. Quando seu sistema for implantado em produção definitiva, o celular integrará perfeitamente sem barreiras!
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
         </div>
 
         {/* Column Right: Interactive Playground & Real-Time Log Viewer */}
-        <div className="xl:col-span-12 lg:col-span-12 space-y-8 transition-colors">
+        <div className="xl:col-span-7 lg:col-span-12 space-y-8 transition-colors">
           
           {/* Main Container with 2 tabs: 💬 Active Chats WA or 📲 Whatauto Simulator */}
           <div className="bg-zinc-900 border-4 border-zinc-950 rounded-2xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
@@ -2486,7 +2039,7 @@ export default function GeminiServerTab({
       </div>
 
       {innerTab === 'workspace' && (
-        <GoogleWorkspace
+        <WorkspaceTab
           leads={leads}
           setLeads={setLeads}
           appointments={appointments}

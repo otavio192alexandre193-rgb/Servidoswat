@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Lead, LeadStatus, OperationalFlow } from '../types';
-import { X, Check } from 'lucide-react';
+import { Lead, LeadStatus, OperationalFlow, RealEstateProperty, OperationalOS } from '../types';
+import { X, Check, BrainCircuit, Sparkles, Building2, TrendingUp, ChevronRight } from 'lucide-react';
 import { getKanbanColumns } from '../utils/kanban';
 import { createDefaultFlow } from '../utils/flow';
 
@@ -15,11 +15,25 @@ interface LeadModalProps {
   defaultStatus?: LeadStatus;
   operationalFlows?: OperationalFlow[];
   setOperationalFlows?: React.Dispatch<React.SetStateAction<OperationalFlow[]>>;
+  properties?: RealEstateProperty[];
   onClose: () => void;
   onSave: (lead: Lead) => void;
+  operationalServiceOrders?: OperationalOS[];
+  setOperationalServiceOrders?: React.Dispatch<React.SetStateAction<OperationalOS[]>>;
 }
 
-export default function LeadModal({ isOpen, lead, defaultStatus, operationalFlows = [], setOperationalFlows, onClose, onSave }: LeadModalProps) {
+export default function LeadModal({ 
+  isOpen, 
+  lead, 
+  defaultStatus, 
+  operationalFlows = [], 
+  setOperationalFlows, 
+  properties = [], 
+  onClose, 
+  onSave,
+  operationalServiceOrders = [],
+  setOperationalServiceOrders
+}: LeadModalProps) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -31,9 +45,9 @@ export default function LeadModal({ isOpen, lead, defaultStatus, operationalFlow
   const [familyIncome, setFamilyIncome] = useState<number>(0);
 
   // Custom user suggested columns states
-  const [mainProfile, setMainProfile] = useState<'Investidor' | 'Primeiro Imóvel' | 'Jovem' | 'Meia idade' | 'Idoso'>('Primeiro Imóvel');
-  const [region, setRegion] = useState('Sul');
-  const [gender, setGender] = useState<'Homem' | 'Mulher' | 'Outro' | 'Prefiro nao informar'>('Homem');
+  const [mainProfile, setMainProfile] = useState<string>('');
+  const [region, setRegion] = useState('');
+  const [gender, setGender] = useState<'Homem' | 'Mulher' | 'Outro' | 'Prefiro nao informar' | ''>('');
   const [sqmMatters, setSqmMatters] = useState<'sim' | 'nao'>('nao');
   const [unitTypeMatters, setUnitTypeMatters] = useState<'sim' | 'nao'>('nao');
   const [deliveryMatters, setDeliveryMatters] = useState<'sim' | 'nao'>('nao');
@@ -42,23 +56,42 @@ export default function LeadModal({ isOpen, lead, defaultStatus, operationalFlow
   // Spreadsheet-Aligned Fields
   const [cpf, setCpf] = useState('');
   const [birthDate, setBirthDate] = useState('');
-  const [maritalStatus, setMaritalStatus] = useState<'Solteiro' | 'Casado' | 'Uniao estavel' | 'Divorciado' | 'Viuvo'>('Solteiro');
+  const [maritalStatus, setMaritalStatus] = useState<'Solteiro' | 'Casado' | 'Uniao estavel' | 'Divorciado' | 'Viuvo' | ''>('');
   const [bairroEspecifico, setBairroEspecifico] = useState('');
   const [cep, setCep] = useState('');
   const [fgtsSaldo, setFgtsSaldo] = useState<number>(0);
-  const [restricaoBacen, setRestricaoBacen] = useState<'Sim' | 'Não'>('Não');
-  const [possuiImovel, setPossuiImovel] = useState<'Sim' | 'Não' | 'Em nome de terceiros'>('Não');
-  const [programaDesejado, setProgramaDesejado] = useState<'Minha Casa Minha Vida' | 'SBPE' | 'Indiferente'>('Indiferente');
+  const [restricaoBacen, setRestricaoBacen] = useState<'Sim' | 'Não' | ''>('');
+  const [possuiImovel, setPossuiImovel] = useState<'Sim' | 'Não' | 'Em nome de terceiros' | ''>('');
+  const [programaDesejado, setProgramaDesejado] = useState<'Minha Casa Minha Vida' | 'SBPE' | 'Indiferente' | ''>('Indiferente');
   const [preferenciasUnidade, setPreferenciasUnidade] = useState<string[]>([]);
-  const [comoSoube, setComoSoube] = useState<'Instagram' | 'Facebook' | 'Google' | 'Indicacao' | 'Corretor' | 'Feira' | 'Outros'>('Instagram');
-  const [incomeType, setIncomeType] = useState<'fixa' | 'variavel'>('fixa');
+  const [comoSoube, setComoSoube] = useState<'Instagram' | 'Facebook' | 'Google' | 'Indicacao' | 'Corretor' | 'Feira' | 'Outros' | ''>('');
+  const [incomeType, setIncomeType] = useState<'fixa' | 'variavel' | ''>('');
   const [fluxoId, setFluxoId] = useState<string>('');
+  const [deliveryTimePreference, setDeliveryTimePreference] = useState<'Pronto' | 'Curto' | 'Médio' | 'Longo' | 'Lançamento' | ''>('');
+  const [objective, setObjective] = useState<'Moradia' | 'Investimento' | ''>('');
+  const [maxCommuteTime, setMaxCommuteTime] = useState<number | ''>('');
+  const [familyProfile, setFamilyProfile] = useState<'Solteiro' | 'Casal' | 'Casal com Filhos' | 'Sênior' | ''>('');
+  const [selectedOSIds, setSelectedOSIds] = useState<string[]>([]);
 
   // Form Section Navigation
-  const [activeFormSection, setActiveFormSection] = useState<'geral' | 'financeiro' | 'preferencias'>('geral');
+  const [activeFormSection, setActiveFormSection] = useState<'geral' | 'financeiro' | 'preferencias' | 'inteligencia'>('geral');
+  const [hasChanges, setHasChanges] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || !hasChanges) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isOpen, hasChanges]);
 
   // Initializing state depending on edit/create mode
   useEffect(() => {
+    setHasChanges(false);
     if (lead) {
       setName(lead.name);
       setEmail(lead.email || '');
@@ -70,9 +103,9 @@ export default function LeadModal({ isOpen, lead, defaultStatus, operationalFlow
       setNotes(lead.notes || '');
       setFamilyIncome(lead.familyIncome || 0);
       
-      setMainProfile(lead.mainProfile || 'Primeiro Imóvel');
-      setRegion(lead.region || 'Sul');
-      setGender(lead.gender || 'Homem');
+      setMainProfile(lead.mainProfile || '');
+      setRegion(lead.region || '');
+      setGender(lead.gender || '');
       setSqmMatters(lead.sqmMatters || 'nao');
       setUnitTypeMatters(lead.unitTypeMatters || 'nao');
       setDeliveryMatters(lead.deliveryMatters || 'nao');
@@ -81,17 +114,24 @@ export default function LeadModal({ isOpen, lead, defaultStatus, operationalFlow
       // Spreadsheet-Aligned hydration
       setCpf(lead.cpf || '');
       setBirthDate(lead.birthDate || '');
-      setMaritalStatus(lead.maritalStatus || 'Solteiro');
+      setMaritalStatus(lead.maritalStatus || '');
       setBairroEspecifico(lead.bairroEspecifico || '');
       setCep(lead.cep || '');
       setFgtsSaldo(lead.fgtsSaldo || 0);
-      setRestricaoBacen(lead.restricaoBacen || 'Não');
-      setPossuiImovel(lead.possuiImovel || 'Não');
+      setRestricaoBacen(lead.restricaoBacen || '');
+      setPossuiImovel(lead.possuiImovel || '');
       setProgramaDesejado(lead.programaDesejado || 'Indiferente');
       setPreferenciasUnidade(lead.preferenciasUnidade || []);
-      setComoSoube(lead.comoSoube || 'Instagram');
-      setIncomeType((lead as any).incomeType || 'fixa');
+      setComoSoube(lead.comoSoube || '');
+      setIncomeType((lead as any).incomeType || '');
       setFluxoId(lead.fluxoId || '');
+      setDeliveryTimePreference(lead.deliveryTimePreference || '');
+      setObjective(lead.objective || '');
+      setMaxCommuteTime(lead.maxCommuteTime !== undefined ? lead.maxCommuteTime : '');
+      setFamilyProfile(lead.familyProfile || '');
+      
+      const linkedOS = (operationalServiceOrders || []).filter(os => os.leadIds.includes(lead.id)).map(os => os.id);
+      setSelectedOSIds(linkedOS);
     } else {
       setName('');
       setEmail('');
@@ -102,10 +142,11 @@ export default function LeadModal({ isOpen, lead, defaultStatus, operationalFlow
       setOrigin('WhatsApp');
       setNotes('');
       setFamilyIncome(0);
+      setSelectedOSIds([]);
 
-      setMainProfile('Primeiro Imóvel');
-      setRegion('Sul');
-      setGender('Homem');
+      setMainProfile('');
+      setRegion('');
+      setGender('');
       setSqmMatters('nao');
       setUnitTypeMatters('nao');
       setDeliveryMatters('nao');
@@ -114,19 +155,33 @@ export default function LeadModal({ isOpen, lead, defaultStatus, operationalFlow
       // Form reset values
       setCpf('');
       setBirthDate('');
-      setMaritalStatus('Solteiro');
+      setMaritalStatus('');
       setBairroEspecifico('');
       setCep('');
       setFgtsSaldo(0);
-      setRestricaoBacen('Não');
-      setPossuiImovel('Não');
+      setRestricaoBacen('');
+      setPossuiImovel('');
       setProgramaDesejado('Indiferente');
       setPreferenciasUnidade([]);
-      setComoSoube('Instagram');
-      setIncomeType('fixa');
+      setComoSoube('');
+      setIncomeType('');
       setFluxoId('');
+      setDeliveryTimePreference('');
+      setObjective('');
+      setMaxCommuteTime('');
+      setFamilyProfile('');
     }
   }, [lead, defaultStatus, isOpen]);
+
+  const formatCurrency = (value: number) => {
+    if (!value) return '';
+    return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  const parseCurrency = (value: string) => {
+    const num = value.replace(/\D/g, '');
+    return num ? Number(num) / 100 : 0;
+  };
 
   // Real-time compound Lead Scoring based on user-provided spreadsheet logic
   const calculatedScore = React.useMemo(() => {
@@ -143,6 +198,10 @@ export default function LeadModal({ isOpen, lead, defaultStatus, operationalFlow
     if (cpf && cpf.length >= 11) sc += 10; // Documents provided
     return Math.min(100, sc);
   }, [fgtsSaldo, familyIncome, restricaoBacen, possuiImovel, region, cpf]);
+
+  const probableProgram = React.useMemo(() => {
+    return familyIncome <= 8000 ? 'Minha Casa Minha Vida' : 'SBPE';
+  }, [familyIncome]);
 
   const togglePreference = (pref: string) => {
     if (preferenciasUnidade.includes(pref)) {
@@ -161,15 +220,47 @@ export default function LeadModal({ isOpen, lead, defaultStatus, operationalFlow
       alert("A Seleção de um Fluxo Operacional é obrigatória para salvar o cadastro do perfil.");
       return;
     }
+    
+    setHasChanges(false);
 
-    // Direct deduction of probable program in accordance with spreadsheet rules
-    let probableProgram: 'Minha Casa Minha Vida' | 'SBPE' = 'SBPE';
-    if (familyIncome <= 8000) {
-      probableProgram = 'Minha Casa Minha Vida';
+    const leadId = lead ? lead.id : `lead-${Date.now()}`;
+
+    // Update active OS connections
+    if (setOperationalServiceOrders) {
+      setOperationalServiceOrders(prev => prev.map(os => {
+        const isInSelected = selectedOSIds.includes(os.id);
+        const hasLead = os.leadIds.includes(leadId);
+        
+        if (isInSelected && !hasLead) {
+          const updatedLeads = [...os.leadIds, leadId];
+          return {
+            ...os,
+            leadIds: updatedLeads,
+            metrics: {
+              ...os.metrics,
+              totalLeads: updatedLeads.length,
+              activeLeads: updatedLeads.length
+            }
+          };
+        } else if (!isInSelected && hasLead) {
+          const updatedLeads = os.leadIds.filter(id => id !== leadId);
+          return {
+            ...os,
+            leadIds: updatedLeads,
+            metrics: {
+              ...os.metrics,
+              totalLeads: updatedLeads.length,
+              activeLeads: updatedLeads.length
+            }
+          };
+        }
+        return os;
+      }));
     }
 
-    const savedLead: Lead = {
-      id: lead ? lead.id : `lead-${Date.now()}`,
+      // Direct deduction of probable program in accordance with spreadsheet rules
+      const savedLead: Lead = {
+      id: leadId,
       name,
       email: email || '',
       phone,
@@ -205,7 +296,11 @@ export default function LeadModal({ isOpen, lead, defaultStatus, operationalFlow
       comoSoube,
       score: calculatedScore,
       fluxoId,
-      incomeType
+      incomeType,
+      deliveryTimePreference,
+      objective,
+      maxCommuteTime,
+      familyProfile
     } as any;
 
     onSave(savedLead);
@@ -303,14 +398,111 @@ export default function LeadModal({ isOpen, lead, defaultStatus, operationalFlow
                 : 'bg-white text-zinc-600 border-zinc-300 hover:bg-zinc-50'
             }`}
           >
-            🏡 Imóvel & Preferências
+            🏡 Imóvel
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveFormSection('inteligencia')}
+            className={`flex-1 px-3 py-2 text-[10.5px] font-black uppercase text-center rounded-xl border-2 transition ${
+              activeFormSection === 'inteligencia'
+                ? 'bg-zinc-900 text-white border-zinc-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'
+                : 'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50'
+            }`}
+          >
+            🧠 Inteligência
           </button>
         </div>
 
         {/* Input Form Fields */}
-        <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto flex-1 text-zinc-800 bg-white">
+        <form onSubmit={handleSubmit} onChange={() => setHasChanges(true)} className="p-5 space-y-4 overflow-y-auto flex-1 text-zinc-800 bg-white">
           
-          {/* TAB 1: DADOS GERAIS */}
+          {/* TAB 4: INTELIGÊNCIA DE CONVERSÃO */}
+          {activeFormSection === 'inteligencia' && (
+            <div className="space-y-6 animate-fadeIn pb-6">
+              <div className="bg-indigo-50 border-2 border-indigo-100 p-4 rounded-2xl">
+                <div className="flex items-center gap-2 text-indigo-900 mb-2">
+                  <BrainCircuit className="w-5 h-5" />
+                  <h4 className="font-black text-xs uppercase tracking-tight">Copiloto cicloCRED: Melhor Próxima Ação</h4>
+                </div>
+                <p className="text-[10px] text-indigo-700 leading-relaxed font-bold">
+                  Com base no score de <span className="text-indigo-900">{calculatedScore} pontos</span> e no programa <span className="text-indigo-900">{probableProgram === 'Minha Casa Minha Vida' ? 'MCMV' : 'SBPE'}</span>, o assistente recomenda:
+                </p>
+                <div className="mt-4 grid grid-cols-1 gap-2">
+                  {familyIncome > 0 && restricaoBacen === 'Não' ? (
+                    <div className="bg-white border-2 border-indigo-950 p-3 rounded-xl flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <TrendingUp className="w-4 h-4 text-emerald-500" />
+                        <div>
+                          <p className="text-[10px] font-black uppercase text-zinc-900">Aprovação de Crédito Imediata</p>
+                          <p className="text-[9px] text-zinc-500 font-bold">Lead com renda compatível e sem restrições.</p>
+                        </div>
+                      </div>
+                      <Sparkles className="w-4 h-4 text-amber-500" />
+                    </div>
+                  ) : (
+                    <div className="bg-white border-2 border-zinc-200 p-3 rounded-xl opacity-60">
+                      <p className="text-[9px] font-black uppercase text-zinc-400">Ação de Qualificação Necessária</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-500 flex items-center gap-2">
+                    <Building2 className="w-4 h-4" /> Compatibilidade com Estoque
+                  </h4>
+                  <span className="text-[9px] font-mono font-black text-zinc-400">{properties.length} IMÓVEIS DISPONÍVEIS</span>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3">
+                  {properties.length > 0 ? (
+                    properties
+                      .filter(p => {
+                        const leadBudget = familyIncome * 40; // Rough estimate
+                        return p.price <= leadBudget || familyIncome === 0;
+                      })
+                      .slice(0, 3)
+                      .map(prop => (
+                        <div key={prop.id} className="group cursor-pointer border-2 border-zinc-950 rounded-2xl overflow-hidden hover:scale-[1.02] transition-transform">
+                          <div className="flex bg-white">
+                            <div className="w-24 h-24 bg-zinc-100 shrink-0 border-r-2 border-zinc-950 relative">
+                              {prop.imageUrl ? (
+                                <img src={prop.imageUrl} alt={prop.title} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-zinc-300">
+                                  <Building2 className="w-8 h-8" />
+                                </div>
+                              )}
+                              <div className="absolute top-1 left-1 bg-zinc-950 text-white text-[7px] font-black px-1.5 py-0.5 rounded uppercase">
+                                {prop.type}
+                              </div>
+                            </div>
+                            <div className="flex-1 p-3 flex flex-col justify-between">
+                              <div>
+                                <h5 className="text-[11px] font-black uppercase text-zinc-900 leading-tight truncate">{prop.title}</h5>
+                                <p className="text-[9px] text-zinc-500 font-bold truncate">{prop.location}</p>
+                              </div>
+                              <div className="flex items-center justify-between mt-2">
+                                <span className="text-[10px] font-mono font-black text-emerald-600">R$ {prop.price.toLocaleString('pt-BR')}</span>
+                                <div className="flex items-center gap-1 text-indigo-600">
+                                  <span className="text-[8px] font-black uppercase">Ver Ficha</span>
+                                  <ChevronRight className="w-3 h-3" />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                  ) : (
+                    <div className="bg-zinc-50 border-2 border-dashed border-zinc-200 p-8 rounded-2xl text-center">
+                      <p className="text-[10px] font-bold text-zinc-400">Nenhum imóvel compatível encontrado no momento.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
           {activeFormSection === 'geral' && (
             <div className="space-y-4 animate-fadeIn">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -389,6 +581,7 @@ export default function LeadModal({ isOpen, lead, defaultStatus, operationalFlow
                     onChange={(e) => setMaritalStatus(e.target.value as any)}
                     className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-2.5 text-xs text-zinc-950 font-bold focus:bg-white outline-none"
                   >
+                    <option value="">Não informado</option>
                     <option value="Solteiro">Solteiro(a)</option>
                     <option value="Casado">Casado(a)</option>
                     <option value="Uniao estavel">União Estável</option>
@@ -406,6 +599,7 @@ export default function LeadModal({ isOpen, lead, defaultStatus, operationalFlow
                     onChange={(e) => setGender(e.target.value as any)}
                     className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-2.5 text-xs text-zinc-950 font-bold focus:bg-white outline-none"
                   >
+                    <option value="">Não informado</option>
                     <option value="Homem">Homem</option>
                     <option value="Mulher">Mulher</option>
                     <option value="Outro">Outro</option>
@@ -446,7 +640,7 @@ export default function LeadModal({ isOpen, lead, defaultStatus, operationalFlow
                   <label htmlFor="lead-form-fluxo" className="block text-[10px] font-mono font-black text-zinc-700 uppercase pt-2">Fluxo Operacional (Obrigatório)*</label>
                   <div className="flex gap-2">
                     <select
-                      id="lead-form-fluxo"
+                       id="lead-form-fluxo"
                       value={fluxoId}
                       onChange={(e) => {
                         if (e.target.value === 'novo' && setOperationalFlows) {
@@ -468,6 +662,87 @@ export default function LeadModal({ isOpen, lead, defaultStatus, operationalFlow
                       ))}
                       <option value="novo" className="bg-indigo-100 text-indigo-800 font-bold">+ Criar Novo Fluxo</option>
                     </select>
+                  </div>
+                </div>
+
+                {/* Ordens de Serviço (OS) - Conectores */}
+                <div className="space-y-2 col-span-1 sm:col-span-2 bg-zinc-50 border-2 border-zinc-950 p-4 rounded-xl mt-2">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="block text-[10px] font-mono font-black text-zinc-700 uppercase">
+                        💼 Vincular Ordens de Serviço (OS)
+                      </span>
+                      <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider block">
+                        Opcional: Associe este lead a ordens de serviço ativas ou crie uma nova OS.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const title = prompt("Digite o nome da nova Ordem de Serviço:");
+                        if (!title) return;
+                        const priority = prompt("Defina a prioridade (baixa, media, alta, urgente):", "media") as any;
+                        const newOS: OperationalOS = {
+                          id: `os-${Date.now()}`,
+                          title,
+                          date: new Date().toISOString(),
+                          fluxoId: fluxoId || 'flow-1',
+                          leadIds: [],
+                          type: 'personalizado',
+                          status: 'pendente',
+                          priority: ['baixa', 'media', 'alta', 'urgente'].includes(priority) ? priority : 'media',
+                          metrics: {
+                            health: 100,
+                            totalLeads: 0,
+                            activeLeads: 0,
+                            conversionCount: 0
+                          }
+                        };
+                        if (setOperationalServiceOrders) {
+                          setOperationalServiceOrders(prev => [newOS, ...prev]);
+                          setSelectedOSIds(prev => [...prev, newOS.id]);
+                        }
+                      }}
+                      className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-white border-2 border-zinc-950 rounded-lg text-[9px] font-black uppercase transition cursor-pointer"
+                    >
+                      + Criar OS
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 pt-2 max-h-32 overflow-y-auto">
+                    {(operationalServiceOrders || []).length === 0 ? (
+                      <span className="text-[10px] text-zinc-400 italic">
+                        Nenhuma Ordem de Serviço cadastrada. Crie uma nova acima!
+                      </span>
+                    ) : (
+                      (operationalServiceOrders || []).map(os => {
+                        const isChecked = selectedOSIds.includes(os.id);
+                        return (
+                          <label
+                            key={os.id}
+                            className={`flex items-center gap-1.5 px-2.5 py-1.5 border-2 rounded-lg text-[11px] font-bold cursor-pointer select-none transition ${
+                              isChecked 
+                                ? 'bg-indigo-50 border-zinc-950 text-indigo-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]' 
+                                : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedOSIds(prev => [...prev, os.id]);
+                                } else {
+                                  setSelectedOSIds(prev => prev.filter(id => id !== os.id));
+                                }
+                              }}
+                              className="rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                            />
+                            <span>{os.title}</span>
+                          </label>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
 
@@ -509,12 +784,12 @@ export default function LeadModal({ isOpen, lead, defaultStatus, operationalFlow
                   <div className="space-y-1">
                     <label htmlFor="lead-form-family-income" className="block text-[10px] font-mono font-black text-zinc-700 uppercase">Renda Familiar Bruta/Conjunta (R$)</label>
                     <input
-                      type="number"
+                      type="text"
                       id="lead-form-family-income"
                       required
-                      placeholder="Ex: 5000"
-                      value={familyIncome || ''}
-                      onChange={(e) => setFamilyIncome(Number(e.target.value) || 0)}
+                      placeholder="Ex: 5.000,00"
+                      value={formatCurrency(familyIncome)}
+                      onChange={(e) => setFamilyIncome(parseCurrency(e.target.value))}
                       className="w-full bg-white border-2 border-zinc-950 rounded-xl p-2.5 text-xs font-mono text-zinc-950 font-black outline-none"
                     />
                   </div>
@@ -523,11 +798,11 @@ export default function LeadModal({ isOpen, lead, defaultStatus, operationalFlow
                   <div className="space-y-1">
                     <label htmlFor="lead-form-fgts" className="block text-[10px] font-mono font-black text-zinc-700 uppercase">Saldo de FGTS Declarado (R$)</label>
                     <input
-                      type="number"
+                      type="text"
                       id="lead-form-fgts"
-                      placeholder="Ex: 15000"
-                      value={fgtsSaldo || ''}
-                      onChange={(e) => setFgtsSaldo(Number(e.target.value) || 0)}
+                      placeholder="Ex: 15.000,00"
+                      value={formatCurrency(fgtsSaldo)}
+                      onChange={(e) => setFgtsSaldo(parseCurrency(e.target.value))}
                       className="w-full bg-white border-2 border-zinc-950 rounded-xl p-2.5 text-xs font-mono text-zinc-950 font-black outline-none"
                     />
                   </div>
@@ -562,6 +837,7 @@ export default function LeadModal({ isOpen, lead, defaultStatus, operationalFlow
                     onChange={(e) => setIncomeType(e.target.value as any)}
                     className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-2.5 text-xs text-zinc-950 font-bold focus:bg-white outline-none"
                   >
+                    <option value="">Não informado</option>
                     <option value="fixa">Holerite / Renda Fixa CLT</option>
                     <option value="variavel">Pró-labore / Extrato Bancário / Renda Variável</option>
                   </select>
@@ -576,6 +852,7 @@ export default function LeadModal({ isOpen, lead, defaultStatus, operationalFlow
                     onChange={(e) => setRestricaoBacen(e.target.value as any)}
                     className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-2.5 text-xs text-zinc-950 font-bold focus:bg-white outline-none"
                   >
+                    <option value="">Não informado</option>
                     <option value="Não">Não possui nenhuma restrição</option>
                     <option value="Sim">Sim, possui restrição activa</option>
                   </select>
@@ -590,6 +867,7 @@ export default function LeadModal({ isOpen, lead, defaultStatus, operationalFlow
                     onChange={(e) => setPossuiImovel(e.target.value as any)}
                     className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-2.5 text-xs text-zinc-950 font-bold focus:bg-white outline-none"
                   >
+                    <option value="">Não informado</option>
                     <option value="Não">Não possuo imóveis ativos</option>
                     <option value="Sim">Sim, possuo imóvel próprio</option>
                     <option value="Em nome de terceiros">Em nome de terceiros / herança</option>
@@ -627,6 +905,7 @@ export default function LeadModal({ isOpen, lead, defaultStatus, operationalFlow
                     onChange={(e) => setRegion(e.target.value)}
                     className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-2.5 text-xs text-zinc-950 font-bold focus:bg-white outline-none"
                   >
+                    <option value="">Não informado</option>
                     <option value="Sul">Zona Sul</option>
                     <option value="Norte">Zona Norte</option>
                     <option value="Leste">Zona Leste</option>
@@ -670,11 +949,10 @@ export default function LeadModal({ isOpen, lead, defaultStatus, operationalFlow
                     onChange={(e) => setMainProfile(e.target.value as any)}
                     className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-2.5 text-xs text-zinc-950 font-bold focus:bg-white outline-none"
                   >
-                    <option value="Primeiro Imóvel">Primeiro Imóvel (Uso Próprio)</option>
-                    <option value="Investidor">Investidor (Renda de Locação/Short Stay)</option>
-                    <option value="Jovem">Jovem Solteiro (Mobilidade & Metrô)</option>
-                    <option value="Meia idade">Meia Idade (Espaço Familiar & Lazer)</option>
-                    <option value="Idoso">Melhor Idade (Tranquilidade & Térreo)</option>
+                    <option value="">Não Informado</option>
+                    {getKanbanColumns("perfil").map(c => (
+                      <option key={c.id} value={c.id}>{c.label}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -704,6 +982,68 @@ export default function LeadModal({ isOpen, lead, defaultStatus, operationalFlow
                     <option value="Minha Casa Minha Vida">Minha Casa Minha Vida (MCMV)</option>
                     <option value="SBPE">SBPE (Financiamento Livre por Banco)</option>
                   </select>
+                </div>
+
+                {/* Prazo de Entrega */}
+                <div className="space-y-1">
+                  <label htmlFor="lead-form-delivery-pref" className="block text-[10px] font-mono font-black text-zinc-700 uppercase">Prazo de Entrega Desejado</label>
+                  <select
+                    id="lead-form-delivery-pref"
+                    value={deliveryTimePreference}
+                    onChange={(e) => setDeliveryTimePreference(e.target.value as any)}
+                    className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-2.5 text-xs text-zinc-950 font-bold focus:bg-white outline-none"
+                  >
+                    <option value="">Não informado</option>
+                    <option value="Pronto">Pronto para Morar</option>
+                    <option value="Curto">Curto Prazo (Até 12 meses)</option>
+                    <option value="Médio">Médio Prazo (12 a 24 meses)</option>
+                    <option value="Longo">Longo Prazo (Acima de 24 meses)</option>
+                    <option value="Lançamento">Lançamento / Pré-venda</option>
+                  </select>
+                </div>
+
+                {/* Objetivo */}
+                <div className="space-y-1">
+                  <label htmlFor="lead-form-objective" className="block text-[10px] font-mono font-black text-zinc-700 uppercase">Objetivo do Imóvel</label>
+                  <select
+                    id="lead-form-objective"
+                    value={objective}
+                    onChange={(e) => setObjective(e.target.value as any)}
+                    className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-2.5 text-xs text-zinc-950 font-bold focus:bg-white outline-none"
+                  >
+                    <option value="">Não informado</option>
+                    <option value="Moradia">Uso Próprio (Moradia)</option>
+                    <option value="Investimento">Investimento (Renda/Revenda)</option>
+                  </select>
+                </div>
+
+                {/* Perfil Familiar */}
+                <div className="space-y-1">
+                  <label htmlFor="lead-form-family-profile" className="block text-[10px] font-mono font-black text-zinc-700 uppercase">Perfil Familiar</label>
+                  <select
+                    id="lead-form-family-profile"
+                    value={familyProfile}
+                    onChange={(e) => setFamilyProfile(e.target.value as any)}
+                    className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-2.5 text-xs text-zinc-950 font-bold focus:bg-white outline-none"
+                  >
+                    <option value="">Não informado</option>
+                    <option value="Solteiro">Solteiro(a)</option>
+                    <option value="Casal">Casal sem Filhos</option>
+                    <option value="Casal com Filhos">Família com Filhos</option>
+                    <option value="Sênior">Sênior / Acessibilidade</option>
+                  </select>
+                </div>
+
+                {/* Tempo de Deslocamento */}
+                <div className="space-y-1">
+                  <label htmlFor="lead-form-commute" className="block text-[10px] font-mono font-black text-zinc-700 uppercase">Tempo Máx. Deslocamento (min)</label>
+                  <input
+                    type="number"
+                    id="lead-form-commute"
+                    value={maxCommuteTime}
+                    onChange={(e) => setMaxCommuteTime(Number(e.target.value))}
+                    className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-2.5 text-xs text-zinc-950 font-bold focus:bg-white outline-none"
+                  />
                 </div>
               </div>
 

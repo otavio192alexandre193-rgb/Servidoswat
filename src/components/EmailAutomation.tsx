@@ -31,6 +31,8 @@ import {
   RotateCcw,
   ListOrdered,
   History,
+  Zap,
+  Pause,
 } from "lucide-react";
 import {
   triggerSensoryFeedback,
@@ -58,7 +60,7 @@ interface EmailAutomationProps {
   onlyTable?: boolean;
 }
 
-export default function EmailAutomation({
+export default React.memo(function EmailAutomation({
   leads,
   globalFilteredLeads,
   globalSearchTerm,
@@ -506,6 +508,25 @@ export default function EmailAutomation({
     setCurrentQueueIndex(startIndex);
   };
 
+  const handleSkipDispatch = () => {
+    if (currentQueueIndex === -1 || currentQueueIndex >= queue.length) return;
+
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+    setCountdown(0);
+
+    setQueue((prev) =>
+      prev.map((q, idx) =>
+        idx === currentQueueIndex ? { ...q, status: "done" } : q,
+      ),
+    );
+
+    triggerSensoryFeedback("warning", accSettings);
+    setCurrentQueueIndex((prev) => prev + 1);
+  };
+
   const handleAssistedDispatch = () => {
     if (currentQueueIndex === -1 || currentQueueIndex >= queue.length) return;
     const item = queue[currentQueueIndex];
@@ -531,7 +552,13 @@ Gostaria de te enviar algumas fotos sem compromisso?`;
     const resolvedSubject = resolvePlaceholders(scriptSubject, item.lead);
     const resolvedBody = resolvePlaceholders(scriptBody, item.lead);
 
-    // 1. Fire window.open (this is a direct click gesture, popups will never be blocked!)
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+    setCountdown(0);
+
+    // 1. Fire local app custom protocol
     executeSingleDispatchEvent(
       item.lead,
       resolvedSubject,
@@ -539,7 +566,21 @@ Gostaria de te enviar algumas fotos sem compromisso?`;
       queueChannel,
     );
 
-    // 2. Write CRM audit log
+    // 2. Also register in backend so it updates real-time chat history
+    if (queueChannel === "whatsapp") {
+      fetch("/api/server/send-custom-whatsapp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: item.lead.phone,
+          sender: item.lead.name,
+          message: resolvedBody,
+          responseType: selectedQueueTemplateId === "gemini_auto" ? "ai" : "human",
+        }),
+      }).catch((err) => console.warn("Erro ao registrar disparo no backend:", err));
+    }
+
+    // 3. Write CRM audit log
     const auditRecord: EmailLog = {
       id: `log-queue-${Date.now()}-${currentQueueIndex}`,
       leadId: item.lead.id,
@@ -556,17 +597,17 @@ Gostaria de te enviar algumas fotos sem compromisso?`;
     };
     onSendEmailSimulated(auditRecord);
 
-    // 3. Mark item as done
+    // 4. Mark item as done
     setQueue((prev) =>
       prev.map((q, idx) =>
         idx === currentQueueIndex ? { ...q, status: "done" } : q,
       ),
     );
 
-    // 4. Play success feedback
+    // 5. Play success feedback
     triggerSensoryFeedback("chime", accSettings);
 
-    // 5. Move to next item in the queue
+    // 6. Move to next item in the queue
     setCurrentQueueIndex((prev) => prev + 1);
   };
 
@@ -577,103 +618,134 @@ Gostaria de te enviar algumas fotos sem compromisso?`;
         setIsQueueRunning(false);
         setCurrentQueueIndex(-1);
         triggerSensoryFeedback("success", accSettings);
+        if (addNotification) {
+          addNotification(
+            "Transmissão Concluída",
+            "Todos os disparos da fila foram processados!",
+            "success"
+          );
+        }
       }
       return;
     }
 
     const item = queue[currentQueueIndex];
 
-    if (item.status !== "idle") {
-      return; // Already being processed or done
-    }
+    // Initialize item if still in idle state
+    if (item.status === "idle") {
+      if (dispatchMode === "manual") {
+        setQueue((prev) =>
+          prev.map((q, idx) =>
+            idx === currentQueueIndex ? { ...q, status: "sending" } : q,
+          ),
+        );
+        return;
+      }
 
-    setQueue((prev) =>
-      prev.map((q, idx) =>
-        idx === currentQueueIndex ? { ...q, status: "sending" } : q,
-      ),
-    );
+      // In semi-auto and auto modes, we put the lead in "waiting" and run a countdown
+      setQueue((prev) =>
+        prev.map((q, idx) =>
+          idx === currentQueueIndex ? { ...q, status: "waiting" } : q,
+        ),
+      );
 
-    if (dispatchMode === "manual") {
-      // In manual mode, we PAUSE here and wait for the manual click to avoid popup blocker!
-      // No automatic timers or window opens.
-      return;
-    }
+      const isBlockEnd = (currentQueueIndex + 1) % leadsPerBlock === 0;
+      const waitTimeSeconds = isBlockEnd && currentQueueIndex < queue.length - 1 ? timerBetweenBlocks : timerBetweenLeads;
+      setCountdown(waitTimeSeconds);
 
-    // Fire immediately for Auto and Semi-Auto
-    const selectedTmpl = templates.find((t) => t.id === selectedQueueTemplateId);
-    let scriptSubject = selectedTmpl ? selectedTmpl.subject : "Apresentação de Cury";
-    let scriptBody = selectedTmpl ? selectedTmpl.body : "Olá {{nome}}";
-
-    if (selectedQueueTemplateId === "gemini_auto") {
-      scriptSubject = "Apresentação Personalizada Cury";
-      scriptBody = `Olá {{nome}}, tudo bem?\n\nVi que o seu perfil {{perfil}} tem muito a ver com algumas oportunidades de imóveis que foram recém liberadas.\nSabendo que sua renda gira em torno de R$ {{renda}}, conseguimos aprovações muito facilitadas com condições exclusivas, principalmente se estivermos focando na região de {{regiao}}.\n\nGostaria de te enviar algumas fotos sem compromisso?`;
-    }
-
-    const resolvedSubject = resolvePlaceholders(scriptSubject, item.lead);
-    const resolvedBody = resolvePlaceholders(scriptBody, item.lead);
-
-    const success = executeSingleDispatchEvent(item.lead, resolvedSubject, resolvedBody, queueChannel);
-    setIsPopupBlocked(!success && queueChannel === "whatsapp");
-
-    const auditRecord: EmailLog = {
-      id: `log-queue-${Date.now()}-${currentQueueIndex}`,
-      leadId: item.lead.id,
-      leadName: item.lead.name,
-      templateName: selectedQueueTemplateId === "gemini_auto" ? "Auto-Gerado via Gemini" : (selectedTmpl ? selectedTmpl.name : "Modelo de Lote") + ` (${queueChannel.toUpperCase()} - Fila)`,
-      subject: resolvedSubject,
-      body: resolvedBody,
-      sentAt: new Date().toISOString().replace("T", " ").slice(0, 16),
-      status: "enviado",
-    };
-    onSendEmailSimulated(auditRecord);
-
-    setQueue((prev) => prev.map((q, idx) => idx === currentQueueIndex ? { ...q, status: "waiting" } : q));
-
-    // Calculate wait time
-    // If it's a block end (ie (index + 1) % leadsPerBlock == 0), wait 'timerBetweenBlocks'. Otherwise 'timerBetweenLeads'
-    const isBlockEnd = (currentQueueIndex + 1) % leadsPerBlock === 0;
-    const waitTimeSeconds = isBlockEnd && currentQueueIndex < queue.length - 1 ? timerBetweenBlocks : timerBetweenLeads;
-    
-    setCountdown(waitTimeSeconds);
-
-    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-
-    countdownIntervalRef.current = setInterval(() => {
-       if (dispatchMode === "semi-auto" && !document.hasFocus()) {
-           // Pause countdown when not focused in semi-auto mode
-           return; 
-       }
-       setCountdown((prev) => {
-         if (prev <= 1) {
-           if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-           
-           // Complete item and go next
-           setQueue((qPrev) =>
-             qPrev.map((q, idx) => idx === currentQueueIndex ? { ...q, status: "done" } : q)
-           );
-           
-           // Slight delay to decouple state updates
-           setTimeout(() => {
-               setCurrentQueueIndex((idx) => idx + 1);
-           }, 0);
-           
-           return 0;
-         }
-         return prev - 1;
-       });
-    }, 1000);
-
-    return () => {
       if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-    };
+
+      countdownIntervalRef.current = setInterval(() => {
+        if (dispatchMode === "semi-auto" && !document.hasFocus()) {
+          return; // Pause countdown in semi-auto if operator unfocuses tab
+        }
+
+        setCountdown((prevCount) => {
+          if (prevCount <= 1) {
+            if (countdownIntervalRef.current) {
+              clearInterval(countdownIntervalRef.current);
+              countdownIntervalRef.current = null;
+            }
+
+            if (dispatchMode === "semi-auto") {
+              // Semi-auto timer finished: Transit to ready (sending) status and wait for user Enter/click
+              setQueue((qPrev) =>
+                qPrev.map((q, idx) =>
+                  idx === currentQueueIndex ? { ...q, status: "sending" } : q,
+                ),
+              );
+              triggerSensoryFeedback("chime", accSettings);
+            } else if (dispatchMode === "auto") {
+              // Auto mode: Automatically open and advance
+              const selectedTmpl = templates.find((t) => t.id === selectedQueueTemplateId);
+              let scriptSubject = selectedTmpl ? selectedTmpl.subject : "Apresentação de Cury";
+              let scriptBody = selectedTmpl ? selectedTmpl.body : "Olá {{nome}}";
+
+              if (selectedQueueTemplateId === "gemini_auto") {
+                scriptSubject = "Apresentação Personalizada Cury";
+                scriptBody = `Olá {{nome}}, tudo bem?\n\nVi que o seu perfil {{perfil}} tem muito a ver com algumas oportunidades de imóveis que foram recém liberadas.\nSabendo que sua renda gira em torno de R$ {{renda}}, conseguimos aprovações muito facilitadas com condições exclusivas, principalmente se estivermos focando na região de {{regiao}}.\n\nGostaria de te enviar algumas fotos sem compromisso?`;
+              }
+
+              const resolvedSubject = resolvePlaceholders(scriptSubject, item.lead);
+              const resolvedBody = resolvePlaceholders(scriptBody, item.lead);
+
+              const success = executeSingleDispatchEvent(item.lead, resolvedSubject, resolvedBody, queueChannel);
+              setIsPopupBlocked(!success && queueChannel === "whatsapp");
+
+              // Sync outbound chat in db
+              if (queueChannel === "whatsapp") {
+                fetch("/api/server/send-custom-whatsapp", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    phone: item.lead.phone,
+                    sender: item.lead.name,
+                    message: resolvedBody,
+                    responseType: selectedQueueTemplateId === "gemini_auto" ? "ai" : "human",
+                  }),
+                }).catch((err) => console.warn("Erro ao registrar disparo automático no backend:", err));
+              }
+
+              // Save audit log
+              const auditRecord: EmailLog = {
+                id: `log-queue-${Date.now()}-${currentQueueIndex}`,
+                leadId: item.lead.id,
+                leadName: item.lead.name,
+                templateName: selectedQueueTemplateId === "gemini_auto" ? "Auto-Gerado via Gemini" : (selectedTmpl ? selectedTmpl.name : "Modelo de Lote") + ` (${queueChannel.toUpperCase()} - Fila Automática)`,
+                subject: resolvedSubject,
+                body: resolvedBody,
+                sentAt: new Date().toISOString().replace("T", " ").slice(0, 16),
+                status: "enviado",
+              };
+              onSendEmailSimulated(auditRecord);
+
+              setQueue((qPrev) =>
+                qPrev.map((q, idx) =>
+                  idx === currentQueueIndex ? { ...q, status: "done" } : q,
+                ),
+              );
+
+              setTimeout(() => {
+                setCurrentQueueIndex((idx) => idx + 1);
+              }, 100);
+            }
+
+            return 0;
+          }
+          return prevCount - 1;
+        });
+      }, 1000);
+    }
   }, [
     isQueueRunning,
     currentQueueIndex,
-    selectedQueueTemplateId,
+    queue,
     dispatchMode,
     leadsPerBlock,
     timerBetweenBlocks,
-    timerBetweenLeads
+    timerBetweenLeads,
+    selectedQueueTemplateId,
+    queueChannel,
   ]);
 
   // Clean-up refs on destroy
@@ -701,11 +773,18 @@ Gostaria de te enviar algumas fotos sem compromisso?`;
 
       if (
         isQueueRunning &&
-        dispatchMode === "manual" &&
         currentQueueIndex !== -1 &&
         currentQueueIndex < queue.length
       ) {
-        if (e.key === "Enter") {
+        const currentItem = queue[currentQueueIndex];
+        // Allow early trigger in semi-auto (during countdown 'waiting' state) or on-demand manual trigger ('sending' state)
+        const isTriggerable = 
+          dispatchMode === "manual" || 
+          dispatchMode === "semi-auto" ||
+          currentItem.status === "sending" ||
+          currentItem.status === "waiting";
+
+        if (isTriggerable && e.key === "Enter") {
           e.preventDefault();
           handleAssistedDispatch();
         }
@@ -743,6 +822,110 @@ Gostaria de te enviar algumas fotos sem compromisso?`;
     theme === "claro"
       ? "bg-zinc-100 border border-zinc-250 text-zinc-800"
       : "bg-zinc-950 border border-zinc-800 text-zinc-300";
+  const activeQueueItem = currentQueueIndex !== -1 && currentQueueIndex < queue.length ? queue[currentQueueIndex] : null;
+
+  const renderActiveConsole = () => {
+    if (!isQueueRunning || !activeQueueItem) return null;
+
+    const leadName = activeQueueItem.lead.name;
+    const leadPhone = activeQueueItem.lead.phone;
+    const status = activeQueueItem.status;
+
+    const consoleBg = theme === "claro" 
+      ? "bg-white border-4 border-zinc-950 text-zinc-950 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)]"
+      : theme === "escuro"
+        ? "bg-zinc-900 border-4 border-zinc-950 text-zinc-100 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+        : "bg-indigo-950/90 border-4 border-indigo-500 text-indigo-100 shadow-[0_0_20px_rgba(99,102,241,0.2)]";
+
+    const isTriggerable = 
+      dispatchMode === "manual" || 
+      status === "sending" || 
+      (dispatchMode === "semi-auto" && countdown === 0);
+
+    return (
+      <div className={`${consoleBg} p-5 rounded-2xl mb-6 transition-all animate-fadeIn`}>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start md:items-center gap-3.5">
+            <div className="h-11 w-11 rounded-full bg-indigo-950 border-2 border-indigo-500 flex items-center justify-center font-black text-indigo-400 font-mono text-xs shadow-inner shrink-0">
+              {currentQueueIndex + 1}/{queue.length}
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-black uppercase tracking-tight">{leadName}</span>
+                <span className="text-[10px] bg-zinc-950/80 border border-zinc-800 text-zinc-400 px-2 py-0.5 rounded font-mono font-bold">{leadPhone}</span>
+                {queueChannel === "whatsapp" ? (
+                  <span className="text-[9px] bg-emerald-950/60 border border-emerald-900 text-emerald-400 px-1.5 py-0.5 rounded font-mono font-extrabold uppercase">WA</span>
+                ) : (
+                  <span className="text-[9px] bg-sky-950/60 border border-sky-900 text-sky-400 px-1.5 py-0.5 rounded font-mono font-extrabold uppercase">Email</span>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5">
+                <span className="text-[10px] uppercase font-mono tracking-wider text-zinc-400">Modo:</span>
+                <span className="text-[10px] uppercase font-mono font-black text-indigo-400">
+                  {dispatchMode === 'auto' ? 'Automático' : dispatchMode === 'semi-auto' ? 'Semi-Auto' : 'Manual'}
+                </span>
+                <span className="text-zinc-650 font-mono text-[10px]">•</span>
+                <span className="text-[10px] uppercase font-mono tracking-wider text-zinc-400">Status:</span>
+                <span className={`text-[10px] uppercase font-mono font-black ${
+                  status === 'sending' ? 'text-indigo-400 animate-pulse' : status === 'waiting' ? 'text-amber-400' : 'text-emerald-400'
+                }`}>
+                  {status === 'sending' ? 'Pronto para Enviar' : status === 'waiting' ? `Contagem (${countdown}s)` : status === 'done' ? 'Sucesso' : status}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {isTriggerable ? (
+              <button
+                onClick={handleAssistedDispatch}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] text-white text-[10px] font-black uppercase tracking-wider rounded-xl flex items-center gap-1.5 transition active:translate-y-0.5 cursor-pointer"
+              >
+                <Zap className="w-3.5 h-3.5 fill-amber-300 stroke-amber-500 animate-pulse" />
+                <span>Disparar Agora (ENTER)</span>
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 bg-zinc-950/40 p-1 px-2.5 rounded-lg border border-zinc-850">
+                <span className="text-[10px] font-mono text-amber-400 font-bold animate-pulse">Próximo em {countdown}s</span>
+                <button
+                  onClick={handleAssistedDispatch}
+                  className="px-2.5 py-1 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-800 text-indigo-300 text-[9px] font-black uppercase rounded-md transition cursor-pointer"
+                  title="Pular contagem e disparar imediatamente"
+                >
+                  Enviar Já
+                </button>
+              </div>
+            )}
+
+            <button
+              onClick={handleSkipDispatch}
+              className="px-3 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-[10px] font-black uppercase rounded-xl border border-zinc-800 transition cursor-pointer"
+              title="Pular este lead sem enviar"
+            >
+              Pular Lead
+            </button>
+
+            <button
+              onClick={stopQueueEngine}
+              className="p-2.5 bg-rose-950/30 text-rose-500 hover:bg-rose-950/50 border border-rose-900/40 rounded-xl transition cursor-pointer"
+              title="Pausar Fila"
+            >
+              <Pause className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Visual Progress Bar */}
+        <div className="w-full bg-zinc-950 h-2 rounded-full mt-4 overflow-hidden border border-zinc-800 p-0.5 shadow-inner">
+          <div 
+            className="bg-indigo-500 h-full rounded-full transition-all duration-300 shadow-[0_0_8px_rgba(99,102,241,0.5)]"
+            style={{ width: `${((currentQueueIndex) / queue.length) * 100}%` }}
+          />
+        </div>
+      </div>
+    );
+  };
+
   const labelTextColor = theme === "claro" ? "text-zinc-700" : "text-zinc-300";
   const subtitleTextColor =
     theme === "claro" ? "text-zinc-500" : "text-zinc-400";
@@ -1255,6 +1438,7 @@ Gostaria de te enviar algumas fotos sem compromisso?`;
       {/* RENDER DISPATCH TAB (Painel de Disparos em Fila Comercial) */}
       {activeTab === "massa" && onlyTable ? (
         <div id="email-dispatch-tab-pane-onlytable" className="space-y-3 animate-fadeIn text-zinc-100">
+          {renderActiveConsole()}
           {/* Compact Control Row */}
           <div className="flex flex-wrap items-center justify-between gap-2 bg-zinc-900/40 p-2.5 rounded-xl border border-zinc-800/60 font-mono">
             <div className="flex items-center gap-2">
@@ -1447,6 +1631,7 @@ Gostaria de te enviar algumas fotos sem compromisso?`;
         </div>
       ) : activeTab === "massa" && (
         <div id="email-dispatch-tab-pane" className="space-y-8 animate-fadeIn">
+          {renderActiveConsole()}
           {/* Section: TABELA DE DISPAROS E ENVIOS */}
           <div className="bg-transparent space-y-4">
             <div className={cardBackground}>
@@ -2001,4 +2186,4 @@ Gostaria de te enviar algumas fotos sem compromisso?`;
       )}
     </div>
   );
-}
+});

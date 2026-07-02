@@ -24,13 +24,15 @@ export const DEFAULT_ETAPAS_COLUMNS: KanbanColumn[] = [
   { id: 'triagem', label: 'Triagem', bgClass: 'bg-indigo-100/90', labelClass: 'text-indigo-950', accentBorderClass: 'border-indigo-500' },
   { id: 'qualificacao', label: 'Qualificação', bgClass: 'bg-purple-100/90', labelClass: 'text-purple-950', accentBorderClass: 'border-purple-500' },
   { id: 'analise_perfil', label: 'Análise de Perfil', bgClass: 'bg-fuchsia-100/90', labelClass: 'text-fuchsia-950', accentBorderClass: 'border-fuchsia-500' },
+  { id: 'compatibilizacao', label: 'Compatibilização c/ Estoque', bgClass: 'bg-rose-100/90', labelClass: 'text-rose-950', accentBorderClass: 'border-rose-500' },
   { id: 'apresentacao', label: 'Apresentação de solução', bgClass: 'bg-pink-100/90', labelClass: 'text-pink-950', accentBorderClass: 'border-pink-500' },
-  { id: 'proposta', label: 'Proposta', bgClass: 'bg-rose-100/90', labelClass: 'text-rose-950', accentBorderClass: 'border-rose-500' },
+  { id: 'proposta', label: 'Proposta', bgClass: 'bg-red-100/90', labelClass: 'text-red-950', accentBorderClass: 'border-red-500' },
   { id: 'visita', label: 'Visita / Reunião', bgClass: 'bg-orange-100/90', labelClass: 'text-orange-950', accentBorderClass: 'border-orange-500' },
   { id: 'objecao', label: 'Objeções', bgClass: 'bg-amber-100/90', labelClass: 'text-amber-950', accentBorderClass: 'border-amber-500' },
   { id: 'escolha_de_unidade', label: 'Escolha de unidade', bgClass: 'bg-yellow-100/90', labelClass: 'text-yellow-950', accentBorderClass: 'border-yellow-500' },
   { id: 'simulacao_final', label: 'Simulação final', bgClass: 'bg-lime-100/90', labelClass: 'text-lime-950', accentBorderClass: 'border-lime-500' },
   { id: 'fechamento', label: 'Fechamento', bgClass: 'bg-emerald-100/90', labelClass: 'text-emerald-950', accentBorderClass: 'border-emerald-500' },
+  { id: 'pos_venda', label: 'Pós-Venda', bgClass: 'bg-green-100/90', labelClass: 'text-green-950', accentBorderClass: 'border-green-500' },
   { id: 'follow_up_1', label: 'Follow-up 1', bgClass: 'bg-teal-100/90', labelClass: 'text-teal-950', accentBorderClass: 'border-teal-500' },
   { id: 'follow_up_2', label: 'Follow-up 2', bgClass: 'bg-cyan-100/90', labelClass: 'text-cyan-950', accentBorderClass: 'border-cyan-500' },
   { id: 'follow_up_3', label: 'Follow-up 3', bgClass: 'bg-sky-100/90', labelClass: 'text-sky-950', accentBorderClass: 'border-sky-500' },
@@ -104,7 +106,7 @@ export const DEFAULT_QUALIFICACAO_COLUMNS: KanbanColumn[] = [
   { id: 'dossie_pronto', label: 'Dossiê Pronto Caixa', bgClass: 'bg-emerald-100/90', labelClass: 'text-emerald-950', accentBorderClass: 'border-emerald-500' },
 ];
 
-export function getKanbanColumns(pageId?: string): KanbanColumn[] {
+export function getKanbanColumns(pageId?: string, activeFlowId?: string): KanbanColumn[] {
   const activePageId = pageId || localStorage.getItem('ciclocred_active_funnel_page_id') || 'etapas';
   
   if (activePageId === 'principal' || activePageId === 'tabelas' || activePageId === 'status') {
@@ -133,7 +135,40 @@ export function getKanbanColumns(pageId?: string): KanbanColumn[] {
   }
 
   if (activePageId === 'status') return DEFAULT_STATUS_COLUMNS;
-  if (activePageId === 'etapas' || activePageId === 'ativos') return DEFAULT_ETAPAS_COLUMNS;
+  if (activePageId === 'etapas' || activePageId === 'ativos') {
+    const flowId = activeFlowId || localStorage.getItem("ciclocred_active_system_flow_id");
+    const savedFlows = localStorage.getItem("ciclocred_crm_operational_flows");
+    if (flowId && savedFlows) {
+      try {
+        const flows = JSON.parse(savedFlows);
+        if (Array.isArray(flows)) {
+          const activeFlow = flows.find(f => f.id === flowId);
+          if (activeFlow && activeFlow.stages && activeFlow.stages.length > 0) {
+            const colors = [
+              { bg: 'bg-indigo-100/90', text: 'text-indigo-950', border: 'border-indigo-500' },
+              { bg: 'bg-emerald-100/90', text: 'text-emerald-950', border: 'border-emerald-500' },
+              { bg: 'bg-sky-100/90', text: 'text-sky-950', border: 'border-sky-500' },
+              { bg: 'bg-purple-100/90', text: 'text-purple-950', border: 'border-purple-500' },
+              { bg: 'bg-fuchsia-100/90', text: 'text-fuchsia-950', border: 'border-fuchsia-500' },
+              { bg: 'bg-rose-100/90', text: 'text-rose-950', border: 'border-rose-500' },
+              { bg: 'bg-amber-100/90', text: 'text-amber-950', border: 'border-amber-500' },
+            ];
+            return activeFlow.stages.map((stage: any, index: number) => {
+              const color = colors[index % colors.length];
+              return {
+                id: stage.id,
+                label: stage.name,
+                bgClass: color.bg,
+                labelClass: color.text,
+                accentBorderClass: color.border
+              };
+            });
+          }
+        }
+      } catch (_) {}
+    }
+    return DEFAULT_ETAPAS_COLUMNS;
+  }
   if (activePageId === 'perfil') return DEFAULT_PERFIL_COLUMNS;
   if (activePageId === 'qualificacao') return DEFAULT_QUALIFICACAO_COLUMNS;
   if (activePageId === 'objecoes' || activePageId === 'carteira') return DEFAULT_OBJECOES_COLUMNS;

@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Lead, LeadStatus, EmailLog, OperationalFlow, Appointment } from '../types';
+import { Lead, LeadStatus, EmailLog, OperationalFlow, Appointment, LeadActionLog, OperationalOS } from '../types';
 import { handleWhatsAppAction } from '../utils/whatsapp';
 import { getKanbanColumns } from '../utils/kanban';
 import { 
@@ -38,8 +38,18 @@ import {
   Trash2,
   Plus,
   Check,
-  CalendarDays
+  CalendarDays,
+  Zap,
+  Target,
+  ArrowRight
 } from 'lucide-react';
+import { 
+  calculateCompatibility, 
+  calculatePriority, 
+  suggestNextAction, 
+  calculateConversionProbability 
+} from '../utils/intelligence';
+import { calculateAdvancedMetrics, calculateFacilitatedInstallment } from '../utils/financeEngine';
 import { 
   getWorkspaceToken, 
   sendGmailMessage, 
@@ -50,6 +60,7 @@ interface LeadDetailsModalProps {
   isOpen: boolean;
   lead: Lead | null;
   emailLogs: EmailLog[];
+  actionLogs?: LeadActionLog[];
   properties?: any[];
   onClose: () => void;
   onUpdateLeadNotes: (leadId: string, notes: string) => void;
@@ -64,6 +75,9 @@ interface LeadDetailsModalProps {
   onNavigateToFollowUp?: (lead: Lead) => void;
   appointments?: Appointment[];
   setAppointments?: React.Dispatch<React.SetStateAction<Appointment[]>>;
+  isInline?: boolean;
+  operationalServiceOrders?: OperationalOS[];
+  setOperationalServiceOrders?: React.Dispatch<React.SetStateAction<OperationalOS[]>>;
 }
 
 const getDaysSinceContact = (lastContactAt?: string): number | null => {
@@ -160,10 +174,11 @@ const STOCK_DEVELOPMENTS: PredictiveProperty[] = [
   }
 ];
 
-export default function LeadDetailsModal({ 
+export default React.memo(function LeadDetailsModal({ 
   isOpen, 
   lead, 
   emailLogs,
+  actionLogs = [],
   properties = [],
   onClose, 
   onUpdateLeadNotes,
@@ -177,9 +192,56 @@ export default function LeadDetailsModal({
   onDeleteLead,
   onNavigateToFollowUp,
   appointments = [],
-  setAppointments
+  setAppointments,
+  isInline,
+  operationalServiceOrders = [],
+  setOperationalServiceOrders
 }: LeadDetailsModalProps) {
+  const [hasChanges, setHasChanges] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || !hasChanges) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isOpen, hasChanges]);
+
   const [activeTab, setActiveTab] = useState<'ficha_checklist' | 'dossies_fluxos' | 'agenda' | 'historico'>('ficha_checklist');
+  const [isSavingFull, setIsSavingFull] = useState(false);
+
+  // Scrolling fix: prevent background scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
+
+  const handleSaveAndSyncFull = () => {
+    if (!lead) return;
+    setIsSavingFull(true);
+    setHasChanges(false);
+    setTimeout(() => {
+      setIsSavingFull(false);
+      window.dispatchEvent(new CustomEvent("ciclocred_map_toast", { 
+        detail: { 
+          title: "💾 FICHA SALVA REALTIME",
+          message: `As alterações e dados da ficha de ${lead.name} foram consolidados no Firestore e no ecossistema cicloCRED com sucesso!`,
+          type: "success"
+        } 
+      }));
+    }, 500);
+  };
+
   const [notesText, setNotesText] = useState('');
   const [selectedFlowId, setSelectedFlowId] = useState<string>('');
   const [flowNotification, setFlowNotification] = useState<string | null>(null);
@@ -219,14 +281,14 @@ export default function LeadDetailsModal({
       title: '🟢 Abordagem MCMV & Subsídio',
       category: 'Primeiro Imóvel',
       description: 'Focado em atrair clientes com potencial para subsídio de até R$ 55 mil.',
-      template: 'Olá [Nome], tudo bem? Me chamo [Corretor] e sou especialista em crédito do cicloCRED.\n\nEstava analisando seu perfil e vi que tem interesse no empreendimento [Imovel]. Sabia que com a sua renda mensal declarada de R$ [Renda], você tem direito ao programa Minha Casa Minha Vida e pode receber até R$ 55.000 de subsídio direto do governo para abater o saldo?\n\nGostaria de simular suas parcelas em 2 minutos sem compromisso? Tenho um simulador oficial Caixa aberto aqui.'
+      template: 'Olá [Nome], tudo bem? Me chamo [Corretor] e sou especialista do ecossistema Cury Constelação.\n\nEstava analisando seu perfil e vi que tem interesse no empreendimento [Imovel]. Sabia que com a sua renda mensal declarada de R$ [Renda], você tem direito ao programa Minha Casa Minha Vida e pode receber até R$ 55.000 de subsídio direto do governo para abater o saldo?\n\nGostaria de simular suas parcelas em 2 minutos sem compromisso? Tenho um simulador oficial Caixa aberto aqui.'
     },
     {
       id: 'script-sbpe',
       title: '🔵 Apresentação de Parcelas Médias / SBPE',
       category: 'Médio/Alto Padrão',
       description: 'Ideal para clientes de classe média interessados em tabela SAC ou Price.',
-      template: 'Olá [Nome], excelente dia! Aqui é [Corretor] do cicloCRED.\n\nTenho ótimas notícias sobre o empreendimento [Imovel] de seu interesse. Fiz um pré-enquadramento de crédito habitacional pelo SBPE na tabela SAC, e as primeiras parcelas estimadas ficaram super confortáveis, com a facilidade de amortização progressiva.\n\nSua renda declarada de R$ [Renda] se enquadra perfeitamente. Vamos fazer uma simulação personalizada hoje? Qual o melhor horário?'
+      template: 'Olá [Nome], excelente dia! Aqui é [Corretor] da Cury Constelação.\n\nTenho ótimas notícias sobre o empreendimento [Imovel] de seu interesse. Fiz um pré-enquadramento de crédito habitacional pelo SBPE na tabela SAC, e as primeiras parcelas estimadas ficaram super confortáveis, com a facilidade de amortização progressiva.\n\nSua renda declarada de R$ [Renda] se enquadra perfeitamente. Vamos fazer uma simulação personalizada hoje? Qual o melhor horário?'
     },
     {
       id: 'script-restricao',
@@ -245,10 +307,10 @@ export default function LeadDetailsModal({
     const imovelName = lead.propertyInterest || 'Empreendimento de Interesse';
     
     return template
-      .replace(/\[Nome\]/g, lead.name)
-      .replace(/\[Corretor\]/g, agentName)
-      .replace(/\[Renda\]/g, formattedIncome)
-      .replace(/\[Imovel\]/g, imovelName);
+      .replace(new RegExp('\\[Nome\\]', 'g'), lead.name)
+      .replace(new RegExp('\\[Corretor\\]', 'g'), agentName)
+      .replace(new RegExp('\\[Renda\\]', 'g'), formattedIncome)
+      .replace(new RegExp('\\[Imovel\\]', 'g'), imovelName);
   };
 
   const [isSavingNotes, setIsSavingNotes] = useState(false);
@@ -314,7 +376,7 @@ export default function LeadDetailsModal({
   const [coBuyerIncome, setCoBuyerIncome] = useState<number>(2500);
   const [tempCoBuyerIncomeInput, setTempCoBuyerIncomeInput] = useState<string>('2500');
   const [hasDependents, setHasDependents] = useState<boolean>(false);
-  const [hasThreeYearsCLT, setHasThreeYearsCLT] = useState<boolean>(true);
+  const [hasThreeYearsCLT, setHasThreeYearsCLT] = useState<boolean>(lead?.checklist?.aprov ?? true);
   const [fgtsBalance, setFgtsBalance] = useState<number>(12000);
   const [tempFgtsInput, setTempFgtsInput] = useState<string>('12000');
   const [ownSavings, setOwnSavings] = useState<number>(8000);
@@ -369,6 +431,7 @@ export default function LeadDetailsModal({
     };
     setChecklist(newChecklist);
     localStorage.setItem(`ciclocred_checklist_${lead.id}`, JSON.stringify(newChecklist));
+    updateField('checklist', newChecklist);
     if (awardXP) {
       awardXP(5);
     }
@@ -451,12 +514,13 @@ export default function LeadDetailsModal({
 
   useEffect(() => {
     if (lead) {
+      setHasChanges(false);
       setNotesText(lead.notes);
       setSessionIncome(lead.familyIncome || 0);
       setTempIncomeInput(lead.familyIncome ? String(lead.familyIncome) : '');
       setLeadName(lead.name || '');
       setLeadPhone(lead.phone || '');
-      setLeadMainProfile(lead.mainProfile || 'Primeiro Imóvel');
+      setLeadMainProfile(lead.mainProfile || '');
       setLeadRegion(lead.region || 'Sul');
       setLeadGender(lead.gender || 'Homem');
       
@@ -471,10 +535,69 @@ export default function LeadDetailsModal({
     }
   }, [lead, isOpen]);
 
+  // Combined timeline of all creation, action, and email events (Memória Operacional & Temporal Map)
+  const combinedTimelineEvents = React.useMemo(() => {
+    if (!lead) return [];
+
+    const events: {
+      id: string;
+      timestamp: Date;
+      type: 'creation' | 'action' | 'email';
+      title: string;
+      subtitle: string;
+      details?: string;
+      user?: string;
+    }[] = [];
+
+    // 1. Lead creation
+    const createdDate = lead.createdAt ? new Date(lead.createdAt) : new Date();
+    events.push({
+      id: 'creation',
+      timestamp: isNaN(createdDate.getTime()) ? new Date() : createdDate,
+      type: 'creation',
+      title: 'Lead Cadastrado',
+      subtitle: `Iniciado de ${lead.origin || 'Origem não informada'}`,
+    });
+
+    // 2. Action Logs
+    (actionLogs || []).forEach(log => {
+      if (log && log.leadId === lead.id) {
+        const logDate = log.timestamp ? new Date(log.timestamp) : new Date();
+        events.push({
+          id: log.id || `log-${Math.random()}`,
+          timestamp: isNaN(logDate.getTime()) ? new Date() : logDate,
+          type: 'action',
+          title: log.action || 'Alteração realizada',
+          subtitle: `Módulo: ${log.module || 'CRM'} | De [${log.prevValue || 'Vazio'}] para [${log.newValue || 'Vazio'}]`,
+          details: log.notes,
+          user: log.user || 'Sistema',
+        });
+      }
+    });
+
+    // 3. Email Logs
+    (emailLogs || []).forEach(log => {
+      if (log && log.leadId === lead.id) {
+        const sentDate = log.sentAt ? new Date(log.sentAt) : new Date();
+        events.push({
+          id: log.id || `email-${Math.random()}`,
+          timestamp: isNaN(sentDate.getTime()) ? new Date() : sentDate,
+          type: 'email',
+          title: `E-mail enviado: ${log.templateName || 'Geral'}`,
+          subtitle: log.subject || 'Sem assunto',
+          details: log.body,
+        });
+      }
+    });
+
+    // Sort descending
+    return events.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  }, [lead, actionLogs, emailLogs]);
+
   if (!isOpen || !lead) return null;
 
   // Filter logs associated ONLY to this lead
-  const filteredLogs = emailLogs.filter(log => log.leadId === lead.id);
+  const filteredLogs = (emailLogs || []).filter(log => log && log.leadId === lead.id);
 
   const dynColumns = getKanbanColumns();
   const currentStatusObj = dynColumns.find(col => col.id === lead.status) || {
@@ -495,195 +618,70 @@ export default function LeadDetailsModal({
 
   const handleNotesSave = () => {
     setIsSavingNotes(true);
+    setHasChanges(false);
     setTimeout(() => {
         onUpdateLeadNotes(lead.id, notesText);
         setIsSavingNotes(false);
     }, 400);
   };
 
-  // Advanced predictive calculation engine
-  const calculateAdvancedMetrics = (propertyPrice: number, minIncome: number) => {
-    const mainIncome = sessionIncome || 0;
-    const jointIncome = hasCoBuyer ? coBuyerIncome : 0;
-    const grossIncome = mainIncome + jointIncome;
-    const hasFGTS = hasThreeYearsCLT;
-
-    // Pagamento máximo tolerável = 30% da renda familiar bruta
-    const paymentCapacity = grossIncome * 0.30;
-    const maxAllowedInstallment = paymentCapacity;
-
-    let rate = 4.25; // Default interest rate
-    let subsidy = 0;
-    let bracket = '';
-    let finalFinanced = 0;
-
-    // Caso geral de enquadramento idêntico ao simulador consolidado
-    if (grossIncome <= 2640) {
-      bracket = 'Faixa 1 (MCMV)';
-      rate = hasFGTS ? 4.0 : 4.5;
-      const factor = (grossIncome - 1412) / (2640 - 1412);
-      subsidy = Math.max(20000, 55000 - factor * 30000);
-      if (hasDependents) subsidy += 3000;
-    } else if (grossIncome <= 4400) {
-      bracket = 'Faixa 2 (MCMV)';
-      rate = hasFGTS ? 4.75 : 5.25;
-      const factor = (grossIncome - 2640) / (4400 - 2640);
-      subsidy = Math.max(10000, 25000 - factor * 15000);
-      if (hasDependents) subsidy += 2000;
-    } else if (grossIncome <= 8000) {
-      bracket = 'Faixa 3 (MCMV)';
-      rate = hasFGTS ? 6.0 : 6.5;
-      subsidy = hasDependents ? 5000 : 0;
-    } else {
-      bracket = 'SBPE (Livre habitacional)';
-      rate = 9.8;
-      subsidy = 0;
-    }
-
-    const annualRate = rate;
-
-    let maxFundingPct = 0.80;
-    if (grossIncome <= 4400 && hasFGTS) {
-      maxFundingPct = 0.80;
-    } else if (grossIncome <= 4400 && !hasFGTS) {
-      maxFundingPct = 0.70;
-    }
-    
-    const maxFinancivel = propertyPrice * maxFundingPct;
-    
-    // Calcula proposta de financiamento necessária
-    const initialRequiredLoan = propertyPrice - subsidy - fgtsBalance - ownSavings;
-    const requiredLoan = Math.max(0, Math.min(maxFinancivel, initialRequiredLoan));
-    finalFinanced = requiredLoan;
-
-    // Limites de idade e prazo máximo Caixa
-    const maxYears = Math.min(35, 80 - proponentAge);
-    const maxTermMonths = maxYears * 12;
-
-    const monthlyRate = (rate / 100) / 12;
-
-    let initialInstallment = 0;
-    let finalInstallment = 0;
-
-    if (requiredLoan > 0) {
-      if (amortizationSystem === 'PRICE') {
-        const factor = (monthlyRate * Math.pow(1 + monthlyRate, maxTermMonths)) / (Math.pow(1 + monthlyRate, maxTermMonths) - 1);
-        const fixedMonthly = requiredLoan * factor;
-        initialInstallment = Math.min(paymentCapacity, fixedMonthly);
-        finalInstallment = Math.min(paymentCapacity, fixedMonthly);
-      } else {
-        const priceAmortization = requiredLoan / maxTermMonths;
-        initialInstallment = Math.min(paymentCapacity, priceAmortization + (requiredLoan * monthlyRate));
-        finalInstallment = priceAmortization + (priceAmortization * monthlyRate);
-      }
-
-      // Se a parcela bruta simular acima da capacidade real de 30% da renda, reduzimos o valor do financiamento aprovável
-      const rawFirstPay = amortizationSystem === 'PRICE'
-        ? requiredLoan * ((monthlyRate * Math.pow(1 + monthlyRate, maxTermMonths)) / (Math.pow(1 + monthlyRate, maxTermMonths) - 1))
-        : (requiredLoan / maxTermMonths) + (requiredLoan * monthlyRate);
-
-      if (rawFirstPay > paymentCapacity) {
-        // Reduz financiamento aprovado para caber na capacidade exata
-        const allowableFinancing = paymentCapacity / ( (1 / maxTermMonths) + (monthlyRate * 0.75) );
-        finalFinanced = Math.min(maxFinancivel, Math.max(allowableFinancing, 0));
-        
-        // Recalcula parcelas com base no financiamento refinado
-        if (amortizationSystem === 'PRICE') {
-          const factor = (monthlyRate * Math.pow(1 + monthlyRate, maxTermMonths)) / (Math.pow(1 + monthlyRate, maxTermMonths) - 1);
-          const fixedMonthly = finalFinanced * factor;
-          initialInstallment = Math.min(paymentCapacity, fixedMonthly);
-          finalInstallment = Math.min(paymentCapacity, fixedMonthly);
-        } else {
-          const priceAmortization = finalFinanced / maxTermMonths;
-          initialInstallment = Math.min(paymentCapacity, priceAmortization + (finalFinanced * monthlyRate));
-          finalInstallment = priceAmortization + (priceAmortization * monthlyRate);
-        }
-      }
-    }
-
-    const approvedLoan = finalFinanced;
-    const totalDownPaymentRequired = Math.max(0, propertyPrice - approvedLoan - subsidy);
-    const rawWorkBalance = totalDownPaymentRequired - fgtsBalance - ownSavings;
-    const workBalanceToInstall = Math.max(0, rawWorkBalance);
-
-    // Obras em 36 meses padrão construtora
-    const constructionInstallment = workBalanceToInstall / 36;
-
-    // Suitability Match percentage
-    let suitability = 100;
-
-    if (grossIncome <= 0) {
-      suitability = 0;
-    } else {
-      if (grossIncome < minIncome) {
-        const diffRatio = grossIncome / minIncome;
-        suitability -= (1 - diffRatio) * 55;
-      }
-
-      const budgetForWork = grossIncome * 0.25;
-      if (constructionInstallment > budgetForWork) {
-        const overRatio = constructionInstallment / budgetForWork;
-        suitability -= Math.min(25, (overRatio - 1) * 15);
-      }
-
-      if (workBalanceToInstall > propertyPrice * 0.25) {
-        suitability -= 12;
-      }
-
-      if (!hasCleanCredit) {
-        suitability -= 45;
-      }
-
-      if (hasThreeYearsCLT) {
-        suitability += 3;
-      }
-    }
-
-    suitability = Math.max(5, Math.min(99, Math.round(suitability)));
-
-    // Calculate score probability
-    let approvalProbability = 92;
-    if (!hasCleanCredit) approvalProbability -= 60;
-    if (grossIncome < minIncome) approvalProbability -= 20;
-    if (hasCoBuyer) approvalProbability += 8;
-    if (proponentAge > 52) approvalProbability -= 7;
-    approvalProbability = Math.max(12, Math.min(97, approvalProbability));
-
-    return {
-      subsidy,
-      annualRate,
-      maxTermMonths,
-      maxAllowedInstallment,
-      approvedLoan,
-      totalDownPaymentRequired,
-      workBalanceToInstall,
-      constructionInstallment,
-      suitability,
-      approvalProbability,
-      initialInstallment,
-      finalInstallment
-    };
-  };
 
   // Find current selected property simulation
   const selectedProperty = availableProperties.find(p => p.id === selectedPropertyId) || availableProperties[0];
-  const sim = calculateAdvancedMetrics(selectedProperty.price, selectedProperty.minIncomeRequired);
+  const sim = calculateAdvancedMetrics(
+    selectedProperty.price, 
+    selectedProperty.minIncomeRequired,
+    sessionIncome,
+    coBuyerIncome,
+    hasCoBuyer,
+    hasThreeYearsCLT,
+    hasDependents,
+    proponentAge,
+    hasCleanCredit,
+    amortizationSystem,
+    fgtsBalance,
+    ownSavings
+  );
 
   // Map developments to show live fitting score
   const rankedProperties = availableProperties.map(p => {
-    const metrics = calculateAdvancedMetrics(p.price, p.minIncomeRequired);
+    const metrics = calculateAdvancedMetrics(
+      p.price, 
+      p.minIncomeRequired,
+      sessionIncome,
+      coBuyerIncome,
+      hasCoBuyer,
+      hasThreeYearsCLT,
+      hasDependents,
+      proponentAge,
+      hasCleanCredit,
+      amortizationSystem,
+      fgtsBalance,
+      ownSavings
+    );
     return {
       ...p,
       metrics
     };
   }).sort((a, b) => b.metrics.suitability - a.metrics.suitability);
 
+  const formatCurrency = (value: number) => {
+    if (!value) return '';
+    return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  const parseCurrency = (value: string) => {
+    const num = value.replace(new RegExp('\\D', 'g'), '');
+    return num ? Number(num) / 100 : 0;
+  };
+
   const handleUpdateIncomeClick = () => {
-    const parsed = parseFloat(tempIncomeInput);
+    const parsed = parseCurrency(tempIncomeInput);
     if (!isNaN(parsed) && parsed >= 0) {
       setIsUpdatingIncome(true);
       setSessionIncome(parsed);
       updateField('familyIncome', parsed);
+      setTempIncomeInput(formatCurrency(parsed));
       setTimeout(() => {
         setIsUpdatingIncome(false);
       }, 300);
@@ -735,47 +733,64 @@ export default function LeadDetailsModal({
   // Find active scheduled follow-ups for this lead
   const leadAppointments = appointments.filter(apt => apt.leadId === lead.id || apt.leadName === lead.name);
 
-  return (
+  const modalContent = (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-zinc-950/80 backdrop-blur-xs overflow-hidden"
-      id="lead-details-modal-overlay"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      id="lead-details-modal-frame"
+      className={isInline ? "bg-white flex flex-col text-zinc-800" : "bg-white border-4 border-zinc-950 rounded-2xl w-full max-w-3xl shadow-[6px_6px_0px_0px_rgba(24,24,27,1)] overflow-hidden max-h-[92vh] flex flex-col text-zinc-800 "}
     >
-      <div 
-        id="lead-details-modal-frame"
-        className="bg-white border-4 border-zinc-950 rounded-2xl w-full max-w-3xl shadow-[6px_6px_0px_0px_rgba(24,24,27,1)] overflow-hidden max-h-[92vh] flex flex-col text-zinc-800 animate-in fade-in zoom-in-95 duration-150"
-      >
-        {/* Header containing name and current status badge */}
-        <div className="p-5 border-b-4 border-zinc-950 bg-zinc-900 text-white flex items-start justify-between">
-          <div className="space-y-1.5 min-w-0 flex-1">
-            <span className="text-[10px] uppercase font-black tracking-widest text-indigo-400 font-mono">Ficha de Qualificação e Dossiê</span>
-            <h2 className="font-sans font-black text-xl text-white truncate">{lead.name}</h2>
-            
-            <div className="flex flex-wrap items-center gap-3 mt-1.5">
-              <span className={`text-[10px] uppercase font-black px-2.5 py-0.5 rounded ${currentStatus.bg} ${currentStatus.text}`}>
-                {currentStatus.label}
-              </span>
-              <span className="text-xs text-zinc-300 font-bold font-mono">Origem: {lead.origin}</span>
-              {isOverdue && (
-                <span className="flex items-center gap-1 text-[10px] uppercase font-black px-2.5 py-0.5 rounded bg-red-100 border border-red-500 text-red-700  font-mono">
-                  <AlertTriangle className="w-3.5 h-3.5 text-red-600 shrink-0" />
-                  <span>Atenção: Sem Contato há {daysSinceContact} dias</span>
-                </span>
-              )}
-            </div>
-          </div>
+      {/* Header containing name and current status badge */}
+      <div className="p-5 border-b-4 border-zinc-950 bg-zinc-900 text-white flex items-start justify-between">
+        <div className="space-y-1.5 min-w-0 flex-1">
+          <span className="text-[10px] uppercase font-black tracking-widest text-indigo-400 font-mono">Ficha de Qualificação e Dossiê</span>
+          <h2 className="font-sans font-black text-xl text-white truncate">{lead.name}</h2>
           
+          <div className="flex flex-wrap items-center gap-3 mt-1.5">
+            <span className={`text-[10px] uppercase font-black px-2.5 py-0.5 rounded ${currentStatus.bg} ${currentStatus.text}`}>
+              {currentStatus.label}
+            </span>
+            <span className="text-xs text-zinc-300 font-bold font-mono">Origem: {lead.origin}</span>
+            {isOverdue && (
+              <span className="flex items-center gap-1 text-[10px] uppercase font-black px-2.5 py-0.5 rounded bg-red-100 border border-red-500 text-red-700 font-mono">
+                <AlertTriangle className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                <span>Atenção: Sem Contato há {daysSinceContact} dias</span>
+              </span>
+            )}
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2 shrink-0 ml-4">
+          <button
+            onClick={handleSaveAndSyncFull}
+            disabled={isSavingFull}
+            className={`px-3 py-1.5 rounded-xl border-2 border-zinc-950 font-black text-xs uppercase flex items-center gap-1.5 transition ${
+              isSavingFull 
+                ? "bg-zinc-800 text-zinc-500 cursor-not-allowed border-zinc-700" 
+                : "bg-emerald-500 hover:bg-emerald-450 text-zinc-950 shadow-[2px_2px_0px_0px_white] active:translate-y-0.5 active:shadow-none cursor-pointer"
+            }`}
+          >
+            {isSavingFull ? (
+              <>
+                <span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-zinc-950 border-t-transparent rounded-full" />
+                <span>Salvando...</span>
+              </>
+            ) : (
+              <>
+                <span>💾 Salvar Ficha</span>
+              </>
+            )}
+          </button>
+          {!isInline && (
           <button 
             onClick={onClose}
-            className="text-zinc-400 hover:text-white p-1 rounded-lg border border-transparent hover:border-zinc-700 hover:bg-zinc-800 transition shrink-0 ml-4"
+            className="text-zinc-400 hover:text-white p-1 rounded-lg border border-transparent hover:border-zinc-700 hover:bg-zinc-800 transition shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
+          )}
         </div>
+      </div>
 
-        {/* Sticky Tab Selector */}
+      {/* Sticky Tab Selector */}
         <div className="bg-zinc-100 border-b-2 border-zinc-950 px-4 py-2.5 flex flex-wrap gap-1.5 select-none shrink-0">
           <button
             type="button"
@@ -824,7 +839,7 @@ export default function LeadDetailsModal({
         </div>
 
         {/* Main Unified Content */}
-        <div className="p-3 sm:p-5 overflow-y-auto flex-1 bg-zinc-50 flex flex-col gap-6 custom-scrollbar text-zinc-900 font-sans">
+        <div className="p-3 sm:p-5 overflow-y-auto flex-1 bg-zinc-50 flex flex-col gap-6 custom-scrollbar text-zinc-900 font-sans" onChange={() => setHasChanges(true)}>
           
           {/* TAB 1: FICHA & CHECKLIST */}
           {activeTab === 'ficha_checklist' && (
@@ -840,10 +855,220 @@ export default function LeadDetailsModal({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+              {/* Copilot Operacional - Intelligent Engine Section */}
+              <div className="bg-gradient-to-br from-indigo-900 to-zinc-900 border-4 border-zinc-950 rounded-2xl p-5 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] text-white relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none group-hover:scale-110 transition-transform duration-500">
+                  <Bot className="w-24 h-24 text-white" />
+                </div>
+                
+                <div className="relative z-10 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-indigo-400 fill-indigo-400" />
+                    <h4 className="text-xs font-black uppercase tracking-widest text-indigo-200">Copilot Operacional Inteligente</h4>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Recomendação de Ação */}
+                    <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-4 flex flex-col justify-between">
+                      <div className="flex items-start justify-between mb-2">
+                        <span className="text-[9px] font-black uppercase text-indigo-300">Próxima Melhor Ação Sugerida</span>
+                        <Zap className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
+                      </div>
+                      <p className="text-sm font-black uppercase leading-tight mb-3">
+                        {suggestNextAction(lead)}
+                      </p>
+                      <button 
+                        onClick={() => {
+                          const action = suggestNextAction(lead);
+                          if (action === "Iniciar primeiro contato via WhatsApp") {
+                            handleWhatsAppAction(lead, undefined, () => onUpdateLeadFull?.(lead.id, { lastInteractionAt: new Date().toISOString() }));
+                          } else if (action === "Agendar visita ao decorado") {
+                            if (onNavigateToFollowUp) {
+                              onNavigateToFollowUp(lead);
+                            } else {
+                              alert(`Ótima ideia! Vamos agendar a visita de ${lead.name} ao decorado.`);
+                            }
+                          } else if (action === "Solicitar documentação para proposta") {
+                            handleWhatsAppAction(lead, undefined, () => onUpdateLeadFull?.(lead.id, { lastInteractionAt: new Date().toISOString() }));
+                          } else if (action === "Realizar follow-up da proposta enviada") {
+                            handleWhatsAppAction(lead, undefined, () => onUpdateLeadFull?.(lead.id, { lastInteractionAt: new Date().toISOString() }));
+                          } else if (action === "Enviar conteúdo de valor/atualização de obra") {
+                            handleWhatsAppAction(lead, undefined, () => onUpdateLeadFull?.(lead.id, { lastInteractionAt: new Date().toISOString() }));
+                          } else {
+                            if (onOpenAIAssistant) {
+                              onOpenAIAssistant(lead);
+                            } else {
+                              alert("Copilot acionado para esta etapa!");
+                            }
+                          }
+                          
+                          if (awardXP) {
+                            awardXP(25);
+                          }
+                        }}
+                        className="w-full py-2 bg-indigo-500 hover:bg-indigo-400 text-white rounded-lg border-2 border-zinc-950 text-[10px] font-black uppercase transition-all flex items-center justify-center gap-2 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-none cursor-pointer"
+                      >
+                        <span>Executar Ação</span>
+                        <ArrowRight className="w-3 h-3" />
+                      </button>
+                    </div>
+
+                    {/* Compatibilidade de Estoque */}
+                    <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <span className="text-[9px] font-black uppercase text-indigo-300">Compatibilidade Lead × Estoque</span>
+                        <Target className="w-3.5 h-3.5 text-emerald-400" />
+                      </div>
+                      <div className="flex items-end gap-2 mb-1">
+                        <span className="text-2xl font-black text-white">{lead.compatibilityScore || 0}%</span>
+                        <span className="text-[10px] font-black uppercase text-zinc-400 mb-1">Score de Match</span>
+                      </div>
+                      <p className="text-[10px] font-medium text-zinc-300 italic line-clamp-2">
+                        {lead.compatibilityReasoning || "Recalculando compatibilidade com base no estoque atual..."}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-4 pt-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-rose-500" />
+                      <span className="text-[9px] font-black uppercase text-zinc-400">Prioridade: {calculatePriority(lead)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                      <span className="text-[9px] font-black uppercase text-zinc-400">Conversão: {(calculateConversionProbability(lead) * 100).toFixed(0)}% Prob.</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* CONECTOR DE ORDENS DE SERVIÇO (OS) */}
+              <div className="bg-white border-4 border-zinc-950 rounded-2xl p-4 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] space-y-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b-2 border-zinc-100 pb-3">
+                  <div>
+                    <h4 className="font-mono font-black text-sm uppercase text-zinc-900 flex items-center gap-2">
+                      💼 Ordens de Serviço (OS) Ativas
+                    </h4>
+                    <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
+                      Vincule este lead a uma ou mais ordens de serviço ativas ou crie uma nova OS personalizada em tempo real.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const title = prompt("Digite o nome da nova Ordem de Serviço:");
+                      if (!title) return;
+                      const priority = prompt("Defina a prioridade (baixa, media, alta, urgente):", "media") as any;
+                      const newOS: OperationalOS = {
+                        id: `os-${Date.now()}`,
+                        title,
+                        date: new Date().toISOString(),
+                        fluxoId: lead.fluxoId || 'flow-1',
+                        leadIds: [lead.id],
+                        type: 'personalizado',
+                        status: 'pendente',
+                        priority: ['baixa', 'media', 'alta', 'urgente'].includes(priority) ? priority : 'media',
+                        metrics: {
+                          health: 100,
+                          totalLeads: 1,
+                          activeLeads: 1,
+                          conversionCount: 0
+                        }
+                      };
+                      if (setOperationalServiceOrders) {
+                        setOperationalServiceOrders(prev => [newOS, ...prev]);
+                        window.dispatchEvent(new CustomEvent("ciclocred_map_toast", { 
+                          detail: { 
+                            title: "💼 NOVA OS CRIADA",
+                            message: `Ordem de Serviço "${title}" criada e vinculada a ${lead.name}!`,
+                            type: "success"
+                          } 
+                        }));
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-550 text-white rounded-xl border-2 border-zinc-950 font-black text-[10px] uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-none transition cursor-pointer"
+                  >
+                    + Criar Nova OS
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap gap-2.5 max-h-48 overflow-y-auto p-1">
+                  {operationalServiceOrders.length === 0 ? (
+                    <div className="text-zinc-400 text-[11px] italic py-2 w-full text-center">
+                      Nenhuma Ordem de Serviço cadastrada. Clique no botão acima para criar uma!
+                    </div>
+                  ) : (
+                    operationalServiceOrders.map(os => {
+                      const isLinked = os.leadIds.includes(lead.id);
+                      return (
+                        <label 
+                          key={os.id}
+                          className={`flex items-center gap-2 px-3 py-2 border-2 rounded-xl text-xs font-bold transition select-none cursor-pointer ${
+                            isLinked 
+                              ? 'bg-emerald-50 border-emerald-500 text-emerald-950 shadow-[2px_2px_0px_0px_rgba(16,185,129,0.3)]' 
+                              : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isLinked}
+                            onChange={(e) => {
+                              if (!setOperationalServiceOrders) return;
+                              const checked = e.target.checked;
+                              setOperationalServiceOrders(prev => prev.map(item => {
+                                if (item.id === os.id) {
+                                  const leadsSet = new Set(item.leadIds);
+                                  if (checked) {
+                                    leadsSet.add(lead.id);
+                                  } else {
+                                    leadsSet.delete(lead.id);
+                                  }
+                                  return {
+                                    ...item,
+                                    leadIds: Array.from(leadsSet),
+                                    metrics: {
+                                      ...item.metrics,
+                                      totalLeads: leadsSet.size,
+                                      activeLeads: leadsSet.size
+                                    }
+                                  };
+                                }
+                                return item;
+                              }));
+
+                              if (checked && onUpdateLeadFull) {
+                                onUpdateLeadFull(lead.id, { fluxoId: os.fluxoId });
+                              }
+
+                              window.dispatchEvent(new CustomEvent("ciclocred_map_toast", { 
+                                detail: { 
+                                  title: checked ? "🔗 VÍNCULO ESTABELECIDO" : "🔓 VÍNCULO REMOVIDO",
+                                  message: checked 
+                                    ? `Lead ${lead.name} associado à OS "${os.title}" e redirecionado ao fluxo correspondente com sucesso!` 
+                                    : `Lead ${lead.name} removido da OS "${os.title}"!`,
+                                  type: "success"
+                                } 
+                              }));
+                            }}
+                            className="rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                          />
+                          <div className="flex flex-col">
+                            <span className="font-black text-[11px] uppercase tracking-tight">{os.title}</span>
+                            <span className="text-[9px] text-zinc-500 font-mono">
+                              Prioridade: {os.priority} • {os.leadIds.length} Leads
+                            </span>
+                          </div>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-5 max-w-full">
                 
                 {/* 1. PESSOAL */}
-                <div className="bg-white border-4 border-zinc-950 rounded-2xl overflow-hidden shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] flex flex-col min-h-[500px]">
+                <div className="flex-1 min-w-[300px] max-w-full bg-white border-4 border-zinc-950 rounded-2xl overflow-hidden shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] flex flex-col">
                   <div className="bg-blue-100 border-b-4 border-zinc-950 py-2.5 text-center shrink-0">
                     <h4 className="font-black text-xs uppercase tracking-wider text-blue-950 font-mono">👤 PESSOAL</h4>
                     <p className="text-[8.5px] text-blue-900/70 font-bold uppercase tracking-widest mt-0.5">Identificação e Contato</p>
@@ -932,11 +1157,29 @@ export default function LeadDetailsModal({
                         <input type="text" defaultValue={lead.address || ''} onBlur={(e) => updateField('address', e.target.value)} placeholder="Rua, Número" className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
                       </div>
                     </div>
+
+                    {/* CHECKLIST DE DOCUMENTAÇÃO PESSOAL */}
+                    <div className="p-3 bg-zinc-50 flex flex-col gap-2">
+                      <h4 className="text-[10px] font-mono font-black text-indigo-600 uppercase tracking-widest border-b border-indigo-100 pb-1 flex items-center gap-1">
+                        <span>🪪 Checklist Doc. Pessoal</span>
+                      </h4>
+                      {[
+                        { key: 'doc_cnh_rg', label: 'RG ou CNH legível e atualizada' },
+                        { key: 'doc_resid', label: 'Comprovante de residência (< 90 dias)' },
+                        { key: 'doc_est_civil', label: 'Certidão de Nascimento/Casamento' },
+                        { key: 'doc_fgts', label: 'Extrato do FGTS para abatimento' },
+                      ].map(item => (
+                        <label key={item.key} className="flex items-center gap-2 text-[10px] font-bold text-zinc-700 cursor-pointer hover:bg-white p-1 rounded transition">
+                          <input type="checkbox" checked={!!checklist[item.key]} onChange={() => handleToggleChecklistItem(item.key)} className="rounded border-zinc-350 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer" />
+                          <span>{item.label}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
                 {/* 2. QUALIFICAÇÃO */}
-                <div className="bg-white border-4 border-zinc-950 rounded-2xl overflow-hidden shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] flex flex-col min-h-[500px]">
+                <div className="flex-1 min-w-[300px] max-w-full bg-white border-4 border-zinc-950 rounded-2xl overflow-hidden shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] flex flex-col">
                   <div className="bg-amber-100 border-b-4 border-zinc-950 py-2.5 text-center shrink-0">
                     <h4 className="font-black text-xs uppercase tracking-wider text-amber-950 font-mono">🎯 QUALIFICAÇÃO</h4>
                     <p className="text-[8.5px] text-amber-900/70 font-bold uppercase tracking-widest mt-0.5">Perfil, Parâmetros & Preferências</p>
@@ -980,12 +1223,11 @@ export default function LeadDetailsModal({
                     <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
                       <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Perfil Atendimento">Perfil Atend.</span>
                       <div className="col-span-7 text-right">
-                        <select value={leadMainProfile} onChange={(e: any) => { setLeadMainProfile(e.target.value); updateField('mainProfile', e.target.value); }} className="font-black text-zinc-900 bg-transparent focus:outline-none p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full text-right">
-                          <option value="Primeiro Imóvel">Primeiro Imóvel</option>
-                          <option value="Investidor">Investidor</option>
-                          <option value="Jovem">Público Jovem</option>
-                          <option value="Meia idade">Meia idade</option>
-                          <option value="Idoso">Aposentado / Idoso</option>
+                        <select value={lead.mainProfile || leadMainProfile} onChange={(e: any) => { setLeadMainProfile(e.target.value); updateField('mainProfile', e.target.value); }} className="font-black text-zinc-900 bg-transparent focus:outline-none p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full text-right">
+                          <option value="">Não Informado</option>
+                          {getKanbanColumns("perfil").map(col => (
+                            <option key={col.id} value={col.id}>{col.label}</option>
+                          ))}
                         </select>
                       </div>
                     </div>
@@ -1070,18 +1312,83 @@ export default function LeadDetailsModal({
                     <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
                       <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Programa Habitacional">Prog. Habit.</span>
                       <div className="col-span-7 text-right">
-                        <select defaultValue={lead.programaDesejado || 'Indiferente'} onChange={(e: any) => updateField('programaDesejado', e.target.value)} className="font-black text-zinc-900 bg-transparent focus:outline-none p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full text-right">
+                        <select value={lead.programaDesejado || 'Indiferente'} onChange={(e: any) => updateField('programaDesejado', e.target.value)} className="font-black text-zinc-900 bg-transparent focus:outline-none p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full text-right">
                           <option value="Indiferente">Indiferente</option>
                           <option value="Minha Casa Minha Vida">Minha Casa Minha Vida</option>
                           <option value="SBPE">SBPE (Tradicional)</option>
                         </select>
                       </div>
                     </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Objeção do Cliente">Objeção</span>
+                      <div className="col-span-7 text-right">
+                        <select value={lead.objection || ''} onChange={(e: any) => updateField('objection', e.target.value)} className="font-black text-zinc-900 bg-transparent focus:outline-none p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full text-right">
+                          <option value="">Sem Objeção / Nenhum</option>
+                          {getKanbanColumns("objecoes").map(col => (
+                            <option key={col.id} value={col.id}>{col.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
+                      <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Qualificação">Qualificação</span>
+                      <div className="col-span-7 text-right">
+                        <select value={lead.qualificacao || ''} onChange={(e: any) => updateField('qualificacao', e.target.value)} className="font-black text-zinc-900 bg-transparent focus:outline-none p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full text-right">
+                          <option value="">Sem Contato / Não Analisado</option>
+                          {getKanbanColumns("qualificacao").map(col => (
+                            <option key={col.id} value={col.id}>{col.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors bg-indigo-50/50">
+                      <span className="col-span-5 text-indigo-950 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Status Funil">Status (Tabela)</span>
+                      <div className="col-span-7 text-right">
+                        <select value={lead.status || ''} onChange={(e: any) => updateField('status', e.target.value)} className="font-black text-indigo-950 bg-transparent focus:outline-none p-1 border border-indigo-200 focus:border-indigo-950 rounded-md text-xs w-full text-right">
+                          {getKanbanColumns("status").map(col => (
+                            <option key={col.id} value={col.id}>{col.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors bg-indigo-50/50">
+                      <span className="col-span-5 text-indigo-950 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Etapa Funil">Etapa Funil Geral</span>
+                      <div className="col-span-7 text-right">
+                        <select value={lead.stage || ''} onChange={(e: any) => updateField('stage', e.target.value)} className="font-black text-indigo-950 bg-transparent focus:outline-none p-1 border border-indigo-200 focus:border-indigo-950 rounded-md text-xs w-full text-right">
+                          <option value="">Sem etapa</option>
+                          {getKanbanColumns("etapas").map(col => (
+                            <option key={col.id} value={col.id}>{col.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {lead.fluxoId && (
+                      <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors bg-amber-50/50">
+                        <span className="col-span-5 text-amber-950 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Etapa da OS">Etapa do Fluxo OS</span>
+                        <div className="col-span-7 text-right">
+                          <select
+                            value={lead.osStageId || ''}
+                            onChange={(e: any) => updateField('osStageId', e.target.value)}
+                            className="font-black text-amber-950 bg-transparent focus:outline-none p-1 border border-amber-200 focus:border-amber-950 rounded-md text-xs w-full text-right"
+                          >
+                            <option value="">Selecione etapa...</option>
+                            {(operationalFlows || []).find(f => f.id === lead.fluxoId)?.stages?.map(s => (
+                              <option key={s.id} value={s.id}>{s.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* 3. FINANCEIRO */}
-                <div className="bg-white border-4 border-zinc-950 rounded-2xl overflow-hidden shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] flex flex-col min-h-[500px]">
+                <div className="flex-1 min-w-[300px] max-w-full bg-white border-4 border-zinc-950 rounded-2xl overflow-hidden shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] flex flex-col">
                   <div className="bg-emerald-100 border-b-4 border-zinc-950 py-2.5 text-center shrink-0">
                     <h4 className="font-black text-xs uppercase tracking-wider text-emerald-950 font-mono">💵 FINANCEIRO</h4>
                     <p className="text-[8.5px] text-emerald-900/70 font-bold uppercase tracking-widest mt-0.5">Análise de Crédito & Valores</p>
@@ -1112,7 +1419,7 @@ export default function LeadDetailsModal({
                     <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
                       <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Restrição BACEN / Crédito">BACEN</span>
                       <div className="col-span-7 text-right">
-                        <select defaultValue={lead.restricaoBacen || 'Não'} onChange={(e) => updateField('restricaoBacen', e.target.value)} className="font-black text-zinc-900 bg-transparent focus:outline-none p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full text-right">
+                        <select value={lead.restricaoBacen || 'Não'} onChange={(e) => updateField('restricaoBacen', e.target.value)} className="font-black text-zinc-900 bg-transparent focus:outline-none p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full text-right">
                           <option value="Não">Não</option>
                           <option value="Sim">Sim (Prejudica)</option>
                         </select>
@@ -1122,7 +1429,7 @@ export default function LeadDetailsModal({
                     <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
                       <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Possui Imóvel Ativo">Possui Imóvel</span>
                       <div className="col-span-7 text-right">
-                        <select defaultValue={lead.possuiImovel || 'Não'} onChange={(e) => updateField('possuiImovel', e.target.value)} className="font-black text-zinc-900 bg-transparent focus:outline-none p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full text-right">
+                        <select value={lead.possuiImovel || 'Não'} onChange={(e) => updateField('possuiImovel', e.target.value)} className="font-black text-zinc-900 bg-transparent focus:outline-none p-1 border border-zinc-200 focus:border-zinc-950 rounded-md text-xs w-full text-right">
                           <option value="Não">Não (MCMV)</option>
                           <option value="Sim">Sim (SBPE)</option>
                         </select>
@@ -1130,9 +1437,76 @@ export default function LeadDetailsModal({
                     </div>
 
                     {/* Sub-header 2 */}
-                    <div className="bg-emerald-50 text-emerald-950 px-3 py-1.5 font-mono font-black text-[9px] uppercase tracking-wider border-y-2 border-zinc-950 flex items-center gap-1 shrink-0">
-                      📊 Condições de Crédito
+                    <div className="bg-emerald-50 text-emerald-950 px-3 py-1.5 font-mono font-black text-[9px] uppercase tracking-wider border-y-2 border-zinc-950 flex items-center justify-between shrink-0">
+                      <span>📊 Condições de Crédito</span>
                     </div>
+
+                    {/* DYNAMIC SIMULATION PREVIEW */}
+                    {(() => {
+                      const ownsProp = lead.possuiImovel === 'Sim' || lead.ownsProperty === 'sim';
+                      const incomeVal = Number(lead.familyIncome) || 0;
+                      const hasFgts3Years = !!checklist['fgts_3anos'];
+                      const hasDependents = (Number(lead.dependents) || 0) > 0;
+                      let subsidioEstimado = 0;
+                      let simuladorBracket = 'SBPE';
+                      let annualInterestRate = 0.098;
+
+                      if (!ownsProp && incomeVal > 0) {
+                        if (incomeVal <= 2640) {
+                          simuladorBracket = 'Faixa 1 (MCMV)';
+                          annualInterestRate = hasFgts3Years ? 0.0400 : 0.0450;
+                          const factor = (incomeVal - 1412) / (2640 - 1412);
+                          subsidioEstimado = Math.max(20000, 55000 - factor * 30000);
+                          if (hasDependents) subsidioEstimado += 3000;
+                        } else if (incomeVal <= 4400) {
+                          simuladorBracket = 'Faixa 2 (MCMV)';
+                          annualInterestRate = hasFgts3Years ? 0.0475 : 0.0525;
+                          const factor = (incomeVal - 2640) / (4400 - 2640);
+                          subsidioEstimado = Math.max(10000, 25000 - factor * 15000);
+                          if (hasDependents) subsidioEstimado += 2000;
+                        } else if (incomeVal <= 8000) {
+                          simuladorBracket = 'Faixa 3 (MCMV)';
+                          annualInterestRate = hasFgts3Years ? 0.0600 : 0.0650;
+                          subsidioEstimado = hasDependents ? 5000 : 0;
+                        } else {
+                          simuladorBracket = 'SBPE (Livre)';
+                          annualInterestRate = 0.098;
+                          subsidioEstimado = 0;
+                        }
+                      } else {
+                        simuladorBracket = (incomeVal > 0 && incomeVal <= 8000) ? 'MCMV (s/ subsídio)' : 'SBPE (Livre)';
+                        annualInterestRate = 0.098;
+                        subsidioEstimado = 0;
+                      }
+
+                      return (
+                        <div className="p-3 bg-indigo-50 border-b border-indigo-100 flex flex-col gap-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[10px] font-black font-mono text-indigo-900 uppercase">Enquadramento Caixa</span>
+                            <span className="text-xs font-black text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded">{simuladorBracket}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 mt-1">
+                            <div className="bg-white p-2 rounded border border-indigo-100">
+                              <span className="text-[9px] text-zinc-500 font-bold uppercase block mb-0.5">Subsídio Est.</span>
+                              <span className="text-sm font-black text-emerald-600">
+                                {subsidioEstimado > 0 ? `R$ ${subsidioEstimado.toLocaleString('pt-BR')}` : 'N/A'}
+                              </span>
+                            </div>
+                            <div className="bg-white p-2 rounded border border-indigo-100">
+                              <span className="text-[9px] text-zinc-500 font-bold uppercase block mb-0.5">Taxa de Juros</span>
+                              <span className="text-sm font-black text-indigo-600">
+                                {(annualInterestRate * 100).toFixed(2)}% a.a.
+                              </span>
+                            </div>
+                          </div>
+                          {hasFgts3Years && (
+                            <div className="text-[9px] text-emerald-700 font-bold mt-1 text-right italic">
+                              * Redutor de juros (FGTS 3 anos) ativo.
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     <div className="p-2 grid grid-cols-12 gap-2 items-center hover:bg-zinc-50 transition-colors">
                       <span className="col-span-5 text-zinc-500 uppercase font-black text-[8.5px] font-mono tracking-wider truncate" title="Valor do Imóvel de Interesse">Vlr Imóvel</span>
@@ -1165,214 +1539,38 @@ export default function LeadDetailsModal({
                         <input type="number" defaultValue={lead.downPaymentValue || ''} onBlur={(e) => { const v = parseFloat(e.target.value) || 0; updateField('downPaymentValue', v); }} className="text-right font-black text-zinc-900 bg-transparent focus:outline-none focus:bg-zinc-100 p-1 border border-zinc-200 focus:border-zinc-950 rounded-md w-full text-xs" />
                       </div>
                     </div>
+
+                    {/* CHECKLIST COMPROVAÇÃO DE RENDA */}
+                    <div className="p-3 bg-zinc-50 flex flex-col gap-2">
+                      <h4 className="text-[10px] font-mono font-black text-emerald-600 uppercase tracking-widest border-b border-emerald-100 pb-1 flex items-center gap-1">
+                        <span>💵 Checklist Comp. Renda</span>
+                      </h4>
+                      {[
+                        { key: 'renda_holerites', label: '3 últimos holerites (se CLT)' },
+                        { key: 'renda_ir', label: 'Declaração completa de IRPF + recibo' },
+                        { key: 'renda_extratos', label: '6 meses de extrato bancário (se autônomo)' },
+                        { key: 'renda_carteira', label: 'Carteira de Trabalho Digital (para CLT > 3 anos)' },
+                        { key: 'fgts_3anos', label: 'Possui 3 anos de FGTS (Redutor de Juros CEF)' },
+                      ].map(item => (
+                        <label key={item.key} className="flex items-center gap-2 text-[10px] font-bold text-zinc-700 cursor-pointer hover:bg-white p-1 rounded transition">
+                          <input type="checkbox" checked={!!checklist[item.key]} onChange={() => handleToggleChecklistItem(item.key)} className="rounded border-zinc-350 text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5 cursor-pointer" />
+                          <span>{item.label}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
               </div>
 
-              {/* PLANO DE PARCELAMENTO FACILITADO COM A CONSTRUTORA (TABELA DE SIMULAÇÃO & PROPOSTA) */}
-              <div className="bg-zinc-900 text-white p-5 rounded-2xl space-y-4 border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden animate-fadeIn">
-                <div className="absolute right-3 top-3 opacity-10 rotate-12 select-none pointer-events-none">
-                  <Calculator className="w-20 h-20 text-white" />
-                </div>
-
-                <div className="border-b border-zinc-800 pb-2 relative z-10 flex justify-between items-center">
-                  <div>
-                    <span className="text-[8.5px] font-mono font-black text-emerald-400 uppercase tracking-widest block leading-none">TABELA DE SIMULAÇÃO E PROPOSTA</span>
-                    <h4 className="text-xs font-black uppercase text-white tracking-tight flex items-center gap-1.5 mt-1">
-                      🏡 Entrada Facilitada Construtora (Período Obras)
-                    </h4>
-                  </div>
-                  <div className="px-2 py-0.5 rounded text-[8.5px] font-mono font-black uppercase bg-emerald-500 text-zinc-950 tracking-wider">
-                    Entrada Necessária: R$ {(lead.downPaymentValue || sim.totalDownPaymentRequired || 0).toLocaleString('pt-BR')}
-                  </div>
-                </div>
-
-                {/* Inputs for downpayment facilitation layout */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 relative z-10 text-xs">
-                  {/* Parcela de Ato */}
-                  <div className="space-y-1">
-                    <label className="block text-[9px] font-mono font-black text-zinc-400 uppercase">Ato (Sinal)</label>
-                    <div className="relative">
-                      <span className="absolute left-2 top-1.5 text-[10px] text-zinc-500 font-bold">R$</span>
-                      <input
-                        type="number"
-                        value={valorAto || ''}
-                        onChange={(e) => {
-                          const val = Math.max(0, Number(e.target.value) || 0);
-                          setValorAto(val);
-                          updateField('valorAto', val);
-                        }}
-                        className="w-full bg-zinc-950 border border-zinc-800 hover:border-zinc-700 focus:border-zinc-505 rounded-lg p-1.5 pl-6 text-xs text-white font-mono"
-                      />
-                    </div>
-                  </div>
-
-                  {/* 2 Parcelas Anuais */}
-                  <div className="space-y-1">
-                    <label className="block text-[9px] font-mono font-black text-zinc-400 uppercase text-amber-400">2x Balões Anuais (Cada)</label>
-                    <div className="relative">
-                      <span className="absolute left-2 top-1.5 text-[10px] text-zinc-500 font-bold">R$</span>
-                      <input
-                        type="number"
-                        value={valorAnual || ''}
-                        onChange={(e) => {
-                          const val = Math.max(0, Number(e.target.value) || 0);
-                          setValorAnual(val);
-                          updateField('valorAnual', val);
-                        }}
-                        className="w-full bg-zinc-950 border border-zinc-800 hover:border-zinc-700 focus:border-zinc-505 rounded-lg p-1.5 pl-6 text-xs text-white font-mono"
-                      />
-                    </div>
-                    <span className="block text-[8px] text-zinc-500 font-mono">Total de Balões: R$ {(2 * valorAnual).toLocaleString('pt-BR')}</span>
-                  </div>
-
-                  {/* Parcela de Chaves */}
-                  <div className="space-y-1">
-                    <label className="block text-[9px] font-mono font-black text-zinc-400 uppercase">Chaves</label>
-                    <div className="relative">
-                      <span className="absolute left-2 top-1.5 text-[10px] text-zinc-500 font-bold">R$</span>
-                      <input
-                        type="number"
-                        value={valorChaves || ''}
-                        onChange={(e) => {
-                          const val = Math.max(0, Number(e.target.value) || 0);
-                          setValorChaves(val);
-                          updateField('valorChaves', val);
-                        }}
-                        className="w-full bg-zinc-950 border border-zinc-800 hover:border-zinc-700 focus:border-zinc-505 rounded-lg p-1.5 pl-6 text-xs text-white font-mono"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Tempo de Obra */}
-                  <div className="space-y-1">
-                    <label className="block text-[9px] font-mono font-black text-zinc-400 uppercase">Tempo de Obra (Meses)</label>
-                    <select
-                      value={tempoObra}
-                      onChange={(e) => {
-                        const val = Number(e.target.value) || 36;
-                        setTempoObra(val);
-                        updateField('tempoObra', val);
-                      }}
-                      className="w-full bg-zinc-950 border border-zinc-800 hover:border-zinc-700 focus:border-zinc-505 rounded-lg p-1.5 text-xs text-white font-mono cursor-pointer"
-                    >
-                      <option value={12}>12 meses (1 ano)</option>
-                      <option value={18}>18 meses</option>
-                      <option value={20}>20 meses</option>
-                      <option value={24}>24 meses (2 anos)</option>
-                      <option value={30}>30 meses</option>
-                      <option value={36}>36 meses (3 anos)</option>
-                      <option value={48}>48 meses (4 anos)</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Dynamic calculation banner */}
-                {(() => {
-                  const requiredDownpayment = lead.downPaymentValue || sim.totalDownPaymentRequired || 0;
-                  const totalFacilitadoAvulso = valorAto + (2 * valorAnual) + valorChaves;
-                  const diferencaRestante = Math.max(0, requiredDownpayment - totalFacilitadoAvulso);
-                  const valorMensalObra = tempoObra > 0 ? (diferencaRestante / tempoObra) : 0;
-
-                  return (
-                    <div className="relative z-10 bg-zinc-950/80 border border-zinc-800 p-3 rounded-xl grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
-                      <div>
-                        <span className="block text-[8px] font-mono font-black text-zinc-500 uppercase leading-none">Total Sinal + Balões</span>
-                        <strong className="block text-xs font-sans font-black text-zinc-300 mt-1">
-                          R$ {totalFacilitadoAvulso.toLocaleString('pt-BR')}
-                        </strong>
-                        <span className="text-[8.5px] text-zinc-500 font-mono italic">
-                          (Ato + 2 Anuais + Chaves)
-                        </span>
-                      </div>
-
-                      <div className="border-t md:border-t-0 md:border-l md:border-r border-zinc-800 py-1.5 md:py-0 md:px-3">
-                        <span className="block text-[8px] font-mono font-black text-amber-400 uppercase leading-none">Diferença Restante</span>
-                        <strong className="block text-xs font-sans font-black text-amber-300 mt-1">
-                          R$ {diferencaRestante.toLocaleString('pt-BR')}
-                        </strong>
-                        <span className="text-[8.5px] text-zinc-500 font-mono italic">
-                          (Saldo restante para obras)
-                        </span>
-                      </div>
-
-                      <div className="bg-emerald-950/55 border border-emerald-800 p-2 text-center rounded-lg">
-                        <span className="text-[9px] font-mono font-black text-emerald-300 uppercase block tracking-wider leading-none">
-                          MENSAL OBRA ({tempoObra}X)
-                        </span>
-                        <strong className="block text-sm font-mono font-black text-emerald-400 mt-1">
-                          R$ {Math.round(valorMensalObra).toLocaleString('pt-BR')} /mês
-                        </strong>
-                        <span className="text-[8px] text-zinc-400 block mt-0.5 font-sans">
-                          Dividido automaticamente pelo tempo de obra
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              {/* CHECKLIST DE QUALIFICAÇÃO */}
-              <div className="bg-white border-2 border-zinc-950 rounded-xl p-5 space-y-4 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
-                <div className="flex justify-between items-center border-b-2 border-zinc-200 pb-2">
-                  <h3 className="text-xs font-black text-zinc-900 uppercase tracking-tight flex items-center gap-1.5 font-sans">
-                    📋 Checklist de Qualificação de Financiamento
-                  </h3>
-                  <span className="text-[9px] bg-emerald-100 border border-emerald-300 text-emerald-950 px-2 py-0.5 rounded font-mono font-bold uppercase">
-                    Dossiê Ativo
-                  </span>
-                </div>
-                
-                <p className="text-[11px] text-zinc-500 font-medium">
-                  Verifique se o lead possui as condições e a papelada correta para seguir com a simulação habitacional:
-                </p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Seção 1: Documentação Pessoal */}
-                  <div className="space-y-2 select-none">
-                    <h4 className="text-[10px] font-mono font-black text-indigo-600 uppercase tracking-widest border-b border-indigo-100 pb-1 flex items-center gap-1">
-                      <span>🪪 Doc. Pessoal</span>
-                    </h4>
-                    {[
-                      { key: 'doc_cnh_rg', label: 'RG ou CNH legível e atualizada' },
-                      { key: 'doc_resid', label: 'Comprovante de residência (< 90 dias)' },
-                      { key: 'doc_est_civil', label: 'Certidão de Nascimento/Casamento' },
-                      { key: 'doc_fgts', label: 'Extrato do FGTS para abatimento' },
-                    ].map(item => (
-                      <label key={item.key} className="flex items-center gap-2 text-xs font-bold text-zinc-700 cursor-pointer hover:bg-zinc-50 p-1.5 rounded transition">
-                        <input type="checkbox" checked={!!checklist[item.key]} onChange={() => handleToggleChecklistItem(item.key)} className="rounded border-zinc-350 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" />
-                        <span>{item.label}</span>
-                      </label>
-                    ))}
-                  </div>
-
-                  {/* Seção 2: Comprovação de Renda */}
-                  <div className="space-y-2 select-none">
-                    <h4 className="text-[10px] font-mono font-black text-emerald-600 uppercase tracking-widest border-b border-emerald-100 pb-1 flex items-center gap-1">
-                      <span>💵 Comprovação de Renda</span>
-                    </h4>
-                    {[
-                      { key: 'renda_holerites', label: '3 últimos holerites (se CLT)' },
-                      { key: 'renda_ir', label: 'Declaração completa de IRPF + recibo' },
-                      { key: 'renda_extratos', label: '6 meses de extrato bancário (se autônomo)' },
-                      { key: 'renda_carteira', label: 'Carteira de Trabalho Digital (para CLT > 3 anos)' },
-                    ].map(item => (
-                      <label key={item.key} className="flex items-center gap-2 text-xs font-bold text-zinc-700 cursor-pointer hover:bg-zinc-50 p-1.5 rounded transition">
-                        <input type="checkbox" checked={!!checklist[item.key]} onChange={() => handleToggleChecklistItem(item.key)} className="rounded border-zinc-350 text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer" />
-                        <span>{item.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Progress bar */}
-                {(() => {
-                  const checkedCount = Object.values(checklist).filter(Boolean).length;
-                  const totalCount = 8;
-                  const percent = Math.round((checkedCount / totalCount) * 100);
-                  return (
-                    <div className="pt-3 border-t border-zinc-150 space-y-1.5">
+              {/* Progress bar */}
+              {(() => {
+                const checkedCount = Object.values(checklist).filter(Boolean).length;
+                const totalCount = 8;
+                const percent = Math.round((checkedCount / totalCount) * 100);
+                return (
+                  <div className="mt-5 bg-white border-2 border-zinc-950 rounded-xl p-5 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+                    <div className="space-y-1.5">
                       <div className="flex justify-between items-center text-[10px] font-black uppercase text-zinc-500 font-mono">
                         <span>Status de Qualificação Documental</span>
                         <span>{percent}% Completo ({checkedCount}/{totalCount})</span>
@@ -1381,9 +1579,9 @@ export default function LeadDetailsModal({
                         <div className="bg-indigo-600 h-full transition-all duration-300" style={{ width: `${percent}%` }} />
                       </div>
                     </div>
-                  );
-                })()}
-              </div>
+                  </div>
+                );
+              })()}
             </>
           )}
 
@@ -1512,9 +1710,12 @@ export default function LeadDetailsModal({
                     <div className="flex items-center justify-between p-2.5 bg-white border border-zinc-200 rounded-lg">
                       <div className="space-y-0.5">
                         <span className="text-[8.5px] uppercase font-black text-zinc-400 block font-mono">Vínculo de fomento</span>
-                        <span className="text-[10px] font-extrabold text-zinc-700 font-sans">CLT &gt; 3 anos (FGTS)?</span>
+                        <span className="text-[10px] font-extrabold text-zinc-700 font-sans">Tem 3 anos de FGTS (Redutor de Juros)?</span>
                       </div>
-                      <input type="checkbox" checked={hasThreeYearsCLT} onChange={(e) => setHasThreeYearsCLT(e.target.checked)} className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" />
+                      <input type="checkbox" checked={hasThreeYearsCLT} onChange={(e) => {
+                        setHasThreeYearsCLT(e.target.checked);
+                        updateField('checklist', { ...(lead?.checklist || {}), aprov: e.target.checked });
+                      }} className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" />
                     </div>
 
                     <div className="space-y-1">
@@ -1622,7 +1823,7 @@ export default function LeadDetailsModal({
                           <button type="button" onClick={() => { navigator.clipboard.writeText(personalizedText); if (awardXP) awardXP(20); }} className="flex-1 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white font-mono font-black text-[9px] uppercase border-2 border-zinc-950 rounded-lg active:translate-y-0.5">
                             Copiar Texto
                           </button>
-                          <button type="button" onClick={() => { const cl = (lead?.phone || '').replace(/\D/g, ''); window.location.href = `whatsapp://send?phone=55${cl}&text=${encodeURIComponent(personalizedText)}`; }} className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-black text-[9px] uppercase border-2 border-zinc-950 rounded-lg active:translate-y-0.5">
+                          <button type="button" onClick={() => { const cl = (lead?.phone || '').replace(new RegExp('\\D', 'g'), ''); window.location.href = `whatsapp:send?phone=55${cl}&text=${encodeURIComponent(personalizedText)}`; }} className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-black text-[9px] uppercase border-2 border-zinc-950 rounded-lg active:translate-y-0.5">
                             Disparar Whats
                           </button>
                         </div>
@@ -1699,7 +1900,7 @@ export default function LeadDetailsModal({
                           const subject = `Proposta Comercial Imobiliária | ${lead.name}`;
                           const messageBody = aiPitchText || `Olá ${lead.name},\n\nTemos novidades excelentes de crédito habitacional e simulação para você.\n\nAtenciosamente,\nSua Assessoria Imobiliária`;
                           
-                          const ok = await sendGmailMessage(subject, messageBody.replace(/\n/g, '<br/>'), lead.email);
+                          const ok = await sendGmailMessage(subject, messageBody.replace(new RegExp('\\n', 'g'), '<br/>'), lead.email);
                           if (ok) {
                             setGoogleWorkspaceSuccess("E-mail enviado com sucesso do seu Gmail!");
                             if (awardXP) awardXP(100);
@@ -1836,7 +2037,7 @@ export default function LeadDetailsModal({
                               <span className={`inline-block font-mono text-[8.5px] font-black uppercase px-2 py-0.5 rounded-full ${
                                 apt.status === 'realizado' ? 'bg-emerald-100 text-emerald-800' :
                                 apt.status === 'cancelado' ? 'bg-red-100 text-red-800' :
-                                'bg-amber-100 text-amber-800 animate-pulse'
+                                'bg-amber-100 text-amber-800 '
                               }`}>
                                 {apt.status}
                               </span>
@@ -1925,7 +2126,7 @@ export default function LeadDetailsModal({
 
           {/* TAB 4: HISTÓRICO & NOTAS */}
           {activeTab === 'historico' && (
-            <>
+            <React.Fragment>
               {/* Editable Notes Frame */}
               <div className="space-y-2">
                 <div className="flex justify-between items-center pr-1 select-none">
@@ -1959,36 +2160,73 @@ export default function LeadDetailsModal({
                 </h3>
 
                 <div id="lead-activity-timeline" className="space-y-3 max-h-[280px] overflow-y-auto pr-1">
-                  {/* Simulated Creation Event */}
-                  <div className="flex gap-2.5 items-start text-xs rounded-xl border-2 border-zinc-950 p-3 bg-zinc-50 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
-                    <CalendarCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <div>
-                      <h4 className="font-extrabold text-zinc-900 uppercase tracking-tight text-[11px]">Lead Cadastrado</h4>
-                      <p className="text-[10px] text-zinc-500 font-semibold">Iniciado de {lead.origin}</p>
-                      <p className="text-[10px] text-zinc-400 font-mono mt-0.5">{new Date(lead.createdAt).toLocaleDateString('pt-BR')}</p>
-                    </div>
-                  </div>
-
-                  {/* Automation Log integrations matching lead */}
-                  {filteredLogs.length === 0 ? (
-                    <div className="text-[10px] font-mono font-bold uppercase text-zinc-400 py-4 text-center border-2 border-dashed border-zinc-200 rounded-xl">
-                      <span>Nenhum e-mail despachado ainda.</span>
+                  {combinedTimelineEvents.length === 0 ? (
+                    <div className="text-[10px] font-mono font-bold uppercase text-zinc-400 py-6 text-center border-2 border-dashed border-zinc-200 rounded-xl">
+                      <span>Nenhum evento registrado ainda.</span>
                     </div>
                   ) : (
-                    filteredLogs.map(log => (
-                      <div key={log.id} className="flex gap-2.5 items-start text-xs rounded-xl border-2 border-zinc-950 p-3 bg-indigo-50 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
-                        <Send className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                        <div className="min-w-0">
-                          <h4 className="font-extrabold text-zinc-900 uppercase tracking-tight text-[11px] truncate">E-mail: {log.templateName}</h4>
-                          <p className="text-[10px] text-zinc-500 truncate font-semibold">{log.subject}</p>
-                          <p className="text-[10px] text-zinc-400 font-mono mt-0.5">{log.sentAt}</p>
-                        </div>
-                      </div>
-                    ))
+                    combinedTimelineEvents.map(event => {
+                      if (event.type === 'creation') {
+                        return (
+                          <div key={event.id} className="flex gap-2.5 items-start text-xs rounded-xl border-2 border-zinc-950 p-3 bg-zinc-50 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:scale-[1.01] transition-transform">
+                            <CalendarCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                            <div>
+                              <h4 className="font-extrabold text-zinc-900 uppercase tracking-tight text-[11px]">{event.title}</h4>
+                              <p className="text-[10px] text-zinc-500 font-semibold">{event.subtitle}</p>
+                              <p className="text-[10px] text-zinc-400 font-mono mt-0.5">
+                                {event.timestamp.toLocaleDateString('pt-BR')} às {event.timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      } else if (event.type === 'email') {
+                        return (
+                          <div key={event.id} className="flex gap-2.5 items-start text-xs rounded-xl border-2 border-zinc-950 p-3 bg-indigo-50 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:scale-[1.01] transition-transform">
+                            <Send className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                            <div className="min-w-0 w-full">
+                              <h4 className="font-extrabold text-zinc-900 uppercase tracking-tight text-[11px] truncate">{event.title}</h4>
+                              <p className="text-[10px] text-zinc-500 truncate font-semibold">{event.subtitle}</p>
+                              {event.details && (
+                                <p className="text-[10px] text-zinc-400 italic bg-white/50 rounded p-1.5 mt-1 border border-zinc-200 truncate">
+                                  {event.details}
+                                </p>
+                              )}
+                              <p className="text-[10px] text-zinc-400 font-mono mt-0.5">
+                                {event.timestamp.toLocaleDateString('pt-BR')} às {event.timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      } else {
+                        // User manual action (Action Log)
+                        return (
+                          <div key={event.id} className="flex gap-2.5 items-start text-xs rounded-xl border-2 border-zinc-950 p-3 bg-blue-50 border-blue-900/20 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:scale-[1.01] transition-transform">
+                            <Sparkles className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                            <div className="min-w-0 w-full">
+                              <h4 className="font-extrabold text-blue-950 uppercase tracking-tight text-[11px] flex items-center gap-1.5 flex-wrap">
+                                <span>{event.title}</span>
+                                <span className="bg-blue-100 text-blue-800 text-[8px] px-1.5 py-0.5 rounded font-mono font-bold">
+                                  {event.user}
+                                </span>
+                              </h4>
+                              <p className="text-[10px] text-blue-900 font-semibold">{event.subtitle}</p>
+                              {event.details && (
+                                <p className="text-[10px] text-zinc-600 bg-white/70 rounded p-1.5 mt-1 border border-zinc-200">
+                                  {event.details}
+                                </p>
+                              )}
+                              <p className="text-[10px] text-zinc-400 font-mono mt-0.5">
+                                {event.timestamp.toLocaleDateString('pt-BR')} às {event.timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      }
+                    })
                   )}
                 </div>
               </div>
-            </>
+            </React.Fragment>
           )}
 
         </div>
@@ -2002,7 +2240,7 @@ export default function LeadDetailsModal({
             <button onClick={() => handleWhatsAppAction(lead, undefined, () => onUpdateLeadFull?.(lead.id, { lastInteractionAt: new Date().toISOString() }))} title="WhatsApp Inteligente" className="p-2 px-3 bg-white hover:bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center transition border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] active:translate-y-0.5 active:shadow-[0px_0px_0px_0px_rgba(24,24,27,1)] whitespace-nowrap cursor-pointer">
               <MessageCircle className="w-4 h-4 mr-1.5" /> <span className="font-black text-xs">Whats</span>
             </button>
-            <button onClick={() => window.open(`tel:${lead.phone.replace(/\D/g, '')}`)} title="Ligar" className="p-2 px-3 bg-white hover:bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center transition border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] active:translate-y-0.5 active:shadow-[0px_0px_0px_0px_rgba(24,24,27,1)] whitespace-nowrap cursor-pointer">
+            <button onClick={() => window.open(`tel:${lead.phone.replace(new RegExp('\\D', 'g'), '')}`)} title="Ligar" className="p-2 px-3 bg-white hover:bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center transition border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] active:translate-y-0.5 active:shadow-[0px_0px_0px_0px_rgba(24,24,27,1)] whitespace-nowrap cursor-pointer">
               <Phone className="w-4 h-4 mr-1.5" /> <span className="font-black text-xs">Ligar</span>
             </button>
             <button onClick={() => { if (onNavigateToFollowUp) { onNavigateToFollowUp(lead); } else if (onOpenEditModal) { onOpenEditModal(lead); } onClose(); }} title="Follow-Up" className="p-2 px-3 bg-white hover:bg-amber-100 text-amber-600 rounded-lg flex items-center justify-center transition border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(24,24,27,1)] active:translate-y-0.5 active:shadow-[0px_0px_0px_0px_rgba(24,24,27,1)] whitespace-nowrap cursor-pointer">
@@ -2028,6 +2266,21 @@ export default function LeadDetailsModal({
           </div>
         </div>
       </div>
+  );
+
+  if (isInline) {
+    return modalContent;
+  }
+
+  return (
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-zinc-950/80 backdrop-blur-xs overflow-hidden"
+      id="lead-details-modal-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      {modalContent}
     </div>
   );
-}
+});

@@ -36,6 +36,7 @@ import {
   Image as ImageIcon,
   ChevronLeft,
   Eye,
+  EyeOff,
   LayoutDashboard,
   Users,
   MessageSquare,
@@ -43,6 +44,7 @@ import {
   X,
   Settings
 } from 'lucide-react';
+import { calculateAdvancedMetrics } from '../utils/financeEngine';
 
 interface RealEstateInventoryProps {
   leads: Lead[];
@@ -64,7 +66,7 @@ interface RealEstateInventoryProps {
   awardXP?: (xp: number, cause?: string) => void;
 }
 
-export default function RealEstateInventory({
+export default React.memo(function RealEstateInventory({
   leads,
   globalFilteredLeads,
   globalSearchTerm,
@@ -86,6 +88,8 @@ export default function RealEstateInventory({
   const [activeSubTab, setActiveSubTab] = useState<'estoque' | 'estoque-tabela' | 'importador'>('estoque');
   const [showTableBelowBlocks, setShowTableBelowBlocks] = useState(false);
   const [isPropertyImportModalOpen, setIsPropertyImportModalOpen] = useState(false);
+  const [isGridVisible, setIsGridVisible] = useState(true);
+  const [showOnlySelected, setShowOnlySelected] = useState(false);
 
   useEffect(() => {
     const handleNext = () => {
@@ -212,6 +216,9 @@ export default function RealEstateInventory({
   const [newLocation, setNewLocation] = useState('');
   const [newNeighborhood, setNewNeighborhood] = useState('');
   const [newDescription, setNewDescription] = useState('');
+  const [newDeliveryPhase, setNewDeliveryPhase] = useState<'Pronto' | 'Curto' | 'Médio' | 'Longo' | 'Lançamento'>('Curto');
+  const [newDeliveryDate, setNewDeliveryDate] = useState('');
+  const [newFeatures, setNewFeatures] = useState<string[]>([]);
 
   // CEP & PDF Proposta states
   const [cepInput, setCepInput] = useState('');
@@ -228,6 +235,7 @@ export default function RealEstateInventory({
   const [selectedPropertyForMedia, setSelectedPropertyForMedia] = useState<RealEstateProperty | null>(null);
   const [mediaModalOpen, setMediaModalOpen] = useState(false);
   const [activeMediaTab, setActiveMediaTab] = useState<'carousel' | 'manage' | 'share'>('carousel');
+  const [showSchoolsForProperty, setShowSchoolsForProperty] = useState<string | null>(null);
   const [detailsCarouselIndex, setDetailsCarouselIndex] = useState(0);
   const [cardCarouselIndexes, setCardCarouselIndexes] = useState<Record<string, number>>({});
   const [campaignStatusMessage, setCampaignStatusMessage] = useState('');
@@ -749,6 +757,9 @@ export default function RealEstateInventory({
       neighborhood: newNeighborhood,
       status: 'disponivel',
       description: newDescription,
+      deliveryPhase: newDeliveryPhase,
+      deliveryDate: newDeliveryDate || undefined,
+      features: newFeatures,
       imageUrl: mainImg,
       images: propertyImages.length > 0 ? propertyImages : [mainImg]
     };
@@ -762,6 +773,9 @@ export default function RealEstateInventory({
     setNewLocation('');
     setNewNeighborhood('');
     setNewDescription('');
+    setNewDeliveryPhase('Curto');
+    setNewDeliveryDate('');
+    setNewFeatures([]);
     setPropertyImages(['https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&q=80&w=600']);
     setImageInput('');
   };
@@ -814,8 +828,9 @@ export default function RealEstateInventory({
     
     // If compatibility mode is toggled, only show properties with at least 1 matching lead
     const matchesCompatibilityToggle = showOnlyCompatibilityMode ? getMatchingLeadsCount(prop) > 0 : true;
+    const matchesSelected = showOnlySelected ? selectedProperties.includes(prop.id) : true;
 
-    return matchesSearch && matchesType && matchesStatus && matchesLead && matchesCompatibilityToggle;
+    return matchesSearch && matchesType && matchesStatus && matchesLead && matchesCompatibilityToggle && matchesSelected;
   });
 
   // MCMV / SBPE / CAIXA Lookup Table (based on the PDF Document data)
@@ -1351,7 +1366,7 @@ export default function RealEstateInventory({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", src === 'leads' ? 'Planilha_Leads_cicloCRED.csv' : 'Planilha_Estoque_IMO_cicloCRED.csv');
+    link.setAttribute("download", src === 'leads' ? 'Planilha_Leads_Cury_Constelacao.csv' : 'Planilha_Estoque_IMO_Cury_Constelacao.csv');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1366,7 +1381,7 @@ export default function RealEstateInventory({
           {/* Main action line */}
           <div className="bg-gradient-to-br from-indigo-900 via-zinc-900 to-indigo-950 text-white border-4 border-zinc-950 p-6 rounded-3xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-[5px_5px_0px_0px_rgba(0,0,0,1)]">
             <div className="space-y-1">
-              <span className="text-[10px] uppercase font-mono font-black text-indigo-400 tracking-wider">🏢 Gestão de Portfólio imobiliário cicloCRED</span>
+              <span className="text-[10px] uppercase font-mono font-black text-indigo-400 tracking-wider">🏢 Gestão de Portfólio Cury Constelação</span>
               <h2 className="text-xl font-black uppercase italic tracking-tight">Consolide Carteira de Imóveis para os Leads</h2>
               <p className="text-xs text-zinc-300 font-medium max-w-xl">
                 O CRM correlaciona automaticamente o valor de financiamento pré-aprovado do lead com o portfólio físico para entregar recomendações precisas de compra.
@@ -1591,7 +1606,7 @@ export default function RealEstateInventory({
                 </div>
               )}
               
-              <div className="border border-zinc-250 rounded-2xl shadow-inner bg-zinc-50 overflow-x-auto custom-scrollbar">
+              <div className="border border-zinc-250 rounded-2xl shadow-inner bg-zinc-50 overflow-auto max-h-[500px] custom-scrollbar">
                 <div className="min-w-[900px] w-full">
                   <table className="w-full text-left text-xs border-collapse font-sans">
                   <thead className="bg-zinc-950 text-white font-mono text-[10px] uppercase font-black tracking-wider sticky top-0 z-10">
@@ -1759,7 +1774,7 @@ export default function RealEstateInventory({
                   {/* Modal Header */}
                   <div className="p-6 bg-zinc-900 text-white border-b-4 border-zinc-950 flex justify-between items-center shrink-0">
                     <div className="flex-1 mr-4">
-                      <span className="text-[10px] uppercase font-mono font-black text-indigo-400 tracking-wider">Módulo de Ativos cicloCRED</span>
+                      <span className="text-[10px] uppercase font-mono font-black text-indigo-400 tracking-wider">Módulo de Ativos Cury Constelação</span>
                       <div className="flex items-center gap-2 mt-1">
                         <h3 className="text-xl font-black italic uppercase tracking-tight">Personalização de Carrossel • </h3>
                         <input 
@@ -2113,7 +2128,7 @@ export default function RealEstateInventory({
                   {/* Modal Footer */}
                   <div className="p-6 bg-zinc-50 border-t-4 border-zinc-950 flex flex-wrap justify-between items-center gap-4 shrink-0">
                     <div className="text-xs text-zinc-500 font-medium font-sans">
-                      Estética sob a curadoria técnica operacional de <strong>cicloCRED CRM</strong>.
+                      Estética sob a curadoria técnica operacional de <strong>Cury Constelação CRM</strong>.
                     </div>
                     <div className="flex gap-2">
                       <button
@@ -2479,6 +2494,43 @@ export default function RealEstateInventory({
                   />
                 </div>
 
+                <div className="md:col-span-12 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-mono font-black uppercase text-zinc-500 italic">📅 Prazo de Entrega</label>
+                    <select
+                      value={newDeliveryPhase}
+                      onChange={(e) => setNewDeliveryPhase(e.target.value as any)}
+                      className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-2.5 text-xs font-bold outline-none"
+                    >
+                      <option value="Pronto">Pronto para Morar</option>
+                      <option value="Curto">Curto Prazo (Até 12 meses)</option>
+                      <option value="Médio">Médio Prazo (12 a 24 meses)</option>
+                      <option value="Longo">Longo Prazo (Acima de 24 meses)</option>
+                      <option value="Lançamento">Lançamento / Pré-venda</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-mono font-black uppercase text-zinc-500 italic">Data Prevista (Opcional)</label>
+                    <input
+                      type="date"
+                      value={newDeliveryDate}
+                      onChange={(e) => setNewDeliveryDate(e.target.value)}
+                      className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-2.5 text-xs font-bold outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="md:col-span-12 space-y-1.5">
+                  <label className="block text-xs font-black text-zinc-700 uppercase font-mono">Diferenciais (Separados por vírgula)</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Varanda Gourmet, Suíte Master, Vaga Coberta"
+                    value={newFeatures.join(', ')}
+                    onChange={(e) => setNewFeatures(e.target.value.split(',').map(s => s.trim()).filter(s => s))}
+                    className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-3 text-xs font-bold focus:bg-white outline-none"
+                  />
+                </div>
+
                 <div className="md:col-span-12 space-y-1.5">
                   <label className="block text-xs font-black text-zinc-700 uppercase font-mono">Diferenciais e Memorial Descritivo</label>
                   <textarea
@@ -2593,7 +2645,34 @@ export default function RealEstateInventory({
 
 
           {/* Properties Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="flex items-center justify-between mb-4 mt-8">
+            <h3 className="text-[10px] font-black uppercase text-zinc-400 tracking-widest italic flex items-center gap-2">
+              <Building2 className="w-3.5 h-3.5" />
+              Unidades Disponíveis ({filteredProperties.length})
+            </h3>
+            <div className="flex items-center gap-3">
+              {selectedProperties.length > 0 && (
+                <button
+                  onClick={() => setShowOnlySelected(!showOnlySelected)}
+                  className={`flex items-center gap-2 px-4 py-2 border-2 border-zinc-950 text-[10px] font-black uppercase rounded-xl transition-all shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-none ${showOnlySelected ? 'bg-amber-500 text-zinc-950' : 'bg-white text-zinc-950 hover:bg-zinc-50'}`}
+                >
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  <span>{showOnlySelected ? 'Ver Todas' : `Ver Escolhas (${selectedProperties.length})`}</span>
+                </button>
+              )}
+              <button
+                onClick={() => setIsGridVisible(!isGridVisible)}
+                className="flex items-center gap-2 px-4 py-2 bg-zinc-950 text-white text-[10px] font-black uppercase rounded-xl border-2 border-zinc-950 hover:bg-zinc-800 transition-all shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-none"
+              >
+                {isGridVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                <span>{isGridVisible ? 'Esconder Unidades' : 'Mostrar Unidades'}</span>
+              </button>
+            </div>
+          </div>
+
+          {isGridVisible && (
+            <div className="max-h-[600px] overflow-y-auto pr-2 custom-scrollbar pb-8 border-b-2 border-zinc-100">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {filteredProperties.map(prop => {
               const leadsCount = getMatchingLeadsCount(prop);
 
@@ -2721,21 +2800,44 @@ export default function RealEstateInventory({
                       </p>
 
                       {/* Recommend highlight based on budget matching */}
-                      <div className="pt-2 border-t flex items-center justify-between">
-                        <span className="text-xs font-mono font-black text-indigo-700">
-                          {prop.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
-                        </span>
+                      <div className="pt-2 border-t space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-mono font-black text-indigo-700">
+                            {prop.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+                          </span>
 
-                        {leadsCount > 0 ? (
-                          <span className="text-[10px] uppercase font-bold font-mono text-emerald-700 flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
-                            <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>{leadsCount} Leads Elegíveis</span>
-                          </span>
-                        ) : (
-                          <span className="text-[9px] uppercase font-mono font-bold text-zinc-400">
-                            Sem leads compatíveis
-                          </span>
-                        )}
+                          {leadsCount > 0 ? (
+                            <span className="text-[10px] uppercase font-bold font-mono text-emerald-700 flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
+                              <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>{leadsCount} Leads Elegíveis</span>
+                            </span>
+                          ) : (
+                            <span className="text-[9px] uppercase font-mono font-bold text-zinc-400">
+                              Sem leads compatíveis
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Calculated Metrics for Inventory View */}
+                        {(() => {
+                           const metrics = calculateAdvancedMetrics(
+                              prop.price,
+                              prop.price * 0.01,
+                              3000, 0, false, true, false, 30, true, 'SAC', 0, 0
+                           );
+                           return (
+                             <div className="grid grid-cols-2 gap-2 bg-zinc-50 p-2 rounded-lg border border-zinc-200">
+                               <div className="text-[9px] font-mono">
+                                 <span className="text-zinc-500 uppercase">Subsídio Est.:</span>
+                                 <span className="font-black text-emerald-700 block">{metrics.subsidy.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}</span>
+                               </div>
+                               <div className="text-[9px] font-mono">
+                                 <span className="text-zinc-500 uppercase">Aprovação:</span>
+                                 <span className="font-black text-indigo-700 block">{metrics.approvalProbability}%</span>
+                               </div>
+                             </div>
+                           );
+                        })()}
                       </div>
 
                       {/* Compatible Leads List Box inside card */}
@@ -2774,53 +2876,86 @@ export default function RealEstateInventory({
                           </div>
                         );
                       })()}
+
+                      <div className="mt-4 pt-4 border-t flex flex-wrap gap-2 items-center justify-between">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setSelectedPropertyForMedia(prop);
+                              setDetailsCarouselIndex(0);
+                              setMediaModalOpen(true);
+                            }}
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white border border-zinc-950 text-[10px] font-black uppercase rounded shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition"
+                          >
+                            <Share2 className="w-3.5 h-3.5 text-white" />
+                            <span>Divulgar</span>
+                          </button>
+                          
+                          <button
+                            onClick={() => {
+                              setShowSchoolsForProperty(showSchoolsForProperty === prop.id ? null : prop.id);
+                            }}
+                            className={`flex items-center gap-1.5 px-2.5 py-1.5 border border-zinc-950 text-[10px] font-black uppercase rounded shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition ${showSchoolsForProperty === prop.id ? 'bg-blue-600 text-white shadow-none translate-x-0.5 translate-y-0.5' : 'bg-zinc-950 hover:bg-zinc-800 text-white'}`}
+                          >
+                            <Network className={`w-3.5 h-3.5 ${showSchoolsForProperty === prop.id ? 'text-white' : 'text-blue-400'}`} />
+                            <span>Escolas</span>
+                          </button>
+                        </div>
+
+                        <div className="flex gap-1.5 items-center justify-between sm:justify-end">
+                          <select
+                            value={prop.status}
+                            onChange={(e) => onUpdatePropertyStatus(prop.id, e.target.value as any)}
+                            className="bg-white border-2 border-zinc-950 text-[10px] font-black rounded-lg px-2 py-1 outline-none font-mono"
+                          >
+                            <option value="disponivel">Livre</option>
+                            <option value="reservado">Reservar</option>
+                            <option value="vendido">Vendido</option>
+                          </select>
+
+                          <button
+                            onClick={() => onDeleteProperty(prop.id)}
+                            title="Remover Imóvel"
+                            className="p-1 px-1.5 bg-white border-2 border-zinc-950 hover:bg-red-50 text-zinc-400 hover:text-red-700 rounded-lg transition shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {showSchoolsForProperty === prop.id && (
+                        <div className="mt-3 p-4 bg-blue-50 border-2 border-blue-200 rounded-xl animate-fadeIn">
+                          <h5 className="text-[10px] font-black uppercase text-blue-800 mb-2 flex items-center gap-1">
+                            <MapPin className="w-3 h-3" /> Infraestrutura Escolar Próxima
+                          </h5>
+                          <ul className="space-y-1.5">
+                            {[
+                              { name: 'Colégio Mackenzie', type: 'Privada', dist: '850m' },
+                              { name: 'Escola Adventista', type: 'Privada', dist: '1.2km' },
+                              { name: 'E.E. Dr. José Augusto', type: 'Pública', dist: '600m' },
+                              { name: 'CMEI Pintando o Sete', type: 'Pública', dist: '450m' }
+                            ].map((school, idx) => (
+                              <li key={idx} className="flex items-center justify-between bg-white/60 p-2 rounded-lg border border-blue-100 text-[10px] font-bold">
+                                <span className="text-zinc-900">{school.name}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-blue-600 text-[8px] font-black uppercase">{school.type}</span>
+                                  <span className="text-zinc-400 font-mono">{school.dist}</span>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      </div>
                     </div>
                   </div>
-
-                  {/* Actions bar for cards */}
-                  <div className="p-4 bg-zinc-50/70 border-t border-zinc-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 select-none">
-                    <div className="flex gap-2.5">
-                      <button
-                        onClick={() => {
-                          setSelectedPropertyForMedia(prop);
-                          setDetailsCarouselIndex(0);
-                          setMediaModalOpen(true);
-                        }}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white border border-zinc-950 text-[10px] font-black uppercase rounded shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition"
-                      >
-                        <Share2 className="w-3.5 h-3.5 text-white" />
-                        <span>Divulgar / Fotos</span>
-                      </button>
-                    </div>
-
-                    <div className="flex gap-1.5 items-center justify-between sm:justify-end">
-                      <select
-                        value={prop.status}
-                        onChange={(e) => onUpdatePropertyStatus(prop.id, e.target.value as any)}
-                        className="bg-white border text-[10px] font-black rounded px-1 outline-none font-mono"
-                      >
-                        <option value="disponivel">Livre</option>
-                        <option value="reservado">Reservar</option>
-                        <option value="vendido">Vendido</option>
-                      </select>
-
-                      <button
-                        onClick={() => onDeleteProperty(prop.id)}
-                        title="Remover Imóvel"
-                        className="p-1 px-1.5 bg-white border hover:bg-red-50 text-zinc-400 hover:text-red-700 rounded transition"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-
-        </div>
-      )}
+        )}
+      </div>
+    )}
 
       {/* RENDER TAB 2: PROPERTIES SPREADSHEET TABLE */}
       {activeSubTab === 'estoque-tabela' && (
@@ -2916,7 +3051,7 @@ export default function RealEstateInventory({
               </div>
             )}
             
-            <div className="border border-zinc-250 rounded-2xl shadow-inner bg-zinc-50 overflow-x-auto custom-scrollbar">
+            <div className="border border-zinc-250 rounded-2xl shadow-inner bg-zinc-50 overflow-auto max-h-[500px] custom-scrollbar">
               <div className="min-w-[900px] w-full">
                 <table className="w-full text-left text-xs border-collapse font-sans">
                 <thead className="bg-zinc-950 text-white font-mono text-[10px] uppercase font-black tracking-wider sticky top-0 z-10 font-sans">
@@ -3081,7 +3216,7 @@ export default function RealEstateInventory({
             {/* Input Controls */}
             <div className="lg:col-span-5 space-y-4">
               <div>
-                <span className="text-[10px] font-mono font-black text-indigo-600 uppercase">Simulador de Hipotecas e Financiamentos cicloCRED</span>
+                <span className="text-[10px] font-mono font-black text-indigo-600 uppercase">Simulador de Crédito Cury Constelação</span>
                 <h3 className="text-base font-black uppercase italic tracking-tight text-zinc-950">1. Parametrizar Simulação</h3>
               </div>
 
@@ -3619,7 +3754,7 @@ export default function RealEstateInventory({
                   </div>
                   
                   <p className="text-[11px] text-zinc-500 font-semibold leading-relaxed">
-                    A cicloCRED atualiza a cada 30 segundos os índices e disponibilidades dos empreendimentos Cury em São Paulo, Guarulhos, ABC e região metropolitana.
+                    O ecossistema Cury Constelação atualiza a cada 30 segundos os índices e disponibilidades dos empreendimentos Cury em São Paulo, Guarulhos, ABC e região metropolitana.
                   </p>
 
                   {/* Programmatic log display */}
@@ -3943,7 +4078,7 @@ export default function RealEstateInventory({
               <div className="flex justify-between items-center pb-3 border-b-2 border-zinc-200 print:hidden">
                 <div className="flex items-center gap-2">
                   <span className="p-1 px-2 bg-emerald-100 border-2 border-zinc-950 text-emerald-800 text-[10px] font-black uppercase rounded shadow font-mono">PDF PRONTO</span>
-                  <h3 className="text-sm font-black uppercase tracking-tight text-zinc-950 font-mono">Visualização da Proposta cicloCRED</h3>
+                  <h3 className="text-sm font-black uppercase tracking-tight text-zinc-950 font-mono">Visualização da Proposta Cury Constelação</h3>
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -3971,21 +4106,21 @@ export default function RealEstateInventory({
                 {/* Simulated Stamp / Seal */}
                 <div className="absolute top-2.5 right-6 opacity-15 pointer-events-none select-none border-4 border-indigo-755 p-2 uppercase font-mono font-black border-dashed rounded text-indigo-755 text-center text-[10px] scale-125 rotate-12">
                   <span>Aprovação Garantida</span><br />
-                  <span className="text-sm">cicloCRED</span>
+                  <span className="text-sm">Cury Constelação</span>
                 </div>
 
                 {/* Corporate Header */}
                 <div className="flex justify-between items-start border-b-4 border-zinc-950 pb-4">
                   <div className="space-y-1">
-                    <span className="text-xs font-mono font-black bg-indigo-950 text-indigo-200 px-2 py-0.5 rounded uppercase">CRÉDITO IMOBILIÁRIO</span>
-                    <h1 className="text-2xl font-black italic tracking-tighter uppercase text-zinc-950">cicloCRED</h1>
-                    <p className="text-[10px] text-zinc-500 font-mono font-bold">SOLUÇÕES FINANCEIRAS & CRÉDITO MULTIBANCOS LTDA</p>
+                    <span className="text-xs font-mono font-black bg-indigo-950 text-indigo-200 px-2 py-0.5 rounded uppercase">CURY CONSTELAÇÃO</span>
+                    <h1 className="text-2xl font-black italic tracking-tighter uppercase text-zinc-950">CURY CONSTELAÇÃO</h1>
+                    <p className="text-[10px] text-zinc-500 font-mono font-bold">ECOSSISTEMA DE VENDAS DE APARTAMENTOS NA PLANTA</p>
                   </div>
                   <div className="text-right font-mono text-[10px] space-y-1 font-bold text-zinc-500">
                     <p className="font-black text-indigo-700">AÇÃO DE FINANCIAMENTO PRELIMINAR</p>
                     <p>Protocolo: <span className="font-black text-zinc-950">SIM-{Date.now().toString().slice(-7)}</span></p>
                     <p>Gerado em: {new Date().toLocaleDateString('pt-BR')}</p>
-                    <p>Assessor: {leads.find(l => l.id === simSelectedLeadId)?.origin || 'CRM cicloCRED'}</p>
+                    <p>Assessor: {leads.find(l => l.id === simSelectedLeadId)?.origin || 'CRM Cury Constelação'}</p>
                   </div>
                 </div>
 
@@ -4089,7 +4224,7 @@ export default function RealEstateInventory({
                 <div className="bg-zinc-50 border border-zinc-250 p-4 rounded-xl text-[10px] space-y-2 text-zinc-500 leading-relaxed">
                   <span className="font-extrabold block text-zinc-900 uppercase font-mono tracking-wider">Declaração de Isenção e Diretrizes Regulatórias</span>
                   <p>
-                    1. Esta ficha de simulação representa uma estimativa calculada dinamicamente pelo CRM cicloCRED e não confere promessa implícita de crédito imobiliário definitivo por parte das instituições financeiras parceiras citadas. 
+                    1. Esta ficha de simulação representa uma estimativa calculada dinamicamente pelo ecossistema Cury Constelação e não confere promessa implícita de crédito imobiliário definitivo por parte das instituições financeiras parceiras citadas. 
                   </p>
                   <p>
                     2. A concessão definitiva está vinculada à avaliação cadastral, validação de restrições em bureaus de crédito (SPC/Serasa) e laudo de avaliação física do imóvel a ser adquirido, in estrita conformidade com a regulamentação do Banco Central do Brasil.
@@ -4497,7 +4632,7 @@ export default function RealEstateInventory({
                         type="button"
                         onClick={async () => {
                           const activeUrl = (selectedPropertyForMedia.images && selectedPropertyForMedia.images[detailsCarouselIndex]) || selectedPropertyForMedia.imageUrl || '';
-                          const captionText = `✨ ESPETACULAR: ${selectedPropertyForMedia.title} em ${selectedPropertyForMedia.neighborhood}!\n📐 Área útil de ${selectedPropertyForMedia.sizeSqm}m² com ${selectedPropertyForMedia.bedrooms} quartos.\n💰 Por apenas ${selectedPropertyForMedia.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}. Faça sua análise cicloCRED!`;
+                          const captionText = `✨ ESPETACULAR: ${selectedPropertyForMedia.title} em ${selectedPropertyForMedia.neighborhood}!\n📐 Área útil de ${selectedPropertyForMedia.sizeSqm}m² com ${selectedPropertyForMedia.bedrooms} quartos.\n💰 Por apenas ${selectedPropertyForMedia.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}. Faça sua análise Cury Constelação!`;
                           await shareNativelyWithFile(activeUrl, selectedPropertyForMedia.title, captionText);
                         }}
                         className="flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-mono text-[9px] font-black uppercase rounded-xl transition cursor-pointer"
@@ -4720,11 +4855,11 @@ export default function RealEstateInventory({
                           type="button"
                           onClick={async () => {
                             const activeUrl = (selectedPropertyForMedia.images && selectedPropertyForMedia.images[detailsCarouselIndex]) || selectedPropertyForMedia.imageUrl || '';
-                            const statusText = `🏨 NOVO IMÓVEL EXCLUSIVO EM ${selectedPropertyForMedia.neighborhood.toUpperCase()}! 📐 ${selectedPropertyForMedia.sizeSqm}m² de puro requinte e lazer. Entrada facilitada via cicloCRED! Me chame p/ simular já!`;
+                            const statusText = `🏨 NOVO IMÓVEL EXCLUSIVO EM ${selectedPropertyForMedia.neighborhood.toUpperCase()}! 📐 ${selectedPropertyForMedia.sizeSqm}m² de puro requinte e lazer. Entrada facilitada via Cury Constelação! Me chame p/ simular já!`;
                             
                             setCampaignStatusMessage('⏳ Baixando imagem de status...');
                             const imgCopied = await copyImageToClipboard(activeUrl);
-                            downloadImageFile(activeUrl, `ciclocred_imovel_${selectedPropertyForMedia.code}.png`);
+                            downloadImageFile(activeUrl, `cury_constelacao_${selectedPropertyForMedia.code}.png`);
                             
                             navigator.clipboard.writeText(statusText);
                             window.open('https://web.whatsapp.com', '_blank');
@@ -4756,11 +4891,11 @@ export default function RealEstateInventory({
                           type="button"
                           onClick={async () => {
                             const activeUrl = (selectedPropertyForMedia.images && selectedPropertyForMedia.images[detailsCarouselIndex]) || selectedPropertyForMedia.imageUrl || '';
-                            const postText = `🚨 OPORTUNIDADE ÚNICA: ${selectedPropertyForMedia.title}. Localizado em ${selectedPropertyForMedia.neighborhood}, oferecendo ${selectedPropertyForMedia.sizeSqm}m² por ${selectedPropertyForMedia.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}. Faça sua simulação com as menores taxas do mercado aqui na cicloCRED! #Imobiliaria #Apartamento #Investimento`;
+                            const postText = `🚨 OPORTUNIDADE ÚNICA: ${selectedPropertyForMedia.title}. Localizado em ${selectedPropertyForMedia.neighborhood}, oferecendo ${selectedPropertyForMedia.sizeSqm}m² por ${selectedPropertyForMedia.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}. Faça sua simulação com as menores taxas do mercado aqui na Cury Constelação! #Imobiliaria #Apartamento #Investimento`;
                             
                             setCampaignStatusMessage('⏳ Preparando imagem e copiando anúncio...');
                             await copyImageToClipboard(activeUrl);
-                            downloadImageFile(activeUrl, `ciclocred_imovel_${selectedPropertyForMedia.code}.png`);
+                            downloadImageFile(activeUrl, `cury_constelacao_${selectedPropertyForMedia.code}.png`);
                             
                             navigator.clipboard.writeText(postText);
                             window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(selectedPropertyForMedia.imageUrl || '')}`, '_blank');
@@ -4777,10 +4912,10 @@ export default function RealEstateInventory({
                           type="button"
                           onClick={async () => {
                             const activeUrl = (selectedPropertyForMedia.images && selectedPropertyForMedia.images[detailsCarouselIndex]) || selectedPropertyForMedia.imageUrl || '';
-                            const adText = `🏡 Quer morar em ${selectedPropertyForMedia.neighborhood}? Parcela estimada a partir do SFH! Fale agora mesmo com assessor cicloCRED para aprovar seu crédito.`;
+                            const adText = `🏡 Quer morar em ${selectedPropertyForMedia.neighborhood}? Parcela estimada a partir do SFH! Fale agora mesmo com assessor Cury Constelação para aprovar seu crédito.`;
                             
                             setCampaignStatusMessage('⏳ Copiando roteiro promocional...');
-                            downloadImageFile(activeUrl, `ciclocred_imovel_${selectedPropertyForMedia.code}.png`);
+                            downloadImageFile(activeUrl, `cury_constelacao_${selectedPropertyForMedia.code}.png`);
                             navigator.clipboard.writeText(adText);
                             alert("Roteiro copiado! Abra o Facebook Story/Feed e cole a nova cópia comercial junto da foto baixada!");
                           }}
@@ -4807,11 +4942,11 @@ export default function RealEstateInventory({
                           type="button"
                           onClick={async () => {
                             const activeUrl = (selectedPropertyForMedia.images && selectedPropertyForMedia.images[detailsCarouselIndex]) || selectedPropertyForMedia.imageUrl || '';
-                            const script = `🎬 ROTEIRO REELS INSTAGRAM:\n\n[Cena 1 - Gancho]: Mostre a Fachada/Fotos internas do ${selectedPropertyForMedia.title}. "Você moraria aqui pagando menos que um aluguel?"\n\n[Cena 2 - Specs]: Passe pelo book de fotos. "São ${selectedPropertyForMedia.sizeSqm}m² com sacada gourmet integrada e lazer club!"\n\n[Cena 3 - CTA]: Mostre a logo cicloCRED. "Consigo aprovar seu financiamento total em 24h. Link na bio!"`;
+                            const script = `🎬 ROTEIRO REELS INSTAGRAM:\n\n[Cena 1 - Gancho]: Mostre a Fachada/Fotos internas do ${selectedPropertyForMedia.title}. "Você moraria aqui pagando menos que um aluguel?"\n\n[Cena 2 - Specs]: Passe pelo book de fotos. "São ${selectedPropertyForMedia.sizeSqm}m² com sacada gourmet integrada e lazer club!"\n\n[Cena 3 - CTA]: Mostre a logo Cury Constelação. "Consigo aprovar seu financiamento total em 24h. Link na bio!"`;
                             
                             setCampaignStatusMessage('⏳ Baixando foto e copiando script...');
                             await copyImageToClipboard(activeUrl);
-                            downloadImageFile(activeUrl, `ciclocred_imovel_${selectedPropertyForMedia.code}.png`);
+                            downloadImageFile(activeUrl, `cury_constelacao_${selectedPropertyForMedia.code}.png`);
                             
                             navigator.clipboard.writeText(script);
                             window.open('https://instagram.com', '_blank');
@@ -4844,7 +4979,7 @@ export default function RealEstateInventory({
                       </div>
                       
                       <p className="text-[10px] text-zinc-555 font-semibold leading-relaxed">
-                        Envie uma propaganda direcionada com foto, especificações do imóvel e proposta de correspondência cicloCRED.
+                        Envie uma propaganda direcionada com foto, especificações do imóvel e proposta de correspondência Cury Constelação.
                       </p>
 
                       <div className="space-y-2 pt-2 border-t border-red-250">
@@ -4855,10 +4990,10 @@ export default function RealEstateInventory({
                             
                             setCampaignStatusMessage('⏳ Carregando imagem no clipboard do e-mail...');
                             await copyImageToClipboard(activeUrl);
-                            downloadImageFile(activeUrl, `ciclocred_imovel_${selectedPropertyForMedia.code}.png`);
+                            downloadImageFile(activeUrl, `cury_constelacao_${selectedPropertyForMedia.code}.png`);
                             
                             const subject = encodeURIComponent(`[Ficha do Imóvel] Unidade Exclusiva: ${selectedPropertyForMedia.title}`);
-                            const body = encodeURIComponent(`Olá,\n\nVerificamos novas oportunidades correspondentes ao seu perfil cadastrado no CRM cicloCRED:\n\n🏡 Imóvel: ${selectedPropertyForMedia.title}\n📍 Endereço: ${selectedPropertyForMedia.neighborhood}, ${selectedPropertyForMedia.location}\n📐 Área útil: ${selectedPropertyForMedia.sizeSqm}m²\n💰 Preço de Venda: ${selectedPropertyForMedia.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}\n\nCondições facilitadas: Oferecemos aprovação de crédito imobiliário integrada multi-bancos!\n\nSolicite uma visita guiada sem compromisso com nossos corretores parceiros.\n\nAtenciosamente,\nAssessoria cicloCRED`);
+                            const body = encodeURIComponent(`Olá,\n\nVerificamos novas oportunidades correspondentes ao seu perfil cadastrado no ecossistema Cury Constelação:\n\n🏡 Imóvel: ${selectedPropertyForMedia.title}\n📍 Endereço: ${selectedPropertyForMedia.neighborhood}, ${selectedPropertyForMedia.location}\n📐 Área útil: ${selectedPropertyForMedia.sizeSqm}m²\n💰 Preço de Venda: ${selectedPropertyForMedia.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}\n\nCondições facilitadas: Oferecemos aprovação de crédito imobiliário integrada multi-bancos!\n\nSolicite uma visita guiada sem compromisso com nossos corretores parceiros.\n\nAtenciosamente,\nAssessoria Cury Constelação`);
                             
                             window.location.href = `mailto:?subject=${subject}&body=${body}`;
                             
@@ -5129,4 +5264,5 @@ export default function RealEstateInventory({
       
 
     </div>
-  );}
+  );
+});

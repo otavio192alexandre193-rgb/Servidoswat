@@ -15,6 +15,7 @@ export interface FlowStage {
   id: string;
   name: string;
   timer: FlowStageTimer;
+  mappedStageId?: string; // ID da etapa do fluxo geral que esta etapa se conecta
 }
 
 export interface StatusTimer {
@@ -45,6 +46,8 @@ export interface Lead {
   pipeline?: string; // legacy support
   fluxoId?: string; // Operational flow id
   stage?: string; // Etapa atual (para funil Ativos)
+  osStageId?: string; // Etapa atual específica no fluxo da Ordem de Serviço (OS)
+  generalStageId?: string; // Etapa correspondente do fluxo geral/original do sistema
   objection?: string; // Objeção (para funil Carteira)
   notes: string;
   origin: string;
@@ -71,7 +74,7 @@ export interface Lead {
   funnelPlacements?: { pageId: string; status: string }[];
   
   // Custom user suggested columns & spreadsheet requirements
-  mainProfile?: 'Investidor' | 'Primeiro Imóvel' | 'Jovem' | 'Meia idade' | 'Idoso';
+  mainProfile?: string;
   unitTypeMatters?: 'sim' | 'nao'; // Tipo de unidade importa?
   deliveryMatters?: 'sim' | 'nao'; // Tempo de entrega importa?
   firstImpression?: string; // Primeira impressão / Observação
@@ -153,11 +156,90 @@ export interface Lead {
   nextFollowUpDate?: string;
 
   // Independent Card Checklist
-  checklist?: {
-    interesse?: boolean;
-    visitou?: boolean;
-    aprov?: boolean;
+  checklist?: Record<string, boolean>;
+  
+  // Intelligent Engine Fields
+  priority?: 'Crítico' | 'Muito Alto' | 'Alto' | 'Médio' | 'Baixo';
+  compatibilityScore?: number; // 0-100
+  compatibilityReasoning?: string;
+  nextBestAction?: string;
+  conversionProbability?: number; // 0-1
+  deliveryTimePreference?: 'Pronto' | 'Curto' | 'Médio' | 'Longo' | 'Lançamento';
+  objective?: 'Moradia' | 'Investimento';
+  maxCommuteTime?: number;
+  familyProfile?: 'Solteiro' | 'Casal' | 'Casal com Filhos' | 'Sênior';
+}
+
+export interface RealEstateDeveloper {
+  id: string;
+  name: string;
+  rating?: number;
+}
+
+export interface NeighborhoodStats {
+  id: string;
+  name: string;
+  region: string;
+  avgPriceSqm: number;
+  priceTrend: 'subindo' | 'estavel' | 'descendo';
+  avgDaysToSell: number;
+  predominantProfile?: string;
+}
+
+export interface RealEstateMemory {
+  developers: RealEstateDeveloper[];
+  neighborhoods: NeighborhoodStats[];
+  marketInsights: {
+    lastUpdate: string;
+    generalTrend: string;
   };
+}
+
+export interface BackgroundConfig {
+  images: string[]; // List of URLs or Base64
+  interval: number; // ms
+}
+
+export type AppBackgrounds = Record<string, BackgroundConfig>;
+
+export interface OperationalOS {
+  id: string;
+  title: string;
+  subtitle?: string;
+  date: string; // startDate
+  endDate?: string;
+  fluxoId: string;
+  stageId?: string; // Etapa do fluxo que a OS ativa
+  stageIds?: string[]; // Multiplas etapas ativadas pela OS
+  leadIds: string[];
+  type: 'import' | 'operacional' | 'personalizado';
+  status: 'pendente' | 'em_execucao' | 'concluido';
+  priority: 'baixa' | 'media' | 'alta' | 'urgente';
+  actions?: string[];
+  
+  // Princípio Operacional
+  actionPlan?: string; // O que fazer? (ação)
+  toolUsed?: string; // Como fazer? (ferramenta)
+  expectedResult?: string; // Qual o objetivo? (resultado esperado)
+  nextAction?: string; // Qual é a próxima ação? (continuidade do fluxo)
+
+  metrics: {
+    health: number; // 0-100
+    totalLeads: number;
+    activeLeads: number;
+    conversionCount: number;
+  };
+}
+
+export interface QuickNote {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  linkedLeadId?: string;
+  linkedAppointmentId?: string;
+  linkedFollowUpId?: string;
+  tags?: string[];
 }
 
 export interface EmailTemplate {
@@ -177,6 +259,18 @@ export interface EmailLog {
   body: string;
   sentAt: string;
   status: 'enviado' | 'falhou';
+}
+
+export interface LeadActionLog {
+  id: string;
+  leadId: string;
+  timestamp: string;
+  module: string; // e.g. Tabela, Ficha, Kanban, Simulador, WhatsApp, etc.
+  action: string; // e.g. 'Status alterado', 'Nota adicionada', 'Renda alterada'
+  prevValue: string;
+  newValue: string;
+  user: string;
+  notes?: string;
 }
 
 export interface DashboardMetrics {
@@ -226,9 +320,16 @@ export interface RealEstateProperty {
   location: string;
   neighborhood: string;
   status: 'disponivel' | 'reservado' | 'vendido';
+  deliveryPhase?: 'Pronto' | 'Curto' | 'Médio' | 'Longo' | 'Lançamento';
+  deliveryDate?: string;
+  developerId?: string;
+  campaigns?: string[];
+  features?: string[]; // varanda, suite, etc.
   description: string;
   imageUrl?: string;
   images?: string[];
+  region?: string;
+  enterpriseName?: string;
 }
 
 export interface Goal {

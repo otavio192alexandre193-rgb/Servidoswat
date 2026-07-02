@@ -28,7 +28,9 @@ import {
   Cloud,
   Sparkles,
   Globe,
-  Clock
+  Clock,
+  Database,
+  Rocket
 } from 'lucide-react';
 import { AccessibilitySettings, triggerSensoryFeedback, INITIAL_ACCESSIBILITY_SETTINGS } from '../utils/sensory';
 
@@ -52,8 +54,8 @@ export default function Sidebar({
   activeTab, 
   setActiveTab, 
   leadsCount,
-  userName = 'Operador cicloCRED',
-  userEmail = 'operador@sistema.com.br',
+  userName = 'Comercial Cury Constelação',
+  userEmail = 'contato@curyconstelacao.com.br',
   onLogout,
   accSettings = INITIAL_ACCESSIBILITY_SETTINGS,
   forceLocalStorageMode = false,
@@ -69,13 +71,9 @@ export default function Sidebar({
   const profilePhoto = localStorage.getItem('ciclocred_user_photo') || '';
 
   const menuItems = [
+    { id: 'google-workspace', name: 'Workspace', icon: Globe },
     { id: 'leads', name: 'Leads', icon: Users, badge: leadsCount },
-    { id: 'inventory', name: 'Estoque e Lançamentos', icon: Package },
-    { id: 'gemini-server', name: 'Assistente AI', icon: Sparkles },
-    { id: 'google-workspace', name: 'Google Workspace', icon: Cloud },
-    { id: 'kids', name: 'Alavancagem & Finanças', icon: TrendingUp },
-    { id: 'user-central', name: 'Painel do Usuário (Metas & Adm)', icon: Trophy },
-    { id: 'settings', name: 'Gestão & Configurações', icon: Settings },
+    { id: 'settings', name: 'Configurações', icon: Settings },
   ];
 
   // Helper inside sidebar to render proper greetings
@@ -102,10 +100,15 @@ export default function Sidebar({
           className="flex items-center gap-2 cursor-pointer hover:opacity-80 active:scale-95 transition-colors select-none"
           title="Ir para a página inicial (Leads)"
         >
-          <Briefcase className="w-5.5 h-5.5 text-indigo-400" />
-          <span className="font-sans font-black tracking-tighter text-xl uppercase italic text-white leading-none">
-            cicloCRED <span className="text-indigo-400">CRM</span>
-          </span>
+          <Rocket className="w-5.5 h-5.5 text-amber-400 animate-bounce" />
+          <div className="flex flex-col">
+            <span className="font-sans font-black tracking-tighter text-base uppercase text-white leading-none">
+              CURY <span className="text-amber-400">CONSTELAÇÃO</span>
+            </span>
+            <span className="text-[9px] font-mono font-black tracking-widest text-zinc-400 uppercase leading-none mt-1">
+              ECOSSISTEMA COMERCIAL
+            </span>
+          </div>
         </div>
       </div>
 

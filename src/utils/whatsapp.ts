@@ -20,12 +20,12 @@ export function autoGenerateScript(lead: Lead): string {
     : '';
 
   // Greetings and Intro based on Profile
-  let intro = `Olá, ${firstName}! Tudo bem? Aqui é o seu especialista de crédito da cicloCRED. 🤝`;
+  let intro = `Olá, ${firstName}! Tudo bem? Aqui é o seu especialista da Cury Constelação. 🤝`;
   
   if (lead.mainProfile === "Investidor") {
-    intro = `Olá, ${firstName}! Tudo bem? Sou especialista de crédito e investimentos da cicloCRED. 📈`;
+    intro = `Olá, ${firstName}! Tudo bem? Sou especialista da Cury Constelação. 📈`;
   } else if (lead.mainProfile === "Primeiro Imóvel") {
-    intro = `Olá, ${firstName}! Sou o consultor da cicloCRED. Vi que você quer realizar o sonho do primeiro imóvel! 🏠`;
+    intro = `Olá, ${firstName}! Sou o consultor da Cury Constelação. Vi que você quer realizar o sonho de conquistar seu apartamento Cury na planta! 🏠`;
   }
 
   let body = '';
@@ -43,7 +43,7 @@ export function autoGenerateScript(lead: Lead): string {
     body += `Configurei uma simulação exclusiva pelo SBPE para o seu perfil. `;
     if (incomeStr) body += `Considerando sua renda familiar de ${incomeStr}, conseguimos ótimas taxas de juros no mercado. `;
   } else {
-    body += `Fizemos uma simulação prévia do seu cadastro da cicloCRED e seu perfil é elegível para excelentes condições de financiamento. `;
+    body += `Fizemos uma simulação prévia do seu cadastro na Cury Constelação e seu perfil é elegível para excelentes condições de financiamento. `;
   }
 
   // Preferences
@@ -79,7 +79,7 @@ export async function handleWhatsAppAction(
   try {
     const brokerName = localStorage.getItem("crm_user_name") || localStorage.getItem("ciclocred_user_name") || "Consultor Especialista";
     const roleName = localStorage.getItem("crm_user_role") || localStorage.getItem("ciclocred_user_role") || "Consultor de Imóveis e Crédito";
-    const agencyName = localStorage.getItem("crm_user_agency") || localStorage.getItem("ciclocred_agency_name") || "cicloCRED";
+    const agencyName = localStorage.getItem("crm_user_agency") || localStorage.getItem("ciclocred_agency_name") || "Cury Constelação";
     const creci = localStorage.getItem("crm_user_creci") || localStorage.getItem("ciclocred_creci_number") || "CRECI Ativo";
 
     const res = await fetch("/api/ai/generate-whatsapp-script", {

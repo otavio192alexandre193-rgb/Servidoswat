@@ -31,7 +31,7 @@ Suas diretrizes obrigatórias de comunicação:
   leads_auto_creation_enabled: false,
   autoresponder_url: "",
   response_mode: "hybrid", // values: "ai", "hybrid", "manual"
-  company_name: "cicloCRED",
+  company_name: "Cury Constelação",
   system_name: "CRM",
   answer_length: "short" // values: "short", "medium", "long"
 };
@@ -213,13 +213,13 @@ async function startServer() {
       });
 
       const formattedIncome = lead.familyIncome ? `R$ ${Number(lead.familyIncome).toLocaleString('pt-BR')}` : 'Não cadastrada';
-      const prompt = `Você é o assistente virtual inteligente e redator comercial sênior da cicloCRED CRM.
+      const prompt = `Você é o assistente virtual inteligente e redator comercial sênior da Cury Constelação CRM.
 Sua missão é gerar uma mensagem comercial inicial em português, altamente personalizada e irresistível para o corretor enviar para este lead via WhatsApp para iniciar o contato.
 
 Informações sobre o Corretor Remetente:
 - Nome do Corretor: ${brokerName || 'Consultor Especialista'}
 - Role/Cargo: ${roleName || 'Consultor de Imóveis e Crédito'}
-- Imobiliária/Assessoria: ${agencyName || 'cicloCRED'}
+- Imobiliária/Assessoria: ${agencyName || 'Cury Constelação'}
 - CRECI: ${creci || 'CRECI Ativo'}
 
 Informações do Lead:
@@ -240,7 +240,7 @@ Regras estritas para a mensagem:
    - Se for renda baixa / Primeiro Imóvel / Minha Casa Minha Vida (MCMV), foque em menor taxa de juros, subsídios federais e opções de entrada parcelada facilitada usando FGTS.
    - Se for SBPE ou renda média-alta ou investidor, foque em fluxo de pagamentos estruturado, opções com varanda ou áreas completas de lazer e rentabilidade.
    - Mencione sutilmente a região de interesse (${lead.region || ''}) ou o projeto / metragem (${lead.propertyInterest || ''}) de maneira orgânica.
-   - Seja empático com a objeção listada (ex: se for 'Não tem entrada' ou 'Muito caro', mostre que a cicloCRED possui soluções diferenciadas de parcelamento do sinal e análise gratuita).
+   - Seja empático com a objeção listada (ex: se for 'Não tem entrada' ou 'Muito caro', mostre que a Cury Constelação possui soluções diferenciadas de parcelamento do sinal e análise gratuita).
 4. Use emojis de forma moderada e bem colocada (como 📲, 🏠, 🤝, ✨).
 5. Termine com uma pergunta simples ou chamada para ação (CTA) para engajar a resposta (ex: fazer uma simulação de crédito rápida ou conferir as opções em uma ligação de 5 min).
 6. ATENÇÃO: Retorne APENAS o corpo de mensagem final para o WhatsApp. NÃO inclua nenhuma introdução técnica do sistema, nem aspas no início ou no fim!`;
@@ -259,7 +259,7 @@ Regras estritas para a mensagem:
       console.warn("Erro recebido no Gemini API para roteiro de WhatsApp, executando Fallback Local:", error);
       
       // Sophisticated local fallback script generator based on parameters!
-      let script = `Olá ${lead.name.split(" ")[0]}, tudo bem? Aqui é o ${brokerName || 'Consultor Especialista'} da ${agencyName || 'cicloCRED'}. `;
+      let script = `Olá ${lead.name.split(" ")[0]}, tudo bem? Aqui é o ${brokerName || 'Consultor Especialista'} da ${agencyName || 'Cury Constelação'}. `;
       
       const incomeVal = Number(lead.familyIncome) || 0;
       const isMCMV = lead.programaDesejado === 'Minha Casa Minha Vida' || (incomeVal > 0 && incomeVal <= 8000);
@@ -273,7 +273,7 @@ Regras estritas para a mensagem:
       }
 
       if (lead.objection === "Muito caro" || lead.objection === "Sem entrada" || lead.objection === "Sem FGTS") {
-        script += `Sobre a questão de fluxo, não se preocupe: a cicloCRED possui soluções incríveis para parcelar sua entrada e utilizar o programa de subsídio de crédito para que as parcelas caibam com segurança no seu bolso. `;
+        script += `Sobre a questão de fluxo, não se preocupe: a Cury Constelação possui soluções incríveis para parcelar sua entrada e utilizar o programa de subsídio de crédito para que as parcelas caibam com segurança no seu bolso. `;
       } else {
         script += `Gostaria de apresentar um plano de financiamento completo e simulações gratuitas de parcelamento. `;
       }
@@ -1668,24 +1668,25 @@ Com base na sua lista de **${totalBase} leads** proveniente de **${origin || 'Or
 
         let matchedScript: string | null = null;
         
-        // Rule 1: Greetings & Introduction
-        if (
-          /\b(oi|ola|olá|bom dia|boa tarde|boa noite|apresentar|como vai|tudo bem|falar com|ajuda)\b/.test(textToMatch) ||
-          textToMatch === "oi" || textToMatch === "olá" || textToMatch === "ola"
-        ) {
-          matchedScript = `Olá, ${sender}! Tudo bem? 👋 
+        if (!matchedScriptObj) {
+          // Rule 1: Greetings & Introduction
+          if (
+            /\b(oi|ola|olá|bom dia|boa tarde|boa noite|apresentar|como vai|tudo bem|falar com|ajuda)\b/.test(textToMatch) ||
+            textToMatch === "oi" || textToMatch === "olá" || textToMatch === "ola"
+          ) {
+            matchedScript = `Olá, ${sender}! Tudo bem? 👋 
 
 Seja muito bem-vindo(a) à *${companyName}*! 🏠
 
 Eu sou o assistente virtual do seu canal de atendimento automático. Estou aqui para agilizar seu processo de simulação de financiamento imobiliário e tirar suas dúvidas de forma rápida e 100% gratuita!
 
 Você gostaria de simular um crédito habitacional hoje ou prefere falar diretamente com um de nossos corretores especialistas?`;
-        }
-        // Rule 2: Simulations & Credit Application
-        else if (
-          /\b(simular|simulacao|simulação|credito|crédito|financiamento|financiar|financiamentos|subsídio|subsidio|mcmv|minha casa minha vida)\b/.test(textToMatch)
-        ) {
-          matchedScript = `Excelente escolha, ${sender}! Vamos dar início à sua Simulação Habitacional Completa! 📈
+          }
+          // Rule 2: Simulations & Credit Application
+          else if (
+            /\b(simular|simulacao|simulação|credito|crédito|financiamento|financiar|financiamentos|subsídio|subsidio|mcmv|minha casa minha vida)\b/.test(textToMatch)
+          ) {
+            matchedScript = `Excelente escolha, ${sender}! Vamos dar início à sua Simulação Habitacional Completa! 📈
 
 Nós facilitamos toda a aprovação de crédito nos maiores bancos parceiros nacionais:
 - 🏦 *Caixa Econômica Federal* (com taxas reduzidas do Minha Casa Minha Vida)
@@ -1694,35 +1695,34 @@ Nós facilitamos toda a aprovação de crédito nos maiores bancos parceiros nac
 E tudo isso é 100% GRATUITO! Para que possamos calcular o seu limite de crédito máximo e simular os subsídios liberados pelo governo, por favor me responda:
 
 👉 *Qual é a renda mensal bruta aproximada somada da sua família?*`;
-        }
-        // Rule 3: Prices & Fees
-        else if (
-          /\b(valor|valores|preço|preco|quanto custa|pagar|custo|custos|gratuito|grátis|gratis|taxa|taxas)\b/.test(textToMatch)
-        ) {
-          matchedScript = `Uma excelente notícia para você, ${sender}: toda a nossa assessoria completa, simulações de crédito e o suporte para aprovação do seu financiamento é **100% gratuito**! 💸
+          }
+          // Rule 3: Prices & Fees
+          else if (
+            /\b(valor|valores|preço|preco|quanto custa|pagar|custo|custos|gratuito|grátis|gratis|taxa|taxas)\b/.test(textToMatch)
+          ) {
+            matchedScript = `Uma excelente notícia para você, ${sender}: toda a nossa assessoria completa, simulações de financiamento e o suporte para aprovação bancária é **100% gratuito**! 💸
 
-Você não paga absolutamente nada pelas simulações nem pelo serviço de encaminhamento de documentos aos bancos. O nosso maior objetivo é garantir que você consiga a menor taxa do mercado!
+Nosso foco é ajudar você a encontrar o seu imóvel ideal sem taxas escondidas de serviço.
 
 Você gostaria de simular o seu limite de crédito conosco sem custos agora mesmo?`;
-        }
-        // Rule 4: Human Handover
-        else if (
-          /\b(humano|atendente|falar com alguem|falar com alguém|falar com especialista|falar com corretor|corretor|consultor|suporte|ligar|telefone)\b/.test(textToMatch)
-        ) {
-          matchedScript = `Perfeito, ${sender}! Estou direcionando a nossa conversa agora mesmo para a nossa equipe de atendimento presencial e corretores especializados da *${companyName}*. 📲
+          }
+          // Rule 4: Human Handover
+          else if (
+            /\b(humano|atendente|falar com alguem|falar com alguém|falar com especialista|falar com corretor|corretor|consultor|suporte|ligar|telefone)\b/.test(textToMatch)
+          ) {
+            matchedScript = `Com certeza, ${sender}! Estou direcionando nossa conversa para um de nossos especialistas imobiliários humanos na ${companyName} agora mesmo. 📲
 
-Em instantes, um de nossos especialistas entrará em contato direto com você para prestar todo o suporte personalizado.
-
-Se preferir, pode me enviar aqui qual modelo de imóvel você busca ou o melhor horário de contato!`;
-        }
-        // Rule 5: Personal Finance Context / Renda
-        else if (
-          /\b(salario|salário|recebo|ganho|renda|reais|r\$|mil)\b/.test(textToMatch) ||
-          /^\d+([\.,]\d+)?$/.test(textToMatch.replace(/\s+/g, ""))
-        ) {
-          matchedScript = `Excelente, anotado! 📝 Com base nesse perfil informado, já estou organizando uma pré-análise com as melhores oportunidades de financiamento habitacional do mercado.
+Em instantes, nosso consultor entrará em contato para um atendimento sob medida e 100% focado nas suas necessidades habitacionais!`;
+          }
+          // Rule 5: Personal Finance Context / Renda
+          else if (
+            /\b(salario|salário|recebo|ganho|renda|reais|r\$|mil)\b/.test(textToMatch) ||
+            /^\d+([\.,]\d+)?$/.test(textToMatch.replace(/\s+/g, ""))
+          ) {
+            matchedScript = `Excelente, anotado! 📝 Com base nesse perfil informado, já estou organizando uma pré-análise com as melhores oportunidades de financiamento habitacional do mercado.
 
 Para finalizarmos e darmos início ao envio para nossos parceiros bancários, você possui saldo no FGTS que deseja utilizar ou possui algum automóvel/imóvel como parte da entrada?`;
+          }
         }
 
         if (matchedScriptObj) {
@@ -2086,6 +2086,18 @@ Escreva uma resposta comercial de impacto em português, respondendo especificam
 
   // Handle root route (/) safely to always serve the React SPA for standard browsers and viewports
   app.get("/", (req, res, next) => {
+    // Intercept possible webhook pings on the root route
+    const userAgent = req.headers['user-agent'] || '';
+    if (userAgent.includes('Dalvik') || userAgent.includes('AutoResponder') || req.query.app || req.query.sender || req.query.message) {
+      console.log(`[ROOT PING] Intercepted webhook ping on root / from ${userAgent}`);
+      return res.status(200).json({
+        status: "ok",
+        message: "Webhook root endpoint active!",
+        reply: "Conexão ativa! Pronto para responder.",
+        replies: [{ message: "Conexão ativa! Pronto para responder." }]
+      });
+    }
+
     // Explicitly prevent browser/CDN caching of the root document so users always fetch the live SPA bundle
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
     res.setHeader('Pragma', 'no-cache');

@@ -10,9 +10,11 @@ interface ScheduleFollowUpModalProps {
   leads: Lead[];
   initialLead?: Lead | null;
   initialLeads?: Lead[] | null;
+  initialData?: Partial<Appointment> | null;
   onAddAppointment: (newAppt: Appointment) => void;
   awardXP?: (xp: number) => void;
   addNotification?: (title: string, message: string, type: 'info' | 'success' | 'warning' | 'alarm' | 'ai') => void;
+  isInline?: boolean;
 }
 
 export default function ScheduleFollowUpModal({
@@ -21,9 +23,11 @@ export default function ScheduleFollowUpModal({
   leads,
   initialLead,
   initialLeads,
+  initialData,
   onAddAppointment,
   awardXP,
-  addNotification
+  addNotification,
+  isInline
 }: ScheduleFollowUpModalProps) {
   const auth = getAuth();
   const currentUser = auth.currentUser;
@@ -73,9 +77,30 @@ export default function ScheduleFollowUpModal({
       setLeadId('');
       setTitle('');
     }
+
+    if (initialData) {
+      if (initialData.title) setTitle(initialData.title);
+      if (initialData.description) setDescription(initialData.description);
+      if (initialData.type) setType(initialData.type);
+      if (initialData.date) setDate(initialData.date);
+      if (initialData.time) setTime(initialData.time);
+    }
+
     setNplText('');
     setNplFeedback(null);
-  }, [initialLead, initialLeads, isOpen]);
+  }, [initialLead, initialLeads, initialData, isOpen]);
+
+  // Scrolling fix: prevent background scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -411,53 +436,54 @@ export default function ScheduleFollowUpModal({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-zinc-950/80 backdrop-blur-xs overflow-y-auto">
-      <div 
-        id="schedule-follow-up-modal"
-        className="relative bg-zinc-900 w-full max-w-2xl rounded-2xl border-4 border-zinc-950 shadow-[8px_8px_0px_0px_rgba(24,24,27,1)] flex flex-col overflow-hidden max-h-[92vh]"
-      >
-        {/* Banner de XP */}
-        <div className="bg-amber-500 py-1.5 px-4 flex items-center justify-between border-b-2 border-zinc-950">
-          <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider font-mono text-zinc-950 flex items-center gap-1.5 animate-pulse">
-            <Award className="w-4 h-4" />
-            <span>Módulo Ativo de Conversão: Planejar este follow-up concede +100 XP ao corretor!</span>
-          </span>
-          <span className="hidden md:inline-block font-mono text-[10px] font-black text-zinc-950 uppercase">cicloCRED CRM</span>
-        </div>
+  const modalContent = (
+    <div 
+      id="schedule-follow-up-modal"
+      className={isInline ? "relative bg-zinc-900 w-full rounded-2xl flex flex-col" : "relative bg-zinc-900 w-full max-w-2xl rounded-2xl border-4 border-zinc-950 shadow-[8px_8px_0px_0px_rgba(24,24,27,1)] flex flex-col overflow-hidden max-h-[92vh]"}
+    >
+      {/* Banner de XP */}
+      <div className="bg-amber-500 py-1.5 px-4 flex items-center justify-between border-b-2 border-zinc-950">
+        <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider font-mono text-zinc-950 flex items-center gap-1.5">
+          <Award className="w-4 h-4" />
+          <span>Módulo Ativo de Conversão: Planejar este follow-up concede +100 XP ao corretor!</span>
+        </span>
+        <span className="hidden md:inline-block font-mono text-[10px] font-black text-zinc-950 uppercase">cicloCRED CRM</span>
+      </div>
 
-        {/* Header */}
-        <div className="p-4 border-b-2 border-zinc-950 bg-zinc-800 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-indigo-500 border-2 border-zinc-950 flex items-center justify-center font-mono text-white text-md font-black shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)]">
-              🚨
-            </div>
-            <div>
-              <h2 className="text-sm sm:text-md font-black uppercase font-mono text-white tracking-tight leading-none">
-                Agendador Inteligente de Follow-up
-              </h2>
-              <span className="text-[10px] text-zinc-400 font-bold uppercase font-mono tracking-wider">
-                ▲ Organizar o Próximo Passo do Funil Comercial
-              </span>
-            </div>
+      {/* Header */}
+      <div className="p-4 border-b-2 border-zinc-950 bg-zinc-800 flex justify-between items-center">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-indigo-500 border-2 border-zinc-950 flex items-center justify-center font-mono text-white text-md font-black shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)]">
+            🚨
           </div>
-
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-lg bg-zinc-700 hover:bg-zinc-600 border-2 border-zinc-950 text-zinc-400 hover:text-white transition flex items-center justify-center font-black cursor-pointer shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)]"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div>
+            <h2 className="text-sm sm:text-md font-black uppercase font-mono text-white tracking-tight leading-none">
+              Agendador Inteligente de Follow-up
+            </h2>
+            <span className="text-[10px] text-zinc-400 font-bold uppercase font-mono tracking-wider">
+              ▲ Organizar o Próximo Passo do Funil Comercial
+            </span>
+          </div>
         </div>
 
-        {/* Body Container */}
+        {!isInline && (
+        <button
+          onClick={onClose}
+          className="w-8 h-8 rounded-lg bg-zinc-700 hover:bg-zinc-600 border-2 border-zinc-950 text-zinc-400 hover:text-white transition flex items-center justify-center font-black cursor-pointer shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)]"
+        >
+          <X className="w-4 h-4" />
+        </button>
+        )}
+      </div>
+
+      {/* Body Container */}
         <div className="p-4 sm:p-5 flex flex-col space-y-5 overflow-y-auto max-h-[calc(92vh-140px)]">
           
           {/* NPL (NLP) Quick Command Input */}
           <div className="p-3.5 bg-zinc-800/60 rounded-xl border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(24,24,27,1)] space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-black uppercase font-mono text-indigo-400 tracking-wider flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-amber-400 animate-spin" />
+                <Sparkles className="w-4 h-4 text-amber-400 " />
                 <span>Comando de Voz ou Texto NPL Inteligente (IA)</span>
               </span>
               <span className="font-mono text-[9px] text-zinc-400 uppercase font-bold">Processamento Cognitivo</span>
@@ -703,7 +729,7 @@ export default function ScheduleFollowUpModal({
               >
                 {isSyncing ? (
                   <>
-                    <span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-zinc-950 border-t-transparent rounded-full" />
+                    <span className=" inline-block w-3.5 h-3.5 border-2 border-zinc-950 border-t-transparent rounded-full" />
                     Sincronizando...
                   </>
                 ) : (
@@ -718,7 +744,16 @@ export default function ScheduleFollowUpModal({
           </form>
 
         </div>
-      </div>
+    </div>
+  );
+
+  if (isInline) {
+    return modalContent;
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-zinc-950/80 backdrop-blur-xs overflow-y-auto">
+      {modalContent}
     </div>
   );
 }

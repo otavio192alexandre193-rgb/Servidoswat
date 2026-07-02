@@ -9,6 +9,7 @@ import {
   Lead,
   EmailTemplate,
   EmailLog,
+  LeadActionLog,
   LeadStatus,
   Appointment,
   InventoryItem,
@@ -18,6 +19,10 @@ import {
   CRMNotification,
   OperationalFlow,
   FollowUpUpdate,
+  QuickNote,
+  OperationalOS,
+  AppBackgrounds,
+  BackgroundConfig,
 } from "./types";
 import {
   INITIAL_LEADS,
@@ -81,6 +86,7 @@ import Reports from "./components/Reports";
 import RealEstateInventory from "./components/RealEstateInventory";
 import LeadModal from "./components/LeadModal";
 import LeadDetailsModal from "./components/LeadDetailsModal";
+import OSModal from "./components/OSModal";
 import MultiLevelMarketingTab from "./components/MultiLevelMarketingTab";
 import FinanceSimulatorTab from "./components/FinanceSimulatorTab";
 import CicloCredInformTab from "./components/CicloCredInformTab";
@@ -89,6 +95,15 @@ import FollowUpsTable from "./components/FollowUpsTable";
 import PublicPortal from "./components/PublicPortal";
 import RuleEnginePanel from "./components/RuleEnginePanel";
 import AIAssistantChat from "./components/AIAssistantChat";
+
+import PersonalizationModal from "./components/PersonalizationModal";
+import IntelligenceDashboard from "./components/IntelligenceDashboard";
+import { 
+  calculateCompatibility, 
+  calculatePriority, 
+  suggestNextAction, 
+  calculateConversionProbability 
+} from "./utils/intelligence";
 
 // Sensory & Custom Sub tabs imports
 import LoginView from "./components/Login";
@@ -106,6 +121,8 @@ import GoogleWorkspace, {
   autoSyncWorkspaceDatabase,
 } from "./components/GoogleWorkspace";
 import GeminiServerTab from "./components/GeminiServerTab";
+import QuickNotes from "./components/QuickNotes";
+import ScheduleFollowUpModal from "./components/ScheduleFollowUpModal";
 import { WorkspaceTab } from "./components/WorkspaceTab";
 import AnimatedCounter from "./components/AnimatedCounter";
 import {
@@ -143,6 +160,7 @@ import {
   Gift,
   Cloud,
   LineChart,
+  Palette,
   Search,
   UserPlus,
   Sliders,
@@ -162,6 +180,12 @@ import {
   Shield,
   ChevronLeft,
   Edit3,
+  LayoutDashboard,
+  FileText,
+  History,
+  ClipboardList,
+  PlusCircle,
+  StickyNote,
 } from "lucide-react";
 
 import SmartCalendar from "./components/SmartCalendar";
@@ -354,7 +378,7 @@ export default function App() {
   // Mounting Diagnostic logs & Telemetry
   useEffect(() => {
     console.log(
-      "[App.tsx] cicloCRED CRM App Component has successfully MOUNTED in viewport DOM.",
+      "[App.tsx] Cury Constelação CRM App Component has successfully MOUNTED in viewport DOM.",
     );
     console.log("[App.tsx] Navigator User Agent:", navigator.userAgent);
     console.log("[App.tsx] System datetime:", new Date().toISOString());
@@ -475,6 +499,8 @@ export default function App() {
   const isLocalGoalsChangeRef = useRef<boolean>(false);
   const isLocalProjectsChangeRef = useRef<boolean>(false);
   const isLocalProfileChangeRef = useRef<boolean>(false);
+  const isLocalNotesChangeRef = useRef<boolean>(false);
+  const isLocalImportBatchesChangeRef = useRef<boolean>(false);
 
   // Core CRM States (Hydrated with LocalStorage or Seeded with defaults)
   const [leads, rawSetLeads] = useState<Lead[]>(() => {
@@ -487,11 +513,46 @@ export default function App() {
     } catch (_) {}
     return [];
   });
+  
+  const leadsRef = useRef<Lead[]>(leads);
+  useEffect(() => {
+    leadsRef.current = leads;
+  }, [leads]);
+
 
   const setLeads = React.useCallback((val: React.SetStateAction<Lead[]>) => {
     isLocalLeadsChangeRef.current = true;
     rawSetLeads(val);
   }, []);
+
+  const isLocalActionLogsChangeRef = useRef<boolean>(false);
+  const [actionLogs, rawSetActionLogs] = useState<LeadActionLog[]>(() => {
+    const saved = localStorage.getItem("ciclocred_crm_action_logs");
+    try {
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
+    return [];
+  });
+
+  const setActionLogs = React.useCallback((val: React.SetStateAction<LeadActionLog[]>) => {
+    isLocalActionLogsChangeRef.current = true;
+    rawSetActionLogs(val);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("ciclocred_crm_action_logs", JSON.stringify(actionLogs));
+  }, [actionLogs]);
+
+  const [activeSystemFlowId, setActiveSystemFlowId] = useState<string>(() => {
+    return localStorage.getItem("ciclocred_active_system_flow_id") || "flow-1";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("ciclocred_active_system_flow_id", activeSystemFlowId);
+  }, [activeSystemFlowId]);
 
   const [operationalFlows, rawSetOperationalFlows] = useState<
     OperationalFlow[]
@@ -519,69 +580,6 @@ export default function App() {
     },
     [],
   );
-
-  // Background archiver for leads checking status timeouts
-  useEffect(() => {
-    if (!isDbHydrated || operationalFlows.length === 0) return;
-
-    const checkAndArchiveLeads = () => {
-      const now = Date.now();
-
-      setLeads((prevLeads) => {
-        let changed = false;
-        const updatedLeads = prevLeads.map((l) => {
-          if (
-            l.status === "arquivado" ||
-            l.status === "perdido" ||
-            l.status === "perdi"
-          ) {
-            return l;
-          }
-
-          const flow =
-            operationalFlows.find((f) => f.id === l.fluxoId) ||
-            operationalFlows[0];
-
-          let timeoutMs = 48 * 60 * 60 * 1000; // default 48h
-          if (flow && flow.statusTimers) {
-            if (l.status === "novo" && flow.statusTimers.recentes) {
-              timeoutMs =
-                flow.statusTimers.recentes.hours * 60 * 60 * 1000 +
-                flow.statusTimers.recentes.minutes * 60 * 1000;
-            } else if (flow.statusTimers.ativos) {
-              timeoutMs =
-                flow.statusTimers.ativos.hours * 60 * 60 * 1000 +
-                flow.statusTimers.ativos.minutes * 60 * 1000;
-            }
-          }
-
-          const lastTime = l.lastInteractionAt
-            ? new Date(l.lastInteractionAt).getTime()
-            : l.createdAt
-              ? new Date(l.createdAt).getTime()
-              : now;
-          const elapsed = now - lastTime;
-
-          if (elapsed > timeoutMs) {
-            changed = true;
-            return {
-              ...l,
-              status: "arquivado" as any,
-              lastInteractionAt: new Date().toISOString(),
-              lostReason: `Inatividade > ${Math.floor(timeoutMs / (1000 * 60 * 60))} horas (Automático)`,
-            };
-          }
-          return l;
-        });
-
-        return changed ? updatedLeads : prevLeads;
-      });
-    };
-
-    checkAndArchiveLeads();
-    const interval = setInterval(checkAndArchiveLeads, 15 * 60 * 1000); // Check every 15 minutes
-    return () => clearInterval(interval);
-  }, [isDbHydrated, setLeads, operationalFlows]);
 
   const [templates, rawSetTemplates] = useState<EmailTemplate[]>(() => {
     const saved = localStorage.getItem("ciclocred_crm_templates");
@@ -835,12 +833,43 @@ export default function App() {
     [],
   );
 
+  // Enriched Leads with Intelligence Engine metrics
+  const enrichedLeads = useMemo(() => {
+    return leads.map(lead => {
+      // Find best property match for this lead
+      let bestMatch: { score: number, reasoning: string, property: RealEstateProperty | null } = { score: 0, reasoning: '', property: null };
+      
+      properties.forEach(prop => {
+        const result = calculateCompatibility(lead, prop);
+        if (result.score > bestMatch.score) {
+          bestMatch = { ...result, property: prop };
+        }
+      });
+
+      const priority = calculatePriority({ ...lead, compatibilityScore: bestMatch.score });
+      const nextBestAction = suggestNextAction(lead);
+      const conversionProbability = calculateConversionProbability({ ...lead, compatibilityScore: bestMatch.score });
+
+      return {
+        ...lead,
+        priority,
+        compatibilityScore: bestMatch.score,
+        compatibilityReasoning: bestMatch.reasoning,
+        nextBestAction,
+        conversionProbability,
+        suggestedUnit: bestMatch.property?.title || lead.suggestedUnit
+      };
+    });
+  }, [leads, properties]);
+
   const [activeTab, rawSetActiveTab] = useState<string>(() => {
-    return localStorage.getItem("ciclocred_active_tab") || "dashboard";
+    const saved = localStorage.getItem("ciclocred_active_tab");
+    if (saved === "painel-geral" || saved === "dashboard" || saved === "marketing") return "google-workspace";
+    return saved || "google-workspace";
   });
-  const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
+  const [isHeaderExpanded, setIsHeaderExpanded] = useState(true);
   const [leadsViewMode, setLeadsViewMode] = useState<
-    "todos" | "recentes" | "ativos" | "archived" | "disparos" | "kanban" | "mapa" | "roteiros" | "estoque" | "followups"
+    "dashboard" | "simulador" | "todos" | "mapa" | "roteiros" | "recentes" | "ativos" | "archived" | "disparos" | "kanban" | "estoque" | "followups"
   >(() => {
     const saved = localStorage.getItem("ciclocred_filter_leads_view_mode");
     if (saved === "novos" || saved === "recentes") return "recentes";
@@ -926,6 +955,89 @@ export default function App() {
     message: string;
   } | null>(null);
   const [isCeoLoading, setIsCeoLoading] = useState(false);
+
+  const handleAskCEOCopilot = async (query: string) => {
+    setIsCeoLoading(true);
+    setCeoResponse({ query, message: "" });
+    try {
+      const activeFlowId = localStorage.getItem("ciclocred_active_system_flow_id") || "flow-1";
+      const savedFlows = localStorage.getItem("ciclocred_crm_operational_flows");
+      let activeFlowStr = "Fluxo Geral Padrão (Etapas tradicionais)";
+      if (activeFlowId && savedFlows) {
+        try {
+          const flows = JSON.parse(savedFlows);
+          if (Array.isArray(flows)) {
+            const activeFlow = flows.find((f: any) => f.id === activeFlowId);
+            if (activeFlow) {
+              activeFlowStr = `Fluxo de Trabalho Ativo: "${activeFlow.name}". Etapas: ${activeFlow.stages?.map((s: any) => s.name).join(' -> ')}`;
+            }
+          }
+        } catch (_) {}
+      }
+
+      const stats = {
+        totalLeads: leads.length,
+        novo: leads.filter(l => l.status === 'novo').length,
+        quente: leads.filter(l => l.status === 'quente').length,
+        frio: leads.filter(l => l.status === 'frio').length,
+        atendimento: leads.filter(l => l.status === 'atendimento' || l.stage?.toLowerCase().includes('atend')).length,
+        visita: leads.filter(l => l.status === 'visita_agendada' || l.checklist?.visitou).length,
+        proposta: leads.filter(l => l.status === 'proposta_enviada').length,
+        vendido: leads.filter(l => l.status === 'vendido' || l.status === 'contrato_assinado').length,
+        totalProperties: properties.length
+      };
+
+      const systemPrompt = `Você é o Diretor Estratégico AI (CEO Copilot) da cicloCRED, especialista em conversão de leads de alto padrão e habitação popular (Minha Casa Minha Vida e SBPE).
+Sua missão é emitir diretrizes de tomada de decisão, diagnósticos e táticas de vendas baseando-se no cenário operacional atual.
+
+[MÉTRICAS DO CRM HOJE]
+- Total de Leads: ${stats.totalLeads}
+- Novos: ${stats.novo}
+- Quentes: ${stats.quente}
+- Em Atendimento: ${stats.atendimento}
+- Com Visita ou Visitou: ${stats.visita}
+- Proposta Enviada: ${stats.proposta}
+- Vendidos/Fechados: ${stats.vendido}
+- Imóveis no Estoque: ${stats.totalProperties}
+- ${activeFlowStr}
+
+Diretrizes de Formatação:
+- Responda de forma executiva, séria, perspicaz e com foco em conversão e faturamento.
+- Use títulos Markdown com '###' para seções e listas com marcadores rápidos.
+- Crie um plano de ação tático específico para responder à pergunta/demanda informada.`;
+
+      const res = await fetch("/api/server/test-ai", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          message: query,
+          custom_prompt: systemPrompt,
+          model_name: "gemini-3.5-flash",
+          temperature: 0.7
+        })
+      });
+
+      if (!res.ok) {
+        throw new Error(`Erro status: ${res.status}`);
+      }
+
+      const data = await res.json();
+      setCeoResponse({
+        query,
+        message: data.reply || "Não consegui formular as diretrizes no momento. Tente novamente."
+      });
+    } catch (err: any) {
+      console.error("Erro no CEO Copilot:", err);
+      setCeoResponse({
+        query,
+        message: `### ⚠️ Falha na Conectividade Estratégica\nNão foi possível obter resposta direta do Gemini para formular a diretriz estratégica: ${err.message || 'Erro de rede'}. Por favor, verifique se a sua chave de API do Gemini está configurada corretamente nas variáveis de ambiente.`
+      });
+    } finally {
+      setIsCeoLoading(false);
+    }
+  };
 
   const [visibilityFilter, setVisibilityFilter] = useState(
     () => localStorage.getItem("ciclocred_filter_visibility_filter") || "todos",
@@ -1120,20 +1232,14 @@ export default function App() {
   }, [dashboardVisibility]);
 
   const TABS_ORDER = [
-    "dashboard",
+    "google-workspace",
     "leads",
-    "simulador",
     "settings",
-    "gemini-server",
-    "painel-geral",
   ];
   const TAB_NAMES: Record<string, string> = {
-    "painel-geral": "Painel Geral",
-    dashboard: "WhatsApp Dashboard",
-    leads: "Leads",
-    simulador: "Simulador",
+    "google-workspace": "Google Workspace",
+    "leads": "Leads",
     settings: "Configurações",
-    "gemini-server": "Assistente AI",
   };
 
   const handleCycleTab = (e: React.MouseEvent) => {
@@ -1166,23 +1272,14 @@ export default function App() {
       const currentTab = activeTabRef.current;
       if (currentTab === "leads") {
         setLeadsViewMode((prev) => {
-          if (prev === "todos") return "recentes";
-          if (prev === "recentes") return "ativos";
-          if (prev === "ativos") return "kanban";
-          if (prev === "kanban") return "mapa";
-          if (prev === "mapa") return "disparos";
-          if (prev === "disparos") return "roteiros";
-          if (prev === "roteiros") return "estoque";
-          if (prev === "estoque") return "archived";
-          if (prev === "archived") return "todos";
-          return "todos";
+          if (prev === "dashboard") return "simulador";
+          if (prev === "simulador") return "todos";
+          if (prev === "todos") return "mapa";
+          if (prev === "mapa") return "roteiros";
+          return "dashboard";
         });
-      } else if (currentTab === "dashboard") {
-        setDashboardVisibility((prev) => {
-          if (prev === "disparos") return "scripts-roteiros";
-          if (prev === "scripts-roteiros") return "envios-realizados";
-          return "disparos";
-        });
+      } else if (currentTab === "google-workspace") {
+        // No-op or custom behavior
       }
     };
 
@@ -1190,23 +1287,23 @@ export default function App() {
       const currentTab = activeTabRef.current;
       if (currentTab === "leads") {
         setLeadsViewMode((prev) => {
-          if (prev === "todos") return "archived";
-          if (prev === "archived") return "estoque";
-          if (prev === "estoque") return "roteiros";
-          if (prev === "roteiros") return "disparos";
-          if (prev === "disparos") return "mapa";
-          if (prev === "mapa") return "kanban";
-          if (prev === "kanban") return "ativos";
-          if (prev === "ativos") return "recentes";
-          if (prev === "recentes") return "todos";
-          return "todos";
+          if (prev === "dashboard") return "roteiros";
+          if (prev === "roteiros") return "mapa";
+          if (prev === "mapa") return "todos";
+          if (prev === "todos") return "simulador";
+          return "dashboard";
         });
-      } else if (currentTab === "dashboard") {
-        setDashboardVisibility((prev) => {
-          if (prev === "disparos") return "envios-realizados";
-          if (prev === "scripts-roteiros") return "disparos";
-          return "scripts-roteiros";
-        });
+      }
+    };
+
+    const handleMapToast = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail && customEvent.detail.message) {
+        addNotification(
+          customEvent.detail.title || "🤖 MAPA CONECTIVO",
+          customEvent.detail.message,
+          customEvent.detail.type || "success"
+        );
       }
     };
 
@@ -1220,6 +1317,7 @@ export default function App() {
       "ciclocred_global_prev_visibility",
       handlePrevVisibility,
     );
+    window.addEventListener("ciclocred_map_toast", handleMapToast);
 
     return () => {
       window.removeEventListener("ciclocred_cycle_tab_next", handleNextPage);
@@ -1232,6 +1330,7 @@ export default function App() {
         "ciclocred_global_prev_visibility",
         handlePrevVisibility,
       );
+      window.removeEventListener("ciclocred_map_toast", handleMapToast);
     };
   }, []);
 
@@ -1254,6 +1353,25 @@ export default function App() {
     "upload" | "copy" | "google_sheets"
   >("upload");
   const [importPipeline, setImportPipeline] = useState<string>("");
+  const [importBatchTitle, setImportBatchTitle] = useState<string>("");
+  const [operationalServiceOrders, rawSetOperationalServiceOrders] = useState<OperationalOS[]>(() => {
+    const saved = localStorage.getItem("ciclocred_import_batches");
+    try {
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
+    return [];
+  });
+
+  const setOperationalServiceOrders = React.useCallback(
+    (val: React.SetStateAction<OperationalOS[]>) => {
+      isLocalImportBatchesChangeRef.current = true;
+      rawSetOperationalServiceOrders(val);
+    },
+    [],
+  );
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<
     "xlsx" | "csv" | "pdf" | "json"
@@ -1273,6 +1391,145 @@ export default function App() {
 
   const [isMaisTabsOpen, setIsMaisTabsOpen] = useState(false);
   const [showPageNamePill, setShowPageNamePill] = useState(true);
+
+  // Quick Notes States
+  const [isQuickNotesOpen, setIsQuickNotesOpen] = useState(false);
+  const [isPersonalizationModalOpen, setIsPersonalizationModalOpen] = useState(false);
+  
+  const [appBackgrounds, setAppBackgrounds] = useState<AppBackgrounds>(() => {
+    const saved = localStorage.getItem("ciclocred_app_backgrounds_v2");
+    try {
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed === 'object' && Object.keys(parsed).length > 0) return parsed;
+      }
+    } catch (_) {}
+    
+    // Premium fallback default carousels
+    const defaultImages = [
+      "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=1200",
+      "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&q=80&w=1200",
+      "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80&w=1200"
+    ];
+    const defaultConfigs: AppBackgrounds = {};
+    const tabs = ['leads', 'google-workspace', 'settings', 'dashboard', 'database', 'gemini-server'];
+    tabs.forEach(tab => {
+      defaultConfigs[tab] = {
+        images: defaultImages,
+        interval: 8000
+      };
+    });
+    return defaultConfigs;
+  });
+
+  const [bgIndices, setBgIndices] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    localStorage.setItem("ciclocred_app_backgrounds_v2", JSON.stringify(appBackgrounds));
+  }, [appBackgrounds]);
+
+  // Carousel Timer Effect
+  useEffect(() => {
+    const timers: NodeJS.Timeout[] = [];
+    
+    (Object.entries(appBackgrounds) as [string, BackgroundConfig][]).forEach(([tab, config]) => {
+      if (config.images.length > 1 && config.interval > 0) {
+        const timer = setInterval(() => {
+          setBgIndices(prev => ({
+            ...prev,
+            [tab]: ((prev[tab] || 0) + 1) % config.images.length
+          }));
+        }, config.interval);
+        timers.push(timer);
+      }
+    });
+
+    return () => timers.forEach(clearInterval);
+  }, [appBackgrounds]);
+  const [quickNotes, rawSetQuickNotes] = useState<QuickNote[]>(() => {
+    const saved = localStorage.getItem("ciclocred_quick_notes");
+    try {
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
+    return [];
+  });
+
+  const setQuickNotes = React.useCallback(
+    (val: React.SetStateAction<QuickNote[]>) => {
+      isLocalNotesChangeRef.current = true;
+      rawSetQuickNotes(val);
+    },
+    [],
+  );
+  const [isScheduleFollowUpModalOpen, setIsScheduleFollowUpModalOpen] = useState(false);
+  const [isOSDetailsModalOpen, setIsOSDetailsModalOpen] = useState(false);
+  const [selectedOSForDetails, setSelectedOSForDetails] = useState<OperationalOS | null>(null);
+  const [scheduleFollowUpInitialLead, setScheduleFollowUpInitialLead] = useState<Lead | null>(null);
+  const [scheduleFollowUpInitialData, setScheduleFollowUpInitialData] = useState<Partial<Appointment> | null>(null);
+
+  useEffect(() => {
+    if (isLocalNotesChangeRef.current && auth.currentUser && !forceLocalStorageMode) {
+      const sync = async () => {
+        try {
+          const batch = writeBatch(db);
+          // Get all existing notes first to know what to delete
+          const notesSnap = await getDocs(collection(db, "quickNotes"));
+          notesSnap.forEach((docSnap) => {
+            batch.delete(docSnap.ref);
+          });
+          // Add current notes
+          quickNotes.forEach((note) => {
+            const noteRef = doc(collection(db, "quickNotes"), note.id);
+            batch.set(noteRef, note);
+          });
+          await batch.commit();
+          isLocalNotesChangeRef.current = false;
+        } catch (err) {
+          console.warn("CRM: Syncing notes to Firestore failed:", err);
+        }
+      };
+      sync();
+    }
+    localStorage.setItem("ciclocred_quick_notes", JSON.stringify(quickNotes));
+  }, [quickNotes]);
+
+  useEffect(() => {
+    if (isLocalImportBatchesChangeRef.current && auth.currentUser && !forceLocalStorageMode) {
+      const sync = async () => {
+        try {
+          const batch = writeBatch(db);
+          const snap = await getDocs(collection(db, "importBatches"));
+          snap.forEach((docSnap) => batch.delete(docSnap.ref));
+          operationalServiceOrders.forEach((b) => {
+            const ref = doc(collection(db, "importBatches"), b.id);
+            batch.set(ref, b);
+          });
+          await batch.commit();
+          isLocalImportBatchesChangeRef.current = false;
+        } catch (err) {
+          console.warn("CRM: Syncing importBatches failed:", err);
+        }
+      };
+      sync();
+    }
+    localStorage.setItem("ciclocred_import_batches", JSON.stringify(operationalServiceOrders));
+  }, [operationalServiceOrders]);
+
+  const handleAddQuickNote = (note: QuickNote) => {
+    setQuickNotes(prev => [note, ...prev]);
+    addNotification("Nota Salva", `A nota "${note.title}" foi salva com sucesso.`, "success");
+  };
+
+  const handleDeleteQuickNote = (id: string) => {
+    setQuickNotes(prev => prev.filter(n => n.id !== id));
+  };
+
+  const handleUpdateQuickNote = (note: QuickNote) => {
+    setQuickNotes(prev => prev.map(n => n.id === note.id ? note : n));
+  };
 
   const cycleKanbanViewMode = React.useCallback(() => {
     setKanbanViewMode((prev) => {
@@ -1340,7 +1597,7 @@ export default function App() {
 
       if (e.key === " " || e.key === "Spacebar" || e.code === "Space") {
         e.preventDefault();
-        setActiveTab("painel-geral");
+        setActiveTab("leads");
         return;
       }
 
@@ -1389,7 +1646,7 @@ export default function App() {
   }, []);
 
   const unifiedFilteredLeads = useMemo(() => {
-    return leads.filter((lead) => {
+    return enrichedLeads.filter((lead) => {
       const matchesSearch =
         String(lead.name || "")
           .toLowerCase()
@@ -1434,6 +1691,10 @@ export default function App() {
 
       const matchesStatus =
         statusFilter === "todos" || lead.status === statusFilter;
+      const matchesStage =
+        stageFilter === "todos" ||
+        lead.stage === stageFilter ||
+        (getKanbanColumns("etapas").find((col) => col.id === stageFilter)?.label === lead.stage);
       const leadQualif = (() => {
         if (lead.funnelPlacements && lead.funnelPlacements.length > 0) {
           const placement = lead.funnelPlacements.find(
@@ -1472,38 +1733,50 @@ export default function App() {
         deliveryExpectedFilter === "todos" ||
         lead.deliveryExpected === deliveryExpectedFilter;
       const matchesGender =
-        genderFilter === "todos" || lead.gender === genderFilter;
+        genderFilter === "todos" ||
+        lead.gender === genderFilter ||
+        (genderFilter.toLowerCase().startsWith("m") && lead.gender === "Homem") ||
+        (genderFilter.toLowerCase().startsWith("f") && lead.gender === "Mulher") ||
+        (genderFilter === "Homem" && lead.gender === "Homem") ||
+        (genderFilter === "Mulher" && lead.gender === "Mulher");
       const matchesAge =
         ageBracketFilter === "todos" || lead.ageBracket === ageBracketFilter;
 
       const matchesObjections =
         objectionsFilter === "todos" ||
+        lead.objection === objectionsFilter ||
         (lead.objections && lead.objections.includes(objectionsFilter)) ||
+        (getKanbanColumns("objecoes").find((col) => col.id === objectionsFilter)?.label === lead.objection) ||
         (objectionsFilter === "-" &&
           (!lead.objections || lead.objections.length === 0));
 
       const matchesProfiles =
         profileFilter === "todos" ||
-        (lead.profiles && lead.profiles.includes(profileFilter));
+        lead.mainProfile === profileFilter ||
+        (lead.profiles && lead.profiles.includes(profileFilter)) ||
+        (getKanbanColumns("perfil").find((col) => col.id === profileFilter)?.label === lead.mainProfile);
 
       // Credito sensitive filters
       let matchesFamilyIncome = true;
       if (familyIncomeFilter !== "todos") {
         const income = lead.familyIncome || 0;
-        if (familyIncomeFilter === "baixa") {
-          matchesFamilyIncome = income < 4000;
-        } else if (familyIncomeFilter === "media") {
-          matchesFamilyIncome = income >= 4000 && income <= 8000;
-        } else if (familyIncomeFilter === "alta") {
+        if (familyIncomeFilter === "Faixa 1" || familyIncomeFilter === "baixa") {
+          matchesFamilyIncome = income <= 2640 || income < 4000;
+        } else if (familyIncomeFilter === "Faixa 2" || familyIncomeFilter === "media") {
+          matchesFamilyIncome = (income > 2640 && income <= 4400) || (income >= 4000 && income <= 8000);
+        } else if (familyIncomeFilter === "Faixa 3") {
+          matchesFamilyIncome = income > 4400 && income <= 8000;
+        } else if (familyIncomeFilter === "Acima do Teto" || familyIncomeFilter === "alta") {
           matchesFamilyIncome = income > 8000;
         }
       }
 
       const matchesRestricaoBacen =
         restricaoBacenFilter === "todos" ||
+        (restricaoBacenFilter === "Sim" && lead.restricaoBacen === "Sim") ||
+        (restricaoBacenFilter === "Não" && (lead.restricaoBacen === "Não" || !lead.restricaoBacen)) ||
         (restricaoBacenFilter === "sim" && lead.restricaoBacen === "Sim") ||
-        (restricaoBacenFilter === "nao" &&
-          (lead.restricaoBacen === "Não" || !lead.restricaoBacen));
+        (restricaoBacenFilter === "nao" && (lead.restricaoBacen === "Não" || !lead.restricaoBacen));
 
       const matchesProgramaDesejado =
         programaDesejadoFilter === "todos" ||
@@ -1526,6 +1799,7 @@ export default function App() {
       return (
         matchesSearch &&
         matchesStatus &&
+        matchesStage &&
         matchesOrigin &&
         matchesInitial &&
         matchesRegion &&
@@ -1548,6 +1822,7 @@ export default function App() {
     leads,
     searchTerm,
     statusFilter,
+    stageFilter,
     qualificacaoFilter,
     originFilter,
     initialLetterFilter,
@@ -1639,12 +1914,12 @@ export default function App() {
   });
 
   const [userName, setUserName] = useState<string>(() => {
-    return localStorage.getItem("ciclocred_user_name") || "Operador cicloCRED";
+    return localStorage.getItem("ciclocred_user_name") || "Operador Cury Constelação";
   });
 
   const [userEmail, setUserEmail] = useState<string>(() => {
     return (
-      localStorage.getItem("ciclocred_user_email") || "operador@sistema.com.br"
+      localStorage.getItem("ciclocred_user_email") || "vendas@curyconstelacao.com.br"
     );
   });
 
@@ -1676,6 +1951,237 @@ export default function App() {
     } catch (_) {}
     return INITIAL_ACCESSIBILITY_SETTINGS;
   });
+
+  // Reactive strategy calibration listener for activeSystemFlowId changes
+  const lastActiveFlowIdRef = useRef<string>(activeSystemFlowId);
+  useEffect(() => {
+    if (!isDbHydrated) return;
+    if (lastActiveFlowIdRef.current === activeSystemFlowId) return;
+    lastActiveFlowIdRef.current = activeSystemFlowId;
+
+    const flow = operationalFlows.find((f) => f.id === activeSystemFlowId);
+    if (flow) {
+      triggerSensoryFeedback("chime", accSettings);
+      addNotification(
+        "⚡ Estratégia de Fluxo Ativada",
+        `O CRM, Workspace, Mapas e Ordens de Serviço foram recalibrados para a lógica do fluxo '${flow.name}'.`,
+        "success"
+      );
+      
+      // Open a high-fidelity interactive system alert banner
+      setActiveAlarm({
+        id: `flow-recalibrate-${Date.now()}`,
+        title: `Estratégia '${flow.name}' Ativada ⚡`,
+        leadName: "Sistema cicloCRED",
+        time: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+        description: `O Motor Cognitivo de automações, prazos temporais, scripts de abordagem e tabelas financeiras foram reconfigurados de acordo com esta nova diretriz de crédito.`
+      });
+    }
+  }, [activeSystemFlowId, isDbHydrated, operationalFlows, accSettings]);
+
+  // upgrade to full Cognitive Automation and Responsive Engine
+  useEffect(() => {
+    if (!isDbHydrated || operationalFlows.length === 0) return;
+
+    const runCognitiveAutomation = () => {
+      const now = Date.now();
+
+      setLeads((prevLeads) => {
+        let changed = false;
+        
+        const updatedLeads = prevLeads.map((l) => {
+          // 1. skip archived/lost/perdi leads for general calculations
+          if (
+            l.status === "arquivado" ||
+            l.status === "perdido" ||
+            l.status === "perdi"
+          ) {
+            return l;
+          }
+
+          let updatedLead = { ...l };
+          let leadChanged = false;
+
+          const activeFlow =
+            operationalFlows.find((f) => f.id === (updatedLead.fluxoId || activeSystemFlowId)) ||
+            operationalFlows.find((f) => f.id === activeSystemFlowId) ||
+            operationalFlows[0];
+
+          // 2. AUTO-CALCULATE FINANCIAL ENQUADRAMENTO (CREDIT QUALIFICATION)
+          const income = Number(updatedLead.familyGrossIncome || updatedLead.familyIncome || 0);
+          if (income > 0 && (!updatedLead.financedValue || !updatedLead.installmentValue || !updatedLead.program)) {
+            const isMCMV = income <= 8000;
+            const calculatedProgram = isMCMV ? "Minha Casa Minha Vida (MCMV)" : "SBPE (Poupança/FGTS)";
+            
+            // MCMV subsidy estimation (mcmvDiscount)
+            let subsidy = 0;
+            if (isMCMV) {
+              if (income <= 2000) subsidy = 55000;
+              else if (income <= 3000) subsidy = 35000;
+              else if (income <= 4000) subsidy = 20000;
+              else if (income <= 8000) subsidy = 5000;
+            }
+
+            const financedLimit = Math.round(isMCMV ? income * 90 : income * 110);
+            const installment = Math.round(income * 0.3);
+            const searchBudget = Number(updatedLead.value || 250000);
+            const downpaymentNeeded = Math.max(0, searchBudget - financedLimit - subsidy);
+
+            updatedLead.program = calculatedProgram;
+            updatedLead.mcmvDiscount = subsidy;
+            updatedLead.financedValue = financedLimit;
+            updatedLead.installmentValue = installment;
+            updatedLead.downPaymentValue = downpaymentNeeded;
+            updatedLead.approvedStatus = updatedLead.approvedStatus || "Qualificado pelo Motor ⚡";
+            leadChanged = true;
+            changed = true;
+
+            addNotification(
+              `Calibragem Financeira: ${updatedLead.name} 📊`,
+              `Motor calculou capacidade de crédito: Financiamento de R$ ${financedLimit.toLocaleString("pt-BR")} e Entrada de R$ ${downpaymentNeeded.toLocaleString("pt-BR")}.`,
+              "ai"
+            );
+          }
+
+          // 3. AUTO-MATCH REAL ESTATE INVENTORY (STOCK COMPATIBILITY)
+          if (properties && properties.length > 0 && !updatedLead.propertyInterest && updatedLead.value) {
+            const maxBudget = Number(updatedLead.value);
+            const leadBedrooms = Number(updatedLead.bedrooms || 0);
+            
+            const bestMatches = properties.map(p => {
+              let score = 100;
+              if (p.price > maxBudget) {
+                const excess = (p.price - maxBudget) / maxBudget;
+                score -= Math.min(60, excess * 100);
+              }
+              if (leadBedrooms > 0 && p.bedrooms < leadBedrooms) {
+                score -= (leadBedrooms - p.bedrooms) * 20;
+              }
+              if (updatedLead.region && p.zone && updatedLead.region.toLowerCase() !== p.zone.toLowerCase()) {
+                score -= 15;
+              }
+              return { property: p, score: Math.max(0, Math.round(score)) };
+            }).filter(m => m.score >= 80)
+              .sort((a, b) => b.score - a.score);
+
+            if (bestMatches.length > 0) {
+              const best = bestMatches[0];
+              updatedLead.propertyInterest = best.property.title;
+              updatedLead.nextSteps = updatedLead.nextSteps 
+                ? `${updatedLead.nextSteps} | Apresentar unidade compatível ${best.property.title} (${best.score}% compatibilidade)` 
+                : `Apresentar unidade compatível ${best.property.title} (${best.score}% compatibilidade)`;
+              leadChanged = true;
+              changed = true;
+
+              addNotification(
+                `Unidade Compatível: ${updatedLead.name} 🏠`,
+                `O imóvel '${best.property.title}' possui enquadramento de ${best.score}% com as preferências deste cliente.`,
+                "success"
+              );
+            }
+          }
+
+          // 4. CHECK STATUS TIMEOUT (ARCHIVER / INACTIVITY)
+          let timeoutMs = 48 * 60 * 60 * 1000; // default 48h
+          if (activeFlow && activeFlow.statusTimers) {
+            if (updatedLead.status === "novo" && activeFlow.statusTimers.recentes) {
+              timeoutMs =
+                activeFlow.statusTimers.recentes.hours * 60 * 60 * 1000 +
+                activeFlow.statusTimers.recentes.minutes * 60 * 1000;
+            } else if (activeFlow.statusTimers.ativos) {
+              timeoutMs =
+                activeFlow.statusTimers.ativos.hours * 60 * 60 * 1000 +
+                activeFlow.statusTimers.ativos.minutes * 60 * 1000;
+            }
+          }
+
+          const lastTime = updatedLead.lastInteractionAt
+            ? new Date(updatedLead.lastInteractionAt).getTime()
+            : updatedLead.createdAt
+              ? new Date(updatedLead.createdAt).getTime()
+              : now;
+          const elapsed = now - lastTime;
+
+          if (elapsed > timeoutMs) {
+            changed = true;
+            return {
+              ...updatedLead,
+              status: "arquivado" as any,
+              lastInteractionAt: new Date().toISOString(),
+              lostReason: `Inatividade > ${Math.floor(timeoutMs / (1000 * 60 * 60))} horas (Automático)`,
+            };
+          }
+
+          // 5. RESPONSIVE FLOW STAGE TIMER (STAGE TIMELINE ALARMS)
+          // Find if lead has stage limit in the active flow
+          const currentStageId = updatedLead.osStageId || updatedLead.stage;
+          if (currentStageId && activeFlow && activeFlow.stages) {
+            const currentStage = activeFlow.stages.find(s => s.id === currentStageId);
+            if (currentStage && currentStage.timer) {
+              const { days = 0, hours = 0, minutes = 0 } = currentStage.timer;
+              const stageTimeoutMs = ((days * 24 + hours) * 60 + minutes) * 60 * 1000;
+              
+              if (stageTimeoutMs > 0) {
+                // If elapsed time is greater than 100% of stage timer
+                if (elapsed > stageTimeoutMs) {
+                  // Check if we already tagged this as expired
+                  if (!updatedLead.nextSteps?.includes("🛑 ALERTA TEMPORAL EXPIRADO")) {
+                    updatedLead.nextSteps = updatedLead.nextSteps 
+                      ? `🛑 ALERTA TEMPORAL EXPIRADO: Prazo da etapa ${currentStage.name} estourou! | ${updatedLead.nextSteps}` 
+                      : `🛑 ALERTA TEMPORAL EXPIRADO: Prazo da etapa ${currentStage.name} estourou!`;
+                    leadChanged = true;
+                    changed = true;
+
+                    triggerSensoryFeedback("chime", accSettings);
+                    addNotification(
+                      `🛑 Prazo Estourado: ${updatedLead.name}`,
+                      `O limite de tempo (${days}d ${hours}h) da etapa '${currentStage.name}' estourou. Fale com o cliente imediatamente.`,
+                      "alarm"
+                    );
+
+                    setActiveAlarm({
+                      id: `stage-expired-${updatedLead.id}`,
+                      title: `PRAZO ESTOURADO: ${updatedLead.name} 🛑`,
+                      leadName: updatedLead.name,
+                      time: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+                      description: `O lead ultrapassou o tempo limite de ${days} dias na etapa '${currentStage.name}' do fluxo comercial ativo.`
+                    });
+                  }
+                } 
+                // If elapsed time is greater than 80% of stage timer
+                else if (elapsed > stageTimeoutMs * 0.8) {
+                  if (!updatedLead.nextSteps?.includes("⚠️ PRAZO PRÓXIMO")) {
+                    updatedLead.nextSteps = updatedLead.nextSteps 
+                      ? `⚠️ PRAZO PRÓXIMO: Enviar script de reengajamento | ${updatedLead.nextSteps}` 
+                      : `⚠️ PRAZO PRÓXIMO: Enviar script de reengajamento`;
+                    leadChanged = true;
+                    changed = true;
+
+                    addNotification(
+                      `⚠️ Prazo Próximo do Fim: ${updatedLead.name}`,
+                      `O lead está prestes a estourar o limite de tempo na etapa '${currentStage.name}'.`,
+                      "warning"
+                    );
+                  }
+                }
+              }
+            }
+          }
+
+          return leadChanged ? updatedLead : l;
+        });
+
+        return changed ? updatedLeads : prevLeads;
+      });
+    };
+
+    // run immediately on start/flow-change
+    runCognitiveAutomation();
+
+    // check every 30 seconds for real-time reactivity
+    const interval = setInterval(runCognitiveAutomation, 30000); 
+    return () => clearInterval(interval);
+  }, [isDbHydrated, setLeads, operationalFlows, activeSystemFlowId, properties, accSettings]);
 
   // CUSTOM STYLED CONFIRMATION DIALOG STATE
   const [confirmModal, setConfirmModal] = useState<{
@@ -1745,13 +2251,13 @@ export default function App() {
   const [agencyName, setAgencyName] = useState<string>(() => {
     return (
       localStorage.getItem("ciclocred_agency_name") ||
-      "cicloCRED Empreendimentos Comerciais"
+      "Cury Constelação - Vendas de Apartamentos na Planta"
     );
   });
   const [consolidatedCrmInfo, setConsolidatedCrmInfo] = useState<string>(() => {
     return (
       localStorage.getItem("ciclocred_consolidated_crm_info") ||
-      "Operando com performance máxima. Metas comerciais alinhadas e integradas cycleCRED."
+      "Operando com performance máxima. Metas comerciais e lançamentos Cury integrados na constelação de vendas."
     );
   });
   const [subscriptionPlan, setSubscriptionPlan] = useState<string>(() => {
@@ -1874,7 +2380,7 @@ export default function App() {
         id: "proj-1",
         name: "Expansão de Lotes Urbanos Virgem",
         description:
-          "Metodologia ativa recomendando ofertas exclusivas de terrenos planos da cicloCRED.",
+          "Metodologia ativa recomendando ofertas exclusivas da Cury Constelação.",
         status: "ativo",
         progress: 0,
         xpReward: 1500,
@@ -2127,7 +2633,7 @@ export default function App() {
           id: "proj-1",
           name: "Expansão de Lotes Urbanos Virgem",
           description:
-            "Metodologia ativa recomendando ofertas exclusivas de terrenos planos da cicloCRED.",
+            "Metodologia ativa recomendando ofertas exclusivas da Cury Constelação.",
           status: "ativo",
           progress: 0,
           xpReward: 1500,
@@ -2194,9 +2700,9 @@ export default function App() {
     return [
       {
         id: "notify-1",
-        title: "Assistente Autônomo cicloCRED ✨",
+        title: "Assistente Cury Constelação ✨",
         message:
-          "Conectei seu funil de CRM. Monitorando a carteira de leads e agendamentos imobiliários em tempo real com clock tátil.",
+          "Conectei seu ecossistema de vendas espacial. Monitorando a carteira comercial de apartamentos na planta Cury em tempo real.",
         type: "ai",
         timestamp: "19:00",
         read: false,
@@ -2388,15 +2894,73 @@ export default function App() {
       }
     };
 
-    const isDashboardTab = activeTab === "dashboard";
-    const isMarketingTab =
-      activeTab === "marketing" || activeTab === "settings";
+    const handleMassOSAssign = (osId: string) => {
+      triggerSensoryFeedback("click", accSettings);
+      if (selectedLeadIds.length > 0 && osId) {
+        const selectedOS = operationalServiceOrders.find(os => os.id === osId);
+        if (selectedOS) {
+          requestConfirmation(
+            "Atribuir Ordem de Serviço?",
+            `Vincular ${selectedLeadIds.length} leads à OS: ${selectedOS.title}?`,
+            () => {
+              // Update OS
+              const newOrders = [...operationalServiceOrders];
+              const osIndex = newOrders.findIndex(os => os.id === osId);
+              if (osIndex !== -1) {
+                const uniqueLeads = Array.from(new Set([...newOrders[osIndex].leadIds, ...selectedLeadIds]));
+                newOrders[osIndex] = {
+                  ...newOrders[osIndex],
+                  leadIds: uniqueLeads,
+                  metrics: {
+                    ...newOrders[osIndex].metrics,
+                    totalLeads: uniqueLeads.length,
+                    activeLeads: uniqueLeads.length
+                  }
+                };
+                rawSetOperationalServiceOrders(newOrders);
+              }
 
-    const containerClasses = isMarketingTab
+              // Update Leads
+              setLeads(prev => prev.map(lead => {
+                if (selectedLeadIds.includes(lead.id)) {
+                  return { ...lead, fluxoId: selectedOS.fluxoId };
+                }
+                return lead;
+              }));
+
+              triggerSensoryFeedback("success", accSettings);
+              addNotification(
+                "✅ OS ATRIBUÍDA",
+                `${selectedLeadIds.length} leads vinculados à OS: ${selectedOS.title}.`,
+                "success"
+              );
+            },
+            "warning"
+          );
+        }
+      } else if (!osId) {
+        // Just changed back to default, do nothing
+      } else {
+        addNotification(
+          "Atribuição de OS",
+          "Selecione pelo menos um Lead para atribuir a Ordem de Serviço.",
+          "warning"
+        );
+      }
+    };
+
+    const isLeadsTab = activeTab === "leads";
+    const isSettingsTab = activeTab === "settings";
+
+    const currentBgConfig = appBackgrounds[activeTab];
+    const activeIndex = bgIndices[activeTab] || 0;
+    const currentBgImage = currentBgConfig?.images[activeIndex < currentBgConfig.images.length ? activeIndex : 0];
+    const hasBg = !!currentBgImage;
+    const containerClasses = isSettingsTab
       ? "bg-transparent pb-2 shrink-0 flex flex-col gap-2 select-none relative z-30 w-full antialiased mb-1"
-      : isDashboardTab
-        ? "bg-zinc-950 px-3 py-2 shrink-0 flex flex-col gap-2 select-none relative z-30 w-full antialiased text-white border border-zinc-800 rounded-xl"
-        : "bg-zinc-900 px-3 py-2 shrink-0 flex flex-col gap-2 select-none relative z-30 w-full antialiased text-white border-b-2 border-zinc-950";
+      : isLeadsTab
+        ? `${hasBg ? "bg-zinc-950/80 backdrop-blur-md" : "bg-zinc-950"} px-3 py-2 shrink-0 flex flex-col gap-2 select-none relative z-30 w-full antialiased text-white border border-zinc-800 rounded-xl`
+        : `${hasBg ? "bg-zinc-900/80 backdrop-blur-md" : "bg-zinc-900"} px-3 py-2 shrink-0 flex flex-col gap-2 select-none relative z-30 w-full antialiased text-white border-b-2 border-zinc-950`;
 
     const leftButtonsClass = "w-8 h-8 rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-black flex items-center justify-center relative cursor-pointer transition-colors shrink-0";
 
@@ -2450,49 +3014,85 @@ export default function App() {
                 </span>
               )}
             </button>
+            
+            {/* VINCULAR OS LOTE */}
+            <select
+              title="Vincular Ordem de Serviço"
+              onChange={(e) => {
+                handleMassOSAssign(e.target.value);
+                e.target.value = ""; // reset select state
+              }}
+              disabled={selectedLeadIds.length === 0}
+              className={`rounded-lg border border-zinc-700 bg-zinc-800 text-white text-[10px] font-black h-8 px-2 uppercase transition focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer ${selectedLeadIds.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-zinc-700'}`}
+            >
+              <option value="">Vincular OS...</option>
+              {operationalServiceOrders.map(os => (
+                <option key={os.id} value={os.id}>{os.title}</option>
+              ))}
+            </select>
           </div>
 
           {/* CENTRO: Barra de Pesquisa restaurada conforme solicitado */}
-          <div className="flex-1 w-full max-w-md relative">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
-              <Search className="h-4 w-4 text-zinc-400" />
-            </span>
-            <input
-              type="text"
-              placeholder="Pesquisar por nome, telefone ou status..."
-              value={searchTerm}
-              onChange={(e) => {
-                triggerSensoryFeedback("click", accSettings);
-                setSearchTerm(e.target.value);
-              }}
-              className={inputClass}
-            />
+          <div className="flex-1 w-full max-w-md relative flex items-center gap-1.5">
+            <div className="relative flex-1">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
+                <Search className="h-4 w-4 text-zinc-400" />
+              </span>
+              <input
+                type="text"
+                placeholder="Pesquisar ou digite comando NPL (ex: focar João)..."
+                value={searchTerm}
+                onChange={(e) => {
+                  triggerSensoryFeedback("click", accSettings);
+                  setSearchTerm(e.target.value);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && e.ctrlKey) {
+                    e.preventDefault();
+                    handleExecuteCentralNlp(searchTerm);
+                  }
+                }}
+                className={`${inputClass} pr-10`}
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white font-bold text-xs"
+                  title="Limpar pesquisa"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => handleExecuteCentralNlp(searchTerm)}
+              disabled={isNlpExecuting || !searchTerm.trim()}
+              title="🤖 Executar Inteligência NLP (Ctrl+Enter)"
+              className={`p-2 rounded-xl border border-zinc-950 font-black text-[10px] transition duration-200 uppercase flex items-center gap-1 shrink-0 ${
+                isNlpExecuting 
+                  ? "bg-indigo-900/60 text-indigo-300 cursor-not-allowed animate-pulse" 
+                  : !searchTerm.trim()
+                    ? "bg-zinc-800 text-zinc-500 cursor-not-allowed border-zinc-700/50"
+                    : "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.4)] hover:scale-[1.02]"
+              }`}
+            >
+              {isNlpExecuting ? (
+                <>
+                  <span className="animate-spin inline-block w-3 h-3 border-2 border-indigo-300 border-t-transparent rounded-full" />
+                  <span>Agindo...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">IA NLP</span>
+                </>
+              )}
+            </button>
           </div>
 
-          {/* LADO DIREITO: Botões solicitados 📥📤🔻 */}
+          {/* LADO DIREITO: Botões solicitados 🔻 */}
           <div className="flex items-center gap-2 shrink-0 w-full md:w-auto justify-end">
-            <button
-              type="button"
-              onClick={() => {
-                triggerSensoryFeedback("click", accSettings);
-                setIsImportModalOpen(true);
-              }}
-              title="📥 Importar Leads"
-              className={rightButtonsClass}
-            >
-              📥
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                triggerSensoryFeedback("click", accSettings);
-                setIsExportModalOpen(true);
-              }}
-              title="📤 Exportar Leads"
-              className={rightButtonsClass}
-            >
-              📤
-            </button>
             <button
               type="button"
               onClick={() => {
@@ -2966,9 +3566,9 @@ export default function App() {
         setUserName(
           user.displayName ||
             user.email?.split("@")[0].toUpperCase() ||
-            "Operador cicloCRED",
+            "Operador Cury Constelação",
         );
-        setUserEmail(user.email || "operador@sistema.com.br");
+        setUserEmail(user.email || "vendas@curyconstelacao.com.br");
         setIsSyncing(true);
 
         const forcedOffline =
@@ -3272,6 +3872,30 @@ export default function App() {
       },
     );
 
+    const unsubscribeActionLogs = onSnapshot(
+      collection(db, "actionLogs"),
+      (snapshot) => {
+        if (isLocalActionLogsChangeRef.current) {
+          isLocalActionLogsChangeRef.current = false;
+          return;
+        }
+        const loaded: LeadActionLog[] = [];
+        snapshot.forEach((docSnap) => {
+          loaded.push(docSnap.data() as LeadActionLog);
+        });
+        loaded.sort((a, b) => {
+          const tA = new Date(a.timestamp || 0).getTime();
+          const tB = new Date(b.timestamp || 0).getTime();
+          return tB - tA;
+        });
+        localStorage.setItem("ciclocred_crm_action_logs", JSON.stringify(loaded));
+        rawSetActionLogs(loaded);
+      },
+      (err) => {
+        console.warn("Firestore actionLogs snapshot error:", err);
+      }
+    );
+
     const unsubscribeAppointments = onSnapshot(
       collection(db, "appointments"),
       (snapshot) => {
@@ -3403,6 +4027,40 @@ export default function App() {
       },
     );
 
+    const unsubscribeQuickNotes = onSnapshot(
+      collection(db, "quickNotes"),
+      (snapshot) => {
+        if (isLocalNotesChangeRef.current) return;
+        const loaded: QuickNote[] = [];
+        snapshot.forEach((docSnap) => {
+          loaded.push(docSnap.data() as QuickNote);
+        });
+        loaded.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        localStorage.setItem("ciclocred_quick_notes", JSON.stringify(loaded));
+        rawSetQuickNotes(loaded);
+      },
+      (err) => {
+        console.warn("QuickNotes live listener failed:", err);
+      }
+    );
+
+    const unsubscribeImportBatches = onSnapshot(
+      collection(db, "importBatches"),
+      (snapshot) => {
+        if (isLocalImportBatchesChangeRef.current) return;
+        const loaded: OperationalOS[] = [];
+        snapshot.forEach((docSnap) => {
+          loaded.push(docSnap.data() as OperationalOS);
+        });
+        loaded.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        localStorage.setItem("ciclocred_import_batches", JSON.stringify(loaded));
+        rawSetOperationalServiceOrders(loaded);
+      },
+      (err) => {
+        console.warn("ImportBatches live listener failed:", err);
+      }
+    );
+
     const unsubscribeProfile = onSnapshot(
       doc(db, "userProfiles", auth.currentUser.uid),
       (docSnap) => {
@@ -3434,6 +4092,7 @@ export default function App() {
 
     return () => {
       unsubscribeLeads();
+      unsubscribeActionLogs();
       unsubscribeAppointments();
       unsubscribeTemplates();
       unsubscribeEmailLogs();
@@ -3441,6 +4100,8 @@ export default function App() {
       unsubscribeProperties();
       unsubscribeGoals();
       unsubscribeProjects();
+      unsubscribeQuickNotes();
+      unsubscribeImportBatches();
       unsubscribeProfile();
     };
   }, [isDbHydrated, isQuotaExceeded, forceLocalStorageMode]);
@@ -3827,211 +4488,447 @@ export default function App() {
     forceLocalStorageMode,
   ]);
 
-  // Centralized Lead Field Updater
-  const handleUpdateLeadField = (leadId: string, fields: Partial<Lead>) => {
-    setLeads((prev) =>
-      prev.map((l) => {
-        if (l.id === leadId) {
-          const updated = {
-            ...l,
-            ...fields,
-            lastInteractionAt: new Date().toISOString(),
+  // Centralized high-performance Engine for Global Synchronization, Memória Operacional and Fluxo Inteligente
+  const enrichAndSyncLead = React.useCallback(async (
+    leadId: string,
+    fields: Partial<Lead>,
+    moduleSource: string,
+    customLogNote?: string
+  ) => {
+    isLocalLeadsChangeRef.current = true;
+    
+    let oldLead: Lead | undefined;
+    let enrichedLead: Lead | undefined;
+    let logEntries: LeadActionLog[] = [];
+
+    // 1. Update the local state React leads and compute intelligence on the fly
+    setLeads((prev) => {
+      const existing = prev.find(l => l.id === leadId);
+      if (!existing) return prev;
+      oldLead = { ...existing };
+
+      let updated: Lead = {
+        ...existing,
+        ...fields,
+        lastInteractionAt: new Date().toISOString(),
+      };
+
+      // Auto-advance rule: ANY edit or alteration on a "novo" lead automatically promotes it to status "ativo" and initial stage "abordagem" (unless explicitly setting another stage)
+      if (
+        existing.status === "novo" &&
+        updated.status !== "arquivado" &&
+        updated.status !== "lead_descartado" &&
+        updated.status !== "descartado" &&
+        updated.status !== "ganhou"
+      ) {
+        updated.status = "ativo";
+        if (!fields.stage && !updated.stage) {
+          updated.stage = "abordagem";
+        }
+      }
+
+      // ----------------- COMPLETE BIDIRECTIONAL SYNC (STATUS <-> STAGE) -----------------
+      if (fields.status !== undefined && fields.status !== existing.status) {
+        if (fields.status === 'ganhou' || fields.status === 'Convertido') {
+          updated.stage = 'fechamento';
+        } else if (fields.status === 'ativo' && (!updated.stage || updated.stage === 'fechamento')) {
+           updated.stage = 'abordagem';
+        }
+      } else if (fields.stage !== undefined && fields.stage !== existing.stage) {
+        if (fields.stage === 'fechamento' || fields.stage === 'concluido') {
+          updated.status = 'ganhou';
+        } else if (fields.stage && updated.status === 'novo') {
+          updated.status = 'ativo';
+        }
+      }
+
+      // ----------------- IMPLICIT STAGE PROMOTION -----------------
+      const stageOrder = [
+        'abordagem', 'triagem', 'qualificacao', 'analise_perfil', 'compatibilizacao',
+        'apresentacao', 'proposta', 'visita', 'objecao', 'escolha_de_unidade',
+        'simulacao_final', 'fechamento', 'pos_venda', 'follow_up_1', 'follow_up_2',
+        'follow_up_3'
+      ];
+      
+      const currentStageIdx = stageOrder.indexOf(updated.stage || 'abordagem');
+      let maxNewStageIdx = currentStageIdx;
+
+      // Auto-promote only if the user didn't explicitly set the stage in this update
+      if (fields.stage === undefined) {
+        // Rule 1: Triagem (Basic info captured)
+        if (updated.name && updated.phone) {
+          maxNewStageIdx = Math.max(maxNewStageIdx, stageOrder.indexOf('triagem'));
+        }
+        // Rule 2: Qualificação (Income / Basic Financials)
+        if (updated.familyIncome && updated.familyIncome > 0) {
+          maxNewStageIdx = Math.max(maxNewStageIdx, stageOrder.indexOf('qualificacao'));
+        }
+        // Rule 3: Análise de Perfil (Profile, Dependents)
+        if (updated.mainProfile) {
+          maxNewStageIdx = Math.max(maxNewStageIdx, stageOrder.indexOf('analise_perfil'));
+        }
+        // Rule 4: Compatibilização (Property Interest / Match)
+        if (updated.propertyInterest) {
+          maxNewStageIdx = Math.max(maxNewStageIdx, stageOrder.indexOf('compatibilizacao'));
+        }
+        // Rule 5: Objeções
+        if (updated.objection && updated.objection !== "Sem Objeção") {
+          maxNewStageIdx = Math.max(maxNewStageIdx, stageOrder.indexOf('objecao'));
+        }
+        // Rule 6: Checklist (Documentos, Visita, Proposta, etc.)
+        if (updated.checklist) {
+          if (updated.checklist['doc_cnh_rg'] && updated.checklist['doc_resid'] && updated.checklist['renda_holerites']) maxNewStageIdx = Math.max(maxNewStageIdx, stageOrder.indexOf('analise_perfil'));
+          if (updated.checklist['visita_agendada'] || updated.checklist['visita_realizada']) maxNewStageIdx = Math.max(maxNewStageIdx, stageOrder.indexOf('visita'));
+          if (updated.checklist['proposta_assinada']) maxNewStageIdx = Math.max(maxNewStageIdx, stageOrder.indexOf('proposta'));
+          if (updated.checklist['credito_aprovado']) maxNewStageIdx = Math.max(maxNewStageIdx, stageOrder.indexOf('simulacao_final'));
+          if (updated.checklist['assinatura_caixa']) maxNewStageIdx = Math.max(maxNewStageIdx, stageOrder.indexOf('fechamento'));
+          if (updated.checklist['chaves_entregues']) maxNewStageIdx = Math.max(maxNewStageIdx, stageOrder.indexOf('pos_venda'));
+        }
+        
+        if (maxNewStageIdx > currentStageIdx && maxNewStageIdx !== -1) {
+          updated.stage = stageOrder[maxNewStageIdx];
+        }
+      }
+
+      // ----------------- OS FLOW & GENERAL STAGE BIDIRECTIONAL SYNC -----------------
+      let activeFluxoId = updated.fluxoId;
+      if (!activeFluxoId && operationalServiceOrders) {
+        const matchingOS = (operationalServiceOrders || []).find(os => os.leadIds && os.leadIds.includes(leadId));
+        if (matchingOS) {
+          activeFluxoId = matchingOS.fluxoId;
+          updated.fluxoId = matchingOS.fluxoId;
+        }
+      }
+
+      if (activeFluxoId) {
+        const activeFlow = (operationalFlows || []).find(f => f.id === activeFluxoId);
+        if (activeFlow && activeFlow.stages && activeFlow.stages.length > 0) {
+          if (fields.fluxoId !== undefined && fields.fluxoId !== existing.fluxoId) {
+            // Flow changed, re-map current stage to new flow
+            const stageToMap = updated.stage || 'abordagem';
+            const matchedCustomStage = activeFlow.stages.find(s => s.mappedStageId === stageToMap || s.id === stageToMap || (s.mappedStageId && s.mappedStageId.includes(stageToMap)) || s.id.includes(stageToMap) || s.name.toLowerCase().includes(stageToMap.replace(/_/g, ' ')));
+            if (matchedCustomStage) {
+              updated.osStageId = matchedCustomStage.id;
+            } else {
+              updated.osStageId = activeFlow.stages[0]?.id; // Default to first stage if no mapping
+            }
+          } else if (fields.osStageId !== undefined) {
+            // Updated via Custom/OS stage
+            const matchedCustomStage = activeFlow.stages.find(s => s.id === fields.osStageId);
+            if (matchedCustomStage) {
+              updated.osStageId = matchedCustomStage.id;
+              if (matchedCustomStage.mappedStageId) {
+                updated.generalStageId = matchedCustomStage.mappedStageId;
+                // Reflect mapped stage in the general kanban (stage)
+                updated.stage = matchedCustomStage.mappedStageId;
+              }
+            }
+          } else if (fields.stage !== undefined || updated.stage !== existing.stage) {
+            // Updated via General Kanban stage directly OR Implicit Stage Promotion
+            const stageToMap = fields.stage !== undefined ? fields.stage : updated.stage;
+            // Find a custom stage in the flow that is mapped to this general stage
+            const matchedCustomStage = activeFlow.stages.find(s => s.mappedStageId === stageToMap || s.id === stageToMap || (s.mappedStageId && s.mappedStageId.includes(stageToMap)) || s.id.includes(stageToMap) || s.name.toLowerCase().includes(stageToMap.replace(/_/g, ' ')));
+            if (matchedCustomStage) {
+              updated.osStageId = matchedCustomStage.id;
+              if (matchedCustomStage.mappedStageId) {
+                updated.generalStageId = matchedCustomStage.mappedStageId;
+                updated.stage = matchedCustomStage.mappedStageId;
+              }
+            }
+          } else if (updated.osStageId) {
+            // Make sure general stage is mapped if osStageId is present
+            const matchedCustomStage = activeFlow.stages.find(s => s.id === updated.osStageId);
+            if (matchedCustomStage && matchedCustomStage.mappedStageId) {
+              updated.generalStageId = matchedCustomStage.mappedStageId;
+              updated.stage = matchedCustomStage.mappedStageId;
+            }
+          }
+        }
+      }
+
+      // ----------------- FINAL SYNC FOR STATUS FROM STAGE (2nd PASS) -----------------
+      if (updated.stage !== existing.stage) {
+        if (updated.stage === 'fechamento' || updated.stage === 'concluido') {
+          updated.status = 'ganhou';
+        } else if (updated.stage && updated.status === 'novo') {
+          updated.status = 'ativo';
+        } else if (updated.status === 'ganhou' && updated.stage !== 'fechamento' && updated.stage !== 'concluido') {
+          updated.status = 'ativo';
+        }
+      }
+
+      // ----------------- FLUXO INTELIGENTE RECALCULATIONS -----------------
+      // a) Recalcular prioridade do Lead
+      updated.priority = calculatePriority(updated);
+
+      // b) Recalcular probabilidade e compatibilidade com estoque
+      let maxCompatScore = 0;
+      if (properties && properties.length > 0) {
+        properties.forEach((p) => {
+          const res = calculateCompatibility(updated, p);
+          if (res.score > maxCompatScore) {
+            maxCompatScore = res.score;
+          }
+        });
+      }
+      updated.compatibilityScore = maxCompatScore;
+      
+      // c) Identificar próxima melhor ação
+      updated.notes = updated.notes || ""; // avoid undefined
+
+      // Update indicators/suggestions
+      const nextAction = suggestNextAction(updated);
+
+      // ----------------- MEMÓRIA OPERACIONAL (TIMELINE LOG ENTRY) -----------------
+      // Compare fields to detect which values changed
+      const fieldsToTrack: (keyof Lead)[] = [
+        'name', 'email', 'phone', 'value', 'status', 'stage', 
+        'notes', 'familyIncome', 'propertyInterest', 'objection', 'fluxoId'
+      ];
+
+      fieldsToTrack.forEach(field => {
+        if (fields[field] !== undefined && String(fields[field]) !== String(existing[field])) {
+          const fieldLabels: Record<string, string> = {
+            name: 'Nome',
+            email: 'E-mail',
+            phone: 'Telefone',
+            value: 'Valor do Negócio',
+            status: 'Status/Fase',
+            stage: 'Etapa do Funil',
+            notes: 'Anotações',
+            familyIncome: 'Renda Familiar Conjunta',
+            propertyInterest: 'Interesse Imobiliário',
+            objection: 'Objeção do Cliente',
+            fluxoId: 'Fluxo Vinculado'
           };
 
-          // Auto-advance rule: ANY edit or alteration on a "novo" lead automatically promotes it to status "ativo" and initial stage "abordagem"
-          if (
-            l.status === "novo" &&
-            updated.status !== "arquivado" &&
-            updated.status !== "lead_descartado" &&
-            updated.status !== "descartado" &&
-            updated.status !== "ganhou"
-          ) {
-            updated.status = "ativo";
-            updated.stage = "abordagem";
-          }
-
-          // Sync details modal if open
-          if (selectedLeadForDetails?.id === leadId) {
-            setSelectedLeadForDetails((curr) =>
-              curr ? { ...curr, ...updated } : null,
-            );
-          }
-          return updated;
+          const logId = "log_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+          logEntries.push({
+            id: logId,
+            leadId: leadId,
+            timestamp: new Date().toISOString(),
+            module: moduleSource,
+            action: `Alterou ${fieldLabels[field] || String(field)}`,
+            prevValue: String(existing[field] || 'Vazio'),
+            newValue: String(updated[field] || 'Vazio'),
+            user: userName || 'Sistema',
+            notes: customLogNote || `Atualização de dados via ${moduleSource}`
+          });
         }
-        return l;
-      }),
-    );
-  };
+      });
+
+      enrichedLead = updated;
+
+      return prev.map((l) => (l.id === leadId ? updated : l));
+    });
+
+    // 2. Perform external async side effects (Firestore save)
+    if (enrichedLead) {
+      if (selectedLeadForDetails?.id === leadId) {
+        setSelectedLeadForDetails(enrichedLead);
+      }
+      const cleanLead = JSON.parse(JSON.stringify(enrichedLead));
+      
+      // Firestore Save Lead
+      if (auth.currentUser && !forceLocalStorageMode && !isQuotaExceeded) {
+        setDoc(doc(db, "leads", leadId), cleanLead).catch(err => {
+          console.warn("Failed to sync updated lead to Firestore:", err);
+        });
+      }
+
+      // 3. Save Log Entries to state & Firestore
+      if (logEntries.length > 0) {
+        isLocalActionLogsChangeRef.current = true;
+        setActionLogs(prevLogs => {
+          const updatedLogs = [...logEntries, ...prevLogs];
+          localStorage.setItem("ciclocred_crm_action_logs", JSON.stringify(updatedLogs));
+          return updatedLogs;
+        });
+
+        // Save logs to Firestore in parallel
+        if (auth.currentUser && !forceLocalStorageMode && !isQuotaExceeded) {
+          logEntries.forEach(log => {
+            const cleanLog = JSON.parse(JSON.stringify(log));
+            setDoc(doc(db, "actionLogs", log.id), cleanLog).catch(err => {
+              console.warn("Failed to sync action log to Firestore:", err);
+            });
+          });
+        }
+
+        // Emit alerts if compatibility score is extremely high!
+        if (enrichedLead.compatibilityScore && enrichedLead.compatibilityScore >= 80) {
+          addNotification(
+            "ALTA COMPATIBILIDADE",
+            `O cliente ${enrichedLead.name} possui ${enrichedLead.compatibilityScore}% de compatibilidade com imóveis do estoque!`,
+            "info"
+          );
+        }
+
+        // Trigger Google Sheets Sync
+        logEntries.forEach(log => {
+          syncCRMMovementToGoogleSheet(
+            log.action,
+            `Cliente: ${enrichedLead?.name} | ${log.action}: De [${log.prevValue}] para [${log.newValue}] (${log.module})`,
+            userName
+          );
+        });
+      }
+    }
+  }, [
+    properties,
+    userName,
+    selectedLeadForDetails,
+    forceLocalStorageMode,
+    isQuotaExceeded,
+    setActionLogs,
+    setLeads,
+    addNotification,
+    operationalFlows,
+    operationalServiceOrders
+  ]);
+
+  // Centralized Lead Field Updater
+  const handleUpdateLeadField = React.useCallback((leadId: string, fields: Partial<Lead>) => {
+    enrichAndSyncLead(leadId, fields, "CRM");
+  }, [enrichAndSyncLead]);
 
   // Lead transition handler
-  const handleMoveLead = (
+  const handleMoveLead = React.useCallback((
     leadId: string,
     newStatus: string,
     targetPageId?: string,
   ) => {
-    let previousStatus: string | undefined;
-    // Get columns to automatically tag the lead based on matching stage label
+    const leadObj = leadsRef.current.find((l) => l.id === leadId);
+    const previousStatus = leadObj ? leadObj.status : undefined;
+
     const cols = getKanbanColumns(targetPageId);
     const targetCol = cols.find((c) => c.id === newStatus);
     const stageLabel = targetCol ? targetCol.label : String(newStatus);
 
-    // Resolve which field the target column actually represents
     const resolvedPageId =
       targetPageId ||
       localStorage.getItem("ciclocred_active_funnel_page_id") ||
       "status";
 
-    setLeads((prevLeads) => {
-      return prevLeads.map((l) => {
-        if (l.id === leadId) {
-          previousStatus = l.status;
-
-          // Ensure funnelPlacements works correctly
-          const placements =
-            l.funnelPlacements && l.funnelPlacements.length > 0
-              ? [...l.funnelPlacements]
-              : [{ pageId: l.funnelPageId || "status", status: l.status }];
-
-          const existingPlacementIndex = placements.findIndex(
-            (p) => p.pageId === resolvedPageId,
-          );
-
-          if (existingPlacementIndex !== -1) {
-            placements[existingPlacementIndex] = {
-              pageId: resolvedPageId,
-              status: newStatus,
-            };
-          } else {
-            placements.push({ pageId: resolvedPageId, status: newStatus });
-          }
-
-          const currentTags = l.tags || [];
-          const newTags = currentTags.includes(stageLabel)
-            ? currentTags
-            : [...currentTags, stageLabel];
-
-          const updatedLead = {
-            ...l,
-            tags: newTags,
-            funnelPageId: resolvedPageId,
-            funnelPlacements: placements,
-            lastInteractionAt: new Date().toISOString(),
-          };
-
-          if (resolvedPageId === "status" || resolvedPageId === "tabelas") {
-            updatedLead.status = newStatus as any;
-          } else if (
-            resolvedPageId === "etapas" ||
-            resolvedPageId === "ativos"
-          ) {
-            updatedLead.stage = newStatus;
-          } else if (resolvedPageId === "perfil") {
-            updatedLead.mainProfile = newStatus;
-          } else if (
-            resolvedPageId === "objecoes" ||
-            resolvedPageId === "carteira"
-          ) {
-            updatedLead.objection = newStatus;
-          }
-
-          // Auto-advance rule: Any movement on a "novo" lead places it directly into 'ativo' and 'abordagem'
-          if (
-            l.status === "novo" &&
-            updatedLead.status !== "arquivado" &&
-            updatedLead.status !== "lead_descartado" &&
-            updatedLead.status !== "descartado" &&
-            updatedLead.status !== "ganhou"
-          ) {
-            updatedLead.status = "ativo";
-            updatedLead.stage = "abordagem";
-          }
-
-          return updatedLead;
-        }
-        return l;
-      });
-    });
-
-    // Sync current details modal if matches
-    if (selectedLeadForDetails && selectedLeadForDetails.id === leadId) {
-      setSelectedLeadForDetails((prev) => {
-        if (!prev) return null;
-        const updated = { ...prev };
-        if (resolvedPageId === "status" || resolvedPageId === "tabelas")
-          updated.status = newStatus as any;
-        if (resolvedPageId === "etapas" || resolvedPageId === "ativos")
-          updated.stage = newStatus;
-        if (resolvedPageId === "perfil") updated.mainProfile = newStatus;
-        if (resolvedPageId === "objecoes" || resolvedPageId === "carteira")
-          updated.objection = newStatus;
-        return updated;
-      });
+    const fieldsToUpdate: Partial<Lead> = {};
+    if (resolvedPageId === "status" || resolvedPageId === "tabelas") {
+      fieldsToUpdate.status = newStatus as any;
+    } else if (resolvedPageId === "etapas" || resolvedPageId === "ativos") {
+      fieldsToUpdate.stage = newStatus;
+    } else if (resolvedPageId === "perfil") {
+      fieldsToUpdate.mainProfile = newStatus as any;
+    } else if (resolvedPageId === "objecoes" || resolvedPageId === "carteira") {
+      fieldsToUpdate.objection = newStatus;
     }
+
+    enrichAndSyncLead(leadId, fieldsToUpdate, "Kanban");
 
     // Trigger Gamification for moving leads in Kanban!
     if (previousStatus && previousStatus !== newStatus) {
-      if (newStatus === "fechado") {
+      if (newStatus === "fechado" || newStatus === "ganhou") {
         progressGoalCategory("venda", 1);
         awardXP(500); // 500 XP big closed win deal bonus!
       } else {
         awardXP(40); // 40 XP for advancing pipeline stage
       }
-
-      // Sync to Google Sheets Real-time
-      const leadObj = leads.find((l) => l.id === leadId);
-      if (leadObj) {
-        syncCRMMovementToGoogleSheet(
-          "Fase Alterada",
-          `Lead ${leadObj.name} movido de [${(previousStatus || "").toUpperCase()}] para [${newStatus.toUpperCase()}] | Negócio: R$ ${leadObj.value.toLocaleString("pt-BR")}`,
-          userName,
-        );
-      }
     }
-  };
+  }, [enrichAndSyncLead, progressGoalCategory, awardXP]);
 
-  const handleUpdateNotes = (leadId: string, newNotes: string) => {
-    setLeads((prevLeads) =>
-      prevLeads.map((l) => (l.id === leadId ? { ...l, notes: newNotes } : l)),
-    );
-    // Sync current details modal if matches
-    if (selectedLeadForDetails && selectedLeadForDetails.id === leadId) {
-      setSelectedLeadForDetails((prev) =>
-        prev ? { ...prev, notes: newNotes } : null,
-      );
-    }
-  };
+  const handleUpdateNotes = React.useCallback((leadId: string, newNotes: string) => {
+    enrichAndSyncLead(leadId, { notes: newNotes }, "Notas");
+  }, [enrichAndSyncLead]);
 
-  const handleUpdateLeadFull = (
+  const handleUpdateLeadFull = React.useCallback((
     leadId: string,
     updatedFields: Partial<Lead>,
   ) => {
-    setLeads((prevLeads) =>
-      prevLeads.map((l) => (l.id === leadId ? { ...l, ...updatedFields } : l)),
-    );
-    if (selectedLeadForDetails && selectedLeadForDetails.id === leadId) {
-      setSelectedLeadForDetails((prev) =>
-        prev ? { ...prev, ...updatedFields } : null,
+    enrichAndSyncLead(leadId, updatedFields, "CRM");
+  }, [enrichAndSyncLead]);
+
+  const handleUpdateFamilyIncome = React.useCallback((leadId: string, income: number) => {
+    enrichAndSyncLead(leadId, { familyIncome: income }, "Ficha");
+  }, [enrichAndSyncLead]);
+
+  const [isNlpExecuting, setIsNlpExecuting] = useState(false);
+
+  const handleExecuteCentralNlp = async (command: string) => {
+    if (!command.trim()) return;
+    setIsNlpExecuting(true);
+    try {
+      const res = await fetch("/api/ai/nlp-command", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          command,
+          leadsContext: leads.map((l) => ({
+            id: l.id,
+            name: l.name,
+            status: l.status,
+            stage: l.stage,
+            value: l.value,
+            familyGrossIncome: l.familyGrossIncome,
+            familyIncome: l.familyIncome,
+            qualificacao: l.qualificacao,
+            mainProfile: l.mainProfile,
+            objection: l.objection
+          })),
+          propertiesContext: []
+        }),
+      });
+
+      if (!res.ok) throw new Error("Erro na comunicação com a IA");
+      const data = await res.json();
+
+      let actionsApplied = 0;
+      if (data.actions && Array.isArray(data.actions)) {
+        for (const action of data.actions) {
+          if (action.type === "UPDATE_LEAD") {
+            handleUpdateLeadField(action.leadId, action.updates);
+            
+            if (action.updates.status) {
+              handleMoveLead(action.leadId, action.updates.status, "status");
+            }
+            if (action.updates.stage) {
+              handleMoveLead(action.leadId, action.updates.stage, "etapas");
+            }
+            if (action.updates.mainProfile) {
+              handleMoveLead(action.leadId, action.updates.mainProfile, "perfil");
+            }
+            if (action.updates.objection) {
+              handleMoveLead(action.leadId, action.updates.objection, "objecoes");
+            }
+            actionsApplied++;
+          } else if (action.type === "ADD_TO_DISPATCH_QUEUE") {
+            handleAddMultipleToDisparos(action.leadIds || []);
+            actionsApplied++;
+          } else if (action.type === "FOCUS_LEAD") {
+            const focusLead = leads.find(l => (action.leadIds || []).includes(l.id));
+            if (focusLead) {
+              setSelectedLeadForDetails(focusLead);
+              setIsDetailsModalOpen(true);
+              actionsApplied++;
+            }
+          }
+        }
+      }
+
+      addNotification(
+        "🤖 COMANDO IA EXECUTADO", 
+        data.message || `${actionsApplied} ações inteligentes aplicadas no ecossistema cicloCRED.`, 
+        "success"
       );
+    } catch (err: any) {
+      console.error(err);
+      addNotification("❌ ERRO IA", "Falha ao processar comando com o Gemini.", "alarm");
+    } finally {
+      setIsNlpExecuting(false);
     }
   };
 
-  const handleUpdateFamilyIncome = (leadId: string, income: number) => {
-    setLeads((prevLeads) =>
-      prevLeads.map((l) =>
-        l.id === leadId ? { ...l, familyIncome: income } : l,
-      ),
-    );
-    if (selectedLeadForDetails && selectedLeadForDetails.id === leadId) {
-      setSelectedLeadForDetails((prev) =>
-        prev ? { ...prev, familyIncome: income } : null,
-      );
-    }
-  };
 
 
-
-  const handleDeleteLead = (leadId: string) => {
-    const leadObj = leads.find((l) => l.id === leadId);
+  const handleDeleteLead = React.useCallback((leadId: string) => {
+    const leadObj = leadsRef.current.find((l) => l.id === leadId);
     const leadName = leadObj ? leadObj.name : "este lead";
     requestConfirmation(
       "Remover Cliente Lead?",
@@ -4097,7 +4994,7 @@ export default function App() {
       },
       "danger",
     );
-  };
+  }, [requestConfirmation, setLeads, scriptsTargetLeadId, selectedLeadForDetails, accSettings, addNotification]);
 
   const handleDeleteMultipleLeadsHandler = async (ids: string[]) => {
     // Flag local change to lock incoming snapshots
@@ -4831,6 +5728,10 @@ export default function App() {
     }
   };
 
+  const currentBgConfig = appBackgrounds[activeTab];
+  const activeIndex = bgIndices[activeTab] || 0;
+  const currentBgImage = currentBgConfig?.images[activeIndex < currentBgConfig.images.length ? activeIndex : 0];
+
   return (
     <div
       className={`min-h-screen transition-colors  ${theme === "escuro" || theme === "galatico" ? "dark bg-zinc-950 text-zinc-100" : "bg-zinc-50 text-zinc-900"} ${theme === "galatico" ? "bg-black" : ""} ${accSettings.highContrast ? "contrast-125" : ""}`}
@@ -4858,101 +5759,21 @@ export default function App() {
         />
       )}
       {/* Right Core Content viewports wrapper */}
-      <div className="relative flex-1 flex flex-col h-screen overflow-hidden">
-        {/* Top-center Hover/Touch trigger for the auto-hiding navigation system */}
+      <div 
+        className="relative flex-1 flex flex-col h-screen overflow-hidden bg-cover bg-center bg-no-repeat transition-all duration-500"
+        style={{ 
+          backgroundImage: currentBgImage ? `url(${currentBgImage})` : 'none',
+        }}
+      >
+        {currentBgImage && (
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] pointer-events-none z-0" />
+        )}
+        {/* Unified Neo-Brutalist Layout - Fixed Header */}
         <div
-          onMouseEnter={() => setIsHeaderExpanded(true)}
-          onClick={() => setIsHeaderExpanded((prev) => !prev)}
-          className="fixed top-0 left-1/2 -translate-x-1/2 w-48 h-3.5 z-[100] cursor-pointer bg-transparent border-none opacity-0 select-none"
-          title="Toque/Encoste para abrir ou fechar o menu superior"
-        />
-
-        {/* Unified Neo-Brutalist Layout according to diagram */}
-        <div
-          className={`bg-black text-white flex items-center justify-between w-full select-none shrink-0 pl-4 md:pl-8 pr-12 md:pr-16 py-3 gap-3.5 relative z-40 transition-colors ease-in-out ${
-            isHeaderExpanded
-              ? "translate-y-0 opacity-100 border-b-4 border-zinc-950 h-auto py-3"
-              : "-translate-y-full opacity-0 pointer-events-none h-0 overflow-hidden py-0 border-b-0"
-          }`}
-          onMouseLeave={() => setIsHeaderExpanded(false)}
+          className={`${currentBgImage ? "bg-black/90 backdrop-blur-md" : "bg-black"} text-white flex items-center justify-between w-full select-none shrink-0 pl-4 md:pl-8 pr-4 py-3 gap-3.5 relative z-40 border-b-4 border-zinc-950 h-auto`}
         >
-          {/* Title / Brand and Left Icons */}
+          {/* User Profile Button with photo or initial - LEFT CORNER */}
           <div className="flex items-center gap-3 shrink-0">
-            <button
-              onClick={() => {
-                triggerSensoryFeedback("click", accSettings);
-                setActiveTab("painel-geral");
-              }}
-              className="flex items-center gap-2.5 focus:outline-none transition group text-left shrink-0 cursor-pointer mr-2"
-              title="cicloCRED CRM - Painel Geral"
-            >
-              <Briefcase className="w-5.5 h-5.5 text-indigo-400 group-hover:scale-110 transition " />
-              <span className="font-sans font-black tracking-tight text-lg md:text-xl uppercase italic text-white leading-none whitespace-nowrap">
-                CICLOCRED <span className="text-indigo-400 font-sans">CRM</span>
-              </span>
-            </button>
-
-            {/* Header Left: Tab Navigation 🔄 */}
-            <button
-              onClick={handleCycleTab}
-              className={`flex items-center justify-center w-9 h-9 shrink-0 rounded-xl border-2 transition-colors cursor-pointer bg-indigo-600 hover:bg-indigo-500 border-indigo-400 text-white shadow-inner hover:scale-105 active:scale-95`}
-              title={`${TAB_NAMES[activeTab] || "Página"} - 🔄 Navegação (Clique: Próxima)`}
-            >
-              <span className="text-sm font-bold">🔄</span>
-            </button>
-
-            {/* Page Name Pill / Indicator */}
-            {showPageNamePill && (
-              <div className="flex items-center bg-zinc-900 border-2 border-zinc-700 text-indigo-400 rounded-lg shadow-[2px_2px_0px_0px_rgba(255,255,255,0.15)] px-3 h-9 mr-auto  shrink-0">
-                <span className="font-mono font-black text-[10px] md:text-xs uppercase whitespace-nowrap">
-                  {TAB_NAMES[activeTab] || "Página"}
-                </span>
-                <button
-                  onClick={() => setShowPageNamePill(false)}
-                  className="ml-2 text-lg hover:text-rose-500 text-zinc-500 font-bold transition-colors leading-none"
-                  title="Fechar Aviso"
-                >
-                  ×
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Right Side Control Panel - User Photo/Modal, Notifications, and Add Lead */}
-          <div className="flex items-center gap-3 shrink-0">
-            {/* Add Lead ➕👤 Button */}
-            <button
-              onClick={() => {
-                triggerSensoryFeedback("click", accSettings);
-                setSelectedLeadForEdit(null);
-                setIsLeadModalOpen(true);
-              }}
-              className="bg-zinc-800 text-white border-2 border-zinc-950 text-sm font-black rounded-lg shadow-[2px_2px_0px_0px_rgba(255,255,255,0.15)] px-2 min-w-[40px] h-9 flex items-center justify-center transition-transform hover:translate-y-[-1px] active:translate-y-[1px] cursor-pointer shrink-0 whitespace-nowrap"
-              title="➕👤 Adicionar Lead à Ficha Cadastral"
-            >
-              ➕👤
-            </button>
-
-            {/* Notification Bell 🔔 */}
-            <button
-              id="bell-notification-trigger"
-              type="button"
-              onClick={() => {
-                triggerSensoryFeedback("click", accSettings);
-                setIsNotificationsOpen((prev) => !prev);
-              }}
-              className="relative w-9 h-9 rounded-lg border-2 border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-white transition cursor-pointer flex items-center justify-center focus:outline-none shadow-[2px_2px_0px_0px_rgba(255,255,255,0.15)]"
-              title="🔔 Ver Notificações"
-            >
-              <Bell className="w-4 h-4 text-zinc-350 shrink-0" />
-              {notifications.filter((n) => !n.read).length > 0 && (
-                <span className="absolute -top-1 -right-1 block text-[8px] font-black font-mono leading-none py-0.5 px-1 bg-rose-600 text-white rounded-full border border-zinc-950">
-                  {notifications.filter((n) => !n.read).length}
-                </span>
-              )}
-            </button>
-
-            {/* User Profile Button with photo or initial */}
             <button
               onClick={() => {
                 triggerSensoryFeedback("click", accSettings);
@@ -4977,21 +5798,120 @@ export default function App() {
                 </div>
               )}
             </button>
+
+            {/* NOVOS BOTÕES: Importar, Exportar e Bloco de Notas (Lado Esquerdo) */}
+            <div className="hidden md:flex items-center gap-2">
+              <button
+                onClick={() => {
+                  triggerSensoryFeedback("click", accSettings);
+                  setIsImportModalOpen(true);
+                }}
+                title="📥 Importar Leads"
+                className="w-10 h-10 rounded-xl border-2 border-zinc-950 bg-zinc-900 hover:bg-zinc-800 transition flex items-center justify-center text-zinc-300"
+              >
+                <Upload className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => {
+                  triggerSensoryFeedback("click", accSettings);
+                  setIsExportModalOpen(true);
+                }}
+                title="📤 Exportar Leads"
+                className="w-10 h-10 rounded-xl border-2 border-zinc-950 bg-zinc-900 hover:bg-zinc-800 transition flex items-center justify-center text-zinc-300"
+              >
+                <Download className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => {
+                  triggerSensoryFeedback("click", accSettings);
+                  setIsQuickNotesOpen(true);
+                }}
+                title="📝 Bloco de Notas Rápido"
+                className="w-10 h-10 rounded-xl border-2 border-zinc-950 bg-zinc-900 hover:bg-zinc-800 transition flex items-center justify-center text-amber-400"
+              >
+                <StickyNote className="w-5 h-5" />
+              </button>
+
+              {/* SELETOR DE FLUXO ATIVO DO SISTEMA */}
+              <div className="flex items-center gap-1 bg-zinc-900 border-2 border-zinc-950 px-2 py-1.5 h-10 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-colors hover:border-indigo-500">
+                <span className="text-[9px] font-black uppercase text-indigo-400 tracking-wider font-mono px-1">Fluxo Ativo:</span>
+                <select
+                  value={activeSystemFlowId}
+                  onChange={(e) => {
+                    triggerSensoryFeedback("click", accSettings);
+                    setActiveSystemFlowId(e.target.value);
+                    window.dispatchEvent(new Event("storage"));
+                  }}
+                  className="bg-zinc-950 text-white font-bold text-[11px] uppercase border-none focus:ring-0 cursor-pointer rounded px-1.5 py-0.5 outline-none max-w-[150px] truncate"
+                >
+                  {operationalFlows.map(flow => (
+                    <option key={flow.id} value={flow.id} className="bg-zinc-900 text-white font-sans text-xs">
+                      {flow.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
 
-          {/* Page Visibility / Actions Options (3 dots vertical) - Colado no canto */}
-          <button
-            onClick={() => {
-              triggerSensoryFeedback("click", accSettings);
-              alert(
-                "Ajustes de edições referentes à página e visibilidade específica aberta e vísivel.",
-              );
-            }}
-            className="absolute right-0 top-0 h-full w-10 md:w-12 bg-zinc-900 border-l border-zinc-700/0 text-zinc-300 hover:bg-zinc-800 hover:text-white transition flex items-center justify-center shrink-0 cursor-pointer"
-            title="Ajustes e Visibilidade da Página"
-          >
-            <MoreVertical className="w-6 h-6" />
-          </button>
+          <div className="flex-1" />
+
+          {/* RIGHT SIDE HEADER ACTIONS */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* NOVO LEAD BUTTON */}
+            <button
+              onClick={() => {
+                triggerSensoryFeedback("click", accSettings);
+                setIsLeadModalOpen(true);
+              }}
+              className="hidden md:flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl border-2 border-zinc-950 shadow-[3px_3px_0px_0px_rgba(255,255,255,0.1)] font-black text-[10px] uppercase tracking-widest transition-all active:translate-y-0.5 active:shadow-none"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>Novo Lead</span>
+            </button>
+
+            {/* WHATSAPP LOGO BUTTON */}
+            <button
+              onClick={() => {
+                triggerSensoryFeedback("click", accSettings);
+                window.location.href = "whatsapp://send";
+              }}
+              title="Abrir WhatsApp"
+              className="w-10 h-10 rounded-xl border-2 border-zinc-950 bg-emerald-500 hover:bg-emerald-600 transition flex items-center justify-center text-white"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z" />
+              </svg>
+            </button>
+
+            {/* NOTIFICATIONS BELL */}
+            <button
+              onClick={() => {
+                triggerSensoryFeedback("click", accSettings);
+                setIsNotificationsOpen(!isNotificationsOpen);
+              }}
+              className="relative w-10 h-10 rounded-xl border-2 border-zinc-950 bg-zinc-900 hover:bg-zinc-800 transition flex items-center justify-center text-zinc-400 hover:text-white"
+            >
+              <Bell className="w-5 h-5" />
+              {notifications.filter((n) => !n.isRead).length > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-600 border-2 border-black rounded-full text-[8px] font-black flex items-center justify-center text-white">
+                  {notifications.filter((n) => !n.isRead).length}
+                </span>
+              )}
+            </button>
+
+            {/* THREE DOTS MORE MENU */}
+            <button
+              onClick={() => {
+                triggerSensoryFeedback("click", accSettings);
+                setIsPersonalizationModalOpen(true);
+              }}
+              title="🎨 Personalização de Layout"
+              className="w-10 h-10 rounded-xl border-2 border-zinc-950 bg-zinc-900 hover:bg-zinc-800 transition flex items-center justify-center text-zinc-400 hover:text-white"
+            >
+              <MoreVertical className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Floating elements removed, integrated natively into the sticky viewport sub-header */}
@@ -5028,28 +5948,6 @@ export default function App() {
             >
               {/* Vertical toolbar panel */}
               <div className="flex flex-col flex-nowrap items-center justify-start gap-1 pb-1 pt-1 px-1 bg-zinc-950/90 border-2 border-zinc-700/80 rounded-2xl shadow-[4px_4px_0px_0px_rgba(24,24,27,0.5)]  w-11">
-                {/* 1. Dashboard WhatsApp */}
-                <button
-                  onClick={() => {
-                    triggerSensoryFeedback("click", accSettings);
-                    handleTabClick("dashboard");
-                  }}
-                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border-2 transition-colors cursor-pointer ${
-                    activeTab === "dashboard"
-                      ? "bg-emerald-600 border-white text-white shadow-inner scale-95"
-                      : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-emerald-400"
-                  }`}
-                  title="WhatsApp Dashboard"
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    className="w-4 h-4"
-                  >
-                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z" />
-                  </svg>
-                </button>
-
                 {/* 2. Leads */}
                 <button
                   onClick={() => handleTabClick("leads")}
@@ -5063,63 +5961,6 @@ export default function App() {
                   👥
                 </button>
 
-                {/* 3. Workspace */}
-                <button
-                  onClick={() => handleTabClick("workspace")}
-                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-colors cursor-pointer ${
-                    activeTab === "workspace"
-                      ? "bg-blue-600 border-blue-400 text-white shadow-inner scale-95"
-                      : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-blue-300"
-                  }`}
-                  title="Workspace"
-                >
-                  🌐
-                </button>
-
-                {/* 5. Scripts e Roteiros */}
-                <button
-                  onClick={() => handleTabClick("automation-flows")}
-                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-colors cursor-pointer ${
-                    activeTab === "automation-flows" ||
-                    activeTab === "scripts-roteiros" ||
-                    activeTab === "disparos" ||
-                    activeTab === "envios-realizados"
-                      ? "bg-indigo-600 border-indigo-400 text-white shadow-inner scale-95"
-                      : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-indigo-300"
-                  }`}
-                  title="Scripts e Roteiros"
-                >
-                  💬
-                </button>
-
-                
-
-                {/* 7. Simulador */}
-                <button
-                  onClick={() => handleTabClick("simulador")}
-                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-colors cursor-pointer ${
-                    activeTab === "simulador"
-                      ? "bg-sky-600 border-sky-400 text-white shadow-inner scale-95"
-                      : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-sky-300"
-                  }`}
-                  title="Simulador de Financiamento"
-                >
-                  🧮
-                </button>
-
-                {/* 8. Estoque */}
-                <button
-                  onClick={() => handleTabClick("inventory")}
-                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-colors cursor-pointer ${
-                    activeTab === "inventory"
-                      ? "bg-orange-600 border-orange-400 text-white shadow-inner scale-95"
-                      : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-orange-300"
-                  }`}
-                  title="Estoque / Carteira"
-                >
-                  🏢
-                </button>
-
                 {/* 9. Configurações */}
                 <button
                   onClick={() => {
@@ -5131,7 +5972,7 @@ export default function App() {
                       ? "bg-indigo-700 border-indigo-400 text-white shadow-inner scale-95"
                       : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-slate-300"
                   }`}
-                  title="Configurações do Perfil"
+                  title="Configuração"
                 >
                   ⚙️
                 </button>
@@ -5147,38 +5988,9 @@ export default function App() {
                       ? "bg-rose-700 border-rose-450 text-white shadow-inner scale-95"
                       : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-rose-300"
                   }`}
-                  title="Backup / Logs e Dados"
+                  title="Dados"
                 >
                   💾
-                </button>
-
-                {/* 11. Assistente AI */}
-                <button
-                  onClick={() => {
-                    triggerSensoryFeedback("click", accSettings);
-                    setActiveTab("gemini-server");
-                  }}
-                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-colors cursor-pointer ${
-                    activeTab === "gemini-server"
-                      ? "bg-purple-600 border-purple-400 text-white shadow-inner scale-95"
-                      : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-purple-300"
-                  }`}
-                  title="Assistente AI cicloCRED"
-                >
-                  ✨
-                </button>
-
-                {/* 12. Painel Geral */}
-                <button
-                  onClick={() => handleTabClick("painel-geral")}
-                  className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm border hover:border-2 transition-colors cursor-pointer ${
-                    activeTab === "painel-geral"
-                      ? "bg-indigo-600 border-indigo-400 text-white shadow-inner scale-95"
-                      : "bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-indigo-300"
-                  }`}
-                  title="Painel Geral"
-                >
-                  📊
                 </button>
               </div>
             </div>
@@ -5228,31 +6040,6 @@ export default function App() {
                   <div
                     className={`fixed bottom-6 right-6 ${floatingRightPosition} z-50 flex flex-row items-center gap-2 pointer-events-auto select-none transition-colors ease-in-out`}
                   >
-                    {/* Button 🔭: Cycle layout zoom from 100% to 10% */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        triggerSensoryFeedback("click", accSettings);
-                        setLayoutZoom((prev) => {
-                          const next = prev - 10;
-                          return next < 10 ? 100 : next;
-                        });
-                      }}
-                      className="font-mono font-black h-7 px-2 rounded-md flex items-center justify-center border border-zinc-950 shadow-sm hover:translate-y-[-1px] active:translate-y-[0.5px] transition-all cursor-pointer text-[10px] gap-1"
-                      title="🔭 Zoom do Layout (10% a 100%)"
-                      style={{
-                        backgroundColor: layoutZoom !== 100 ? "#f59e0b" : "#18181b",
-                        color: layoutZoom !== 100 ? "#09090b" : "#f4f4f5",
-                      }}
-                    >
-                      <span className="text-xs select-none leading-none">
-                        🔭
-                      </span>
-                      <span className="font-black font-mono text-[8.5px]">
-                        {layoutZoom}%
-                      </span>
-                    </button>
-
                     {/* Button 🔻: Toggle filter search bar */}
                     <button
                       type="button"
@@ -5320,125 +6107,8 @@ export default function App() {
                 : "bg-indigo-950/20 "
           }`}
         >
-          {/* FLOATING SUB-HEADER: Invisible limit line, transparent, and floating controls */}
-          <div className="flex items-center justify-between px-6 md:px-10 py-3 bg-zinc-900/5 dark:bg-zinc-100/5  text-zinc-950 dark:text-white border-b border-transparent relative z-30 shrink-0 select-none rounded-2xl mx-8 md:mx-16 lg:mx-24 my-3">
-            {/* Left Nav & Greeting */}
-            <div className="flex items-center gap-3">
-              {/* User Modal Button (Lado Esquerdo) */}
-              <button
-                type="button"
-                onClick={() => {
-                  triggerSensoryFeedback("click", accSettings);
-                  setIsUserCentralModalOpen(true);
-                }}
-                className="w-10 h-10 rounded-full border-2 border-zinc-950 bg-indigo-600 hover:bg-indigo-700 hover:scale-105 active:scale-95 transition flex items-center justify-center text-white shrink-0 cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] font-black text-xs uppercase"
-                title="👤 Abrir Central do Usuário"
-              >
-                {localStorage.getItem("ciclocred_user_photo") ? (
-                  <img
-                    src={localStorage.getItem("ciclocred_user_photo") || undefined}
-                    alt="Perfil"
-                    className="w-full h-full object-cover rounded-full"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <span>{userName ? userName.slice(0, 2).toUpperCase() : "US"}</span>
-                )}
-              </button>
-
-              <div className="flex flex-col gap-0.5">
-                <div className="font-sans font-black text-[11px] md:text-sm uppercase tracking-tight text-zinc-500 truncate max-w-[150px] sm:max-w-none leading-none">
-                  👋{" "}
-                  {(() => {
-                    const h = new Date().getHours();
-                    return h < 12
-                      ? "Bom dia"
-                      : h < 18
-                        ? "Boa tarde"
-                        : "Boa noite";
-                  })()}
-                  ,{" "}
-                  <span className="font-black text-indigo-500 dark:text-indigo-400">
-                    {userName ? userName.split(" ")[0] : "Usuário"}
-                  </span>
-                </div>
-                <div className="font-mono text-[9px] md:text-xs tracking-wider text-zinc-400 uppercase font-bold leading-none mt-1">
-                  📅{" "}
-                  {new Date()
-                    .toLocaleDateString("pt-BR", {
-                      weekday: "short",
-                      day: "numeric",
-                      month: "long",
-                    })
-                    .replace("-feira", "")}
-                </div>
-              </div>
-            </div>
-
-            {/* Right Status / Clock / Nav */}
-            <div className="flex items-center gap-3 select-none">
-              <div className="flex flex-col items-end gap-0.5">
-                <div className="text-indigo-600 dark:text-indigo-400 font-extrabold flex items-center gap-1 text-[11px] md:text-sm leading-none">
-                  🌤️ 26°C
-                </div>
-                <div className="text-emerald-600 dark:text-emerald-400 font-extrabold font-mono text-[9px] md:text-xs leading-none mt-1">
-                  ⏰{" "}
-                  {new Date().toLocaleTimeString("pt-BR", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </div>
-              </div>
-
-              {/* WhatsApp Dashboard Button (Lado Direito) */}
-              <button
-                type="button"
-                onClick={() => {
-                  triggerSensoryFeedback("click", accSettings);
-                  setActiveTab("dashboard");
-                }}
-                className="w-10 h-10 rounded-full border-2 border-zinc-950 bg-emerald-500 hover:bg-emerald-600 hover:scale-105 active:scale-95 transition flex items-center justify-center text-white shrink-0 cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] text-lg"
-                title="💬 Ir para WhatsApp Dashboard"
-              >
-                💬
-              </button>
-            </div>
-          </div>
-
-          {/* ZOOM SLIDER BAR (BARRINHA APARENTE DE ZOOM) */}
-          <div className="flex justify-end px-8 md:px-16 lg:px-24 mb-1">
-            <div className="bg-white dark:bg-zinc-900 border-4 border-zinc-950 px-4 py-2 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex items-center gap-3 text-zinc-950 dark:text-white">
-              <span className="font-mono text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
-                🔭 Zoom: <span className="text-indigo-600 dark:text-indigo-400">{layoutZoom}%</span>
-              </span>
-              <input
-                type="range"
-                min="10"
-                max="100"
-                step="5"
-                value={layoutZoom}
-                onChange={(e) => {
-                  triggerSensoryFeedback("click", accSettings);
-                  setLayoutZoom(Number(e.target.value));
-                }}
-                className="w-24 md:w-32 accent-indigo-600 cursor-pointer h-1.5"
-                title="Ajustar zoom do layout"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  triggerSensoryFeedback("click", accSettings);
-                  setLayoutZoom(100);
-                }}
-                className="text-[9px] font-black font-mono uppercase bg-zinc-100 dark:bg-zinc-850 hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-300 border-2 border-zinc-950 px-1.5 py-0.5 rounded-lg cursor-pointer transition"
-              >
-                Reset
-              </button>
-            </div>
-          </div>
-
           {/* SCROLLABLE WORKSPACE AREA: Scrollbar starts below the header nav buttons */}
-          <div className="flex-1 overflow-y-auto px-8 md:px-16 lg:px-24 py-4 md:py-8 flex flex-col w-full h-full space-y-8 pr-2 custom-scrollbar">
+          <div className={`flex-1 flex flex-col w-full h-full ${activeTab === "google-workspace" ? "overflow-hidden" : "overflow-y-auto px-8 md:px-16 lg:px-24 py-4 md:py-8 space-y-8 pr-2 custom-scrollbar"}`}>
             {isQuotaExceeded && (
               <div className="bg-amber-950/40 border-2 border-amber-500/70 rounded-2xl p-4 md:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-[0_4px_30px_rgba(0,0,0,0.5)]  relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-4 opacity-10 font-mono tracking-tighter text-7xl select-none select-none pointer-events-none group-hover:scale-105 transition-colors text-amber-500 font-extrabold font-black">
@@ -5520,182 +6190,10 @@ export default function App() {
             <Suspense
               fallback={<div className="p-8 text-white">Carregando...</div>}
             >
-              {/* 1. PAINEL GERAL (REPORTS) */}
-              {activeTab === "painel-geral" && (
-                <div
-                  id="crm-dashboard-default"
-                  className="flex flex-col space-y-6 w-full"
-                >
-                  <Reports
-                    leads={leads}
-                    appointments={appointments}
-                    emailLogs={emailLogs}
-                    goals={gamificationGoals}
-                  />
-                </div>
-              )}
+              {/* 1. PAINEL GERAL (REPORTS) REMOVED */}
 
               {/* 0. DYNAMIC WHATSAPP DASHBOARD */}
-              {activeTab === "dashboard" && (
-                <div
-                  id="crm-dashboard-whatsapp"
-                  className="flex flex-col space-y-6 w-full select-none"
-                >
-                  <div className="bg-gradient-to-br from-zinc-900 to-emerald-950/70 border-4 border-zinc-950 p-6 md:p-8 rounded-[30px] shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] text-white relative overflow-hidden group min-h-[300px] flex flex-col justify-center">
-                    <div className="absolute top-0 right-0 p-6 opacity-5 font-mono tracking-tighter text-8xl select-none pointer-events-none font-black uppercase">
-                      WA.CONN
-                    </div>
-
-                    <div className="relative z-10 space-y-5">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-[10px] font-black uppercase tracking-wider">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500  inline-block" />
-                        Iniciação Automática Ativa
-                      </span>
-
-                      <div className="space-y-2">
-                        <h1 className="text-3xl md:text-4xl font-black uppercase italic tracking-tight text-white flex items-center gap-3">
-                          <svg
-                            viewBox="0 0 24 24"
-                            fill="currentColor"
-                            className="w-8 h-8 text-emerald-400 shrink-0"
-                          >
-                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z" />
-                          </svg>
-                          <span>Porta de Comunicação WhatsApp</span>
-                        </h1>
-                        <p className="text-xs text-zinc-350 leading-relaxed font-sans max-w-2xl">
-                          Sempre que o cicloCRED CRM é iniciado, este canal
-                          prepara a esteira de conexões para disparos
-                          automatizados de crédito. Se o seu navegador bloquear
-                          ou não abrir automaticamente o WhatsApp, utilize o
-                          acionamento direto abaixo.
-                        </p>
-                      </div>
-
-                      <div className="flex flex-wrap gap-4 pt-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            triggerSensoryFeedback("success", accSettings);
-                            window.location.href = "whatsapp://send";
-                          }}
-                          className="bg-emerald-500 hover:bg-emerald-600 active:translate-y-0.5 text-zinc-950 font-black font-sans text-xs tracking-wider uppercase px-6 py-4 rounded-xl border-4 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(255,255,255,1)] transition-colors flex items-center gap-2 cursor-pointer"
-                        >
-                          <span>ABRIR WHATSAPP MANUALMENTE</span>
-                          <ExternalLink className="w-4 h-4 shrink-0" />
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            triggerSensoryFeedback("click", accSettings);
-                            setActiveTab("imoveis");
-                          }}
-                          className="bg-zinc-800 hover:bg-zinc-700 active:translate-y-0.5 text-white font-black font-sans text-xs tracking-wider uppercase px-6 py-4 rounded-xl border-4 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(255,255,255,1)] transition-colors flex items-center gap-2 cursor-pointer"
-                        >
-                          <span>IR PARA ESTOQUE E LANÇAMENTOS</span>
-                          <span className="text-zinc-400">🏢</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Operational Status Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-zinc-900 border-4 border-zinc-950 p-5 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between space-y-2">
-                      <div className="flex items-center justify-between text-xs font-mono uppercase text-zinc-400 font-bold">
-                        <span>Gateway de Transmissão</span>
-                        <span className="px-2 py-0.5 text-[8px] bg-emerald-950 text-emerald-400 rounded-full border border-emerald-500/20 font-black">
-                          ONLINE
-                        </span>
-                      </div>
-                      <div className="space-y-1">
-                        <h4 className="text-lg font-black uppercase italic tracking-tight text-white leading-none">
-                          Canal Estabilizado
-                        </h4>
-                        <p className="text-[10px] text-zinc-500 font-sans leading-normal">
-                          Seu app cicloCRED está sincronizado com as instâncias
-                          do WhatsApp Business e portabilidades de contratos.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="bg-zinc-900 border-4 border-zinc-950 p-5 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between space-y-2">
-                      <div className="flex items-center justify-between text-xs font-mono uppercase text-zinc-400 font-bold">
-                        <span>Envios Autônomos</span>
-                        <span className="px-2 py-0.5 text-[8px] bg-indigo-950 text-indigo-400 rounded-full border border-indigo-500/20 font-black">
-                          AUTONOMY ACTIVE
-                        </span>
-                      </div>
-                      <div className="space-y-1">
-                        <h4 className="text-lg font-black uppercase italic tracking-tight text-white leading-none">
-                          Paciência Cognitiva
-                        </h4>
-                        <p className="text-[10px] text-zinc-500 font-sans leading-normal">
-                          Os robôs respondem em segundo plano baseando-se nos
-                          scripts de copywriting e inteligência integrada.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="bg-zinc-900 border-4 border-zinc-950 p-5 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between space-y-2">
-                      <div className="flex items-center justify-between text-xs font-mono uppercase text-zinc-400 font-bold">
-                        <span>Monitoramento</span>
-                        <span className="text-emerald-400 font-mono text-[10px] font-bold">
-                          ⚡ SYNC OK
-                        </span>
-                      </div>
-                      <div className="space-y-1">
-                        <h4 className="text-lg font-black uppercase italic tracking-tight text-white leading-none">
-                          {leads.length} Leads Ativos
-                        </h4>
-                        <p className="text-[10px] text-zinc-500 font-sans leading-normal">
-                          A base completa de leads no seu funil está pronta para
-                          receber ações automáticas ou manuais.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* cicloCRED WhatsApp Dashboard Sub-Visibilities Section */}
-                  <div className="border-t-4 border-zinc-950 pt-6 mt-2 space-y-6">
-                    {/* Integrated Sub-tab Component */}
-                    <div className="w-full ">
-                      <MultiLevelMarketingTab
-                        leads={leads}
-                        globalFilteredLeads={unifiedFilteredLeads}
-                        globalSearchTerm={searchTerm}
-                        templates={templates}
-                        logs={emailLogs}
-                        onAddTemplate={handleAddTemplate}
-                        onEditTemplate={handleEditTemplate}
-                        onDeleteTemplate={handleDeleteTemplate}
-                        onSendEmailSimulated={handleSendEmailSimulated}
-                        properties={properties}
-                        theme={theme}
-                        accSettings={accSettings}
-                        awardXP={(xp, cause) => awardXP(xp)}
-                        addNotification={addNotification}
-                        onTriggerConversao={() => setIsConversaoModalOpen(true)}
-                        tableHeaderComponent={(ids, actions) =>
-                          renderTableSearchBar({
-                            selectedLeadIds: ids,
-                            blockActions: actions,
-                          })
-                        }
-                        forcedSubTab={
-                          dashboardVisibility === "disparos"
-                            ? "massa"
-                            : dashboardVisibility === "scripts-roteiros"
-                              ? "templates"
-                              : "logs"
-                        }
-                        setEmailLogs={setEmailLogs}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
+              {/* Dashboard WhatsApp REMOVED */}
 
               {/* 2 & 3. UNIFIED GESTÃO DE LEADS (TABELA / STATUS / FOLLOW-UP MULTI-MODE) */}
               {activeTab === "leads" && (
@@ -5791,50 +6289,61 @@ export default function App() {
                     return (
                       <div className="w-full flex-1 flex flex-col min-h-0 space-y-8 pb-12">
                         
-                        {/* GORGEOUS GESTÃO DE LEADS NAVIGATION CONTROL BAR */}
-                        <div className="w-full bg-zinc-900/30 p-3 rounded-2xl border-2 border-zinc-800 shadow-xl select-none">
-                          <div className="flex flex-wrap items-center justify-between gap-3 mb-2 px-1">
-                            <span className="text-[10px] md:text-xs font-black uppercase tracking-wider text-indigo-400">
-                              Navegação de Visibilidade / CRM:
-                            </span>
-                            <span className="text-[10px] font-mono text-zinc-500 font-bold">
-                              Clique para mudar de aba • Duplo clique no 🔍 do Kanban ativa hiperfocos
-                            </span>
+                        {/* BROADCAST HEADER FOR PÁGINA INICIAL */}
+                        <div className="bg-zinc-900 border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] flex flex-col md:flex-row md:items-center md:justify-between gap-4 select-none relative overflow-hidden group">
+                          <div className="absolute top-0 right-0 p-6 opacity-5 font-mono tracking-tighter text-8xl select-none pointer-events-none font-black uppercase group-hover:scale-105 transition-colors">
+                            CRM.CORE
                           </div>
-                          <div className="flex flex-wrap gap-2">
-                            {[
-                              { id: "todos", label: "📁 Todos os Leads", color: "text-indigo-400 hover:text-indigo-300" },
-                              { id: "recentes", label: "⏱️ Recentes (24h)", color: "text-amber-400 hover:text-amber-300" },
-                              { id: "ativos", label: "🟢 Leads Ativos", color: "text-emerald-400 hover:text-emerald-300" },
-                              { id: "followups", label: "📅 Tabela Follow-ups", color: "text-amber-500 hover:text-amber-400 font-bold" },
-                              { id: "kanban", label: "📋 Quadro Kanban", color: "text-purple-400 hover:text-purple-300" },
-                              { id: "mapa", label: "🗺️ Mapa Conectivo", color: "text-cyan-400 hover:text-cyan-300" },
-                              { id: "disparos", label: "💬 Disparos Massa", color: "text-pink-400 hover:text-pink-300" },
-                              { id: "roteiros", label: "🤖 Roteiros IA", color: "text-blue-400 hover:text-blue-300" },
-                              { id: "estoque", label: "🏢 Estoque Imóveis", color: "text-teal-400 hover:text-teal-300" },
-                              { id: "archived", label: "🗄️ Arquivados", color: "text-zinc-400 hover:text-zinc-300" },
-                            ].map((item) => {
-                              const isActive = leadsViewMode === item.id;
-                              return (
-                                <button
-                                  key={item.id}
-                                  onClick={() => {
-                                    triggerSensoryFeedback("click", accSettings);
-                                    setLeadsViewMode(item.id as any);
-                                    localStorage.setItem("ciclocred_filter_leads_view_mode", item.id);
-                                  }}
-                                  className={`px-1.5 py-1 rounded-md text-[8.5px] md:text-[9.5px] font-black uppercase tracking-tight border transition-all flex items-center gap-1 cursor-pointer select-none active:translate-y-[1px] ${
-                                    isActive
-                                      ? "bg-indigo-600 border-indigo-600 text-white shadow-sm scale-[1.02]"
-                                      : `border-zinc-800 text-zinc-400 bg-zinc-950/20 hover:bg-zinc-800/40 ${item.color}`
-                                  }`}
-                                >
-                                  {item.label}
-                                </button>
-                              );
-                            })}
+                          <div className="flex-1 z-10">
+                            <h2 className="text-3xl font-black tracking-tighter text-white uppercase italic flex items-center gap-3">
+                              <Users className="w-8 h-8 text-indigo-400" />
+                              <span>Página Inicial</span>
+                            </h2>
+                            <p className="text-xs text-zinc-400 font-bold font-mono mt-1 flex items-center gap-2">
+                              <span className="w-2 h-2 bg-emerald-500 rounded-full " />
+                              Central de inteligência, prospecção e gestão de fluxos operacionais.
+                            </p>
                           </div>
                         </div>
+                        {/* BLOCK NAVIGATION TABS - High Performance Refined Layout */}
+                        <div className="grid grid-cols-5 gap-3 p-2 bg-zinc-950 border border-zinc-800 rounded-3xl shadow-2xl">
+                          <button
+                            onClick={() => { triggerSensoryFeedback("click", accSettings); setLeadsViewMode("dashboard"); }}
+                            className={`flex flex-col items-center justify-center py-4 rounded-2xl transition-all ${leadsViewMode === "dashboard" ? "bg-emerald-600 text-white shadow-lg" : "bg-zinc-900 text-zinc-500 hover:bg-zinc-800 hover:text-white"}`}
+                          >
+                            <MessageSquare className="w-5 h-5 mb-1" />
+                            <span className="text-[10px] font-black uppercase">WhatsApp</span>
+                          </button>
+                          <button
+                            onClick={() => { triggerSensoryFeedback("click", accSettings); setLeadsViewMode("simulador"); }}
+                            className={`flex flex-col items-center justify-center py-4 rounded-2xl transition-all ${leadsViewMode === "simulador" ? "bg-sky-600 text-white shadow-lg" : "bg-zinc-900 text-zinc-500 hover:bg-zinc-800 hover:text-white"}`}
+                          >
+                            <Sliders className="w-5 h-5 mb-1" />
+                            <span className="text-[10px] font-black uppercase">Simulador</span>
+                          </button>
+                          <button
+                            onClick={() => { triggerSensoryFeedback("click", accSettings); setLeadsViewMode("todos"); }}
+                            className={`flex flex-col items-center justify-center py-6 -mt-4 rounded-3xl transition-all ${leadsViewMode === "todos" ? "bg-white text-zinc-950 shadow-2xl scale-110 z-10" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"}`}
+                          >
+                            <LayoutDashboard className="w-6 h-6 mb-1" />
+                            <span className="text-[11px] font-black uppercase">Início</span>
+                          </button>
+                          <button
+                            onClick={() => { triggerSensoryFeedback("click", accSettings); setLeadsViewMode("mapa"); }}
+                            className={`flex flex-col items-center justify-center py-4 rounded-2xl transition-all ${leadsViewMode === "mapa" ? "bg-amber-600 text-white shadow-lg" : "bg-zinc-900 text-zinc-500 hover:bg-zinc-800 hover:text-white"}`}
+                          >
+                            <Share2 className="w-5 h-5 mb-1" />
+                            <span className="text-[10px] font-black uppercase">Mapa</span>
+                          </button>
+                          <button
+                            onClick={() => { triggerSensoryFeedback("click", accSettings); setLeadsViewMode("roteiros"); }}
+                            className={`flex flex-col items-center justify-center py-4 rounded-2xl transition-all ${leadsViewMode === "roteiros" ? "bg-indigo-600 text-white shadow-lg" : "bg-zinc-900 text-zinc-500 hover:bg-zinc-800 hover:text-white"}`}
+                          >
+                            <Sparkles className="w-5 h-5 mb-1" />
+                            <span className="text-[10px] font-black uppercase">Fluxos</span>
+                          </button>
+                        </div>
+
 
                         {/* TABELA DINÂMICA UNIFICADA: Toggled views based on eye icon (👁️) click */}
                         <div className="w-full shrink-0">
@@ -5843,11 +6352,15 @@ export default function App() {
                               <h2 className="text-xl font-extrabold uppercase tracking-tight flex items-center gap-2 text-indigo-400">
                                 <span>TABELA DINÂMICA: {
                                   leadsViewMode === "todos"
-                                    ? "Todos os Leads"
-                                    : leadsViewMode === "recentes"
-                                      ? "Leads Recentes (Últimas 24h)"
-                                      : leadsViewMode === "ativos"
-                                        ? "Leads Ativos"
+                                    ? "Página Inicial"
+                                    : leadsViewMode === "dashboard"
+                                      ? "WhatsApp Dashboard"
+                                      : leadsViewMode === "simulador"
+                                        ? "Simulador de Financiamento"
+                                        : leadsViewMode === "recentes"
+                                          ? "Leads Recentes (Últimas 24h)"
+                                          : leadsViewMode === "ativos"
+                                            ? "Leads Ativos"
                                         : leadsViewMode === "followups"
                                           ? "Tabela de Follow-ups & Compromissos Gerais"
                                           : leadsViewMode === "archived"
@@ -5921,10 +6434,17 @@ export default function App() {
                               >
                                 <KanbanBoard
                                   layoutZoom={layoutZoom}
-leads={currentLeadsArray}
+                                  leads={currentLeadsArray}
                                   properties={properties}
                                   onMoveLead={handleMoveLead}
                                   onAddToDispatchQueue={handleAddMultipleToDisparos}
+                                  importBatches={operationalServiceOrders}
+                                  operationalFlows={operationalFlows}
+                                  activeSystemFlowId={activeSystemFlowId}
+                                  onOSClick={(os) => {
+                                    setSelectedOSForDetails(os);
+                                    setIsOSDetailsModalOpen(true);
+                                  }}
                                   onOpenLeadDetails={(lead) => {
                                     setSelectedLeadForDetails(lead);
                                     setIsDetailsModalOpen(true);
@@ -5969,10 +6489,17 @@ leads={currentLeadsArray}
                               <div className="flex-1 overflow-hidden">
                                 <KanbanBoard
                                   layoutZoom={layoutZoom}
-leads={currentLeadsArray}
+                                  leads={currentLeadsArray}
                                   properties={properties}
                                   onMoveLead={handleMoveLead}
                                   onAddToDispatchQueue={handleAddMultipleToDisparos}
+                                  importBatches={operationalServiceOrders}
+                                  operationalFlows={operationalFlows}
+                                  activeSystemFlowId={activeSystemFlowId}
+                                  onOSClick={(os) => {
+                                    setSelectedOSForDetails(os);
+                                    setIsOSDetailsModalOpen(true);
+                                  }}
                                   onOpenLeadDetails={(lead) => {
                                     setSelectedLeadForDetails(lead);
                                     setIsDetailsModalOpen(true);
@@ -6035,7 +6562,25 @@ leads={currentLeadsArray}
                               )}
                             </div>
                           ) : leadsViewMode === "roteiros" ? (
-                            <div className="space-y-4">
+                            <div className="space-y-8">
+                              {/* Painel Operacional Inteligente Hub (Centralizado) */}
+                              <IntelligenceDashboard 
+                                leads={enrichedLeads}
+                                properties={properties}
+                                onOpenLead={(lead) => {
+                                  setSelectedLeadForDetails(lead);
+                                  setIsDetailsModalOpen(true);
+                                }}
+                                addNotification={addNotification}
+                                importBatches={operationalServiceOrders}
+                                onNewOS={() => {
+                                  setSelectedOSForDetails(null);
+                                  setIsOSDetailsModalOpen(true);
+                                }}
+                                onNewImport={() => setIsImportModalOpen(true)}
+                                onAskCEOCopilot={handleAskCEOCopilot}
+                              />
+
                               <div className="p-4 bg-zinc-900/40 rounded-2xl border-2 border-zinc-950">
                                 <ScriptsAndFlows
                                   leads={leads}
@@ -6049,6 +6594,12 @@ leads={currentLeadsArray}
                                   onDeleteMultipleLeads={handleDeleteMultipleLeadsHandler}
                                   operationalFlows={operationalFlows}
                                   setOperationalFlows={setOperationalFlows}
+                                  operationalServiceOrders={operationalServiceOrders}
+                                  setOperationalServiceOrders={setOperationalServiceOrders}
+                                  onOSClick={(os) => {
+                                    setSelectedOSForDetails(os);
+                                    setIsOSDetailsModalOpen(true);
+                                  }}
                                 />
                               </div>
                             </div>
@@ -6094,56 +6645,460 @@ leads={currentLeadsArray}
                                 />
                               </div>
                             </div>
+                          ) : leadsViewMode === "dashboard" ? (
+                            <div className="flex flex-col space-y-6 w-full select-none">
+                              <div className="bg-gradient-to-br from-zinc-900 to-emerald-950/70 border-4 border-zinc-950 p-6 md:p-8 rounded-[30px] shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] text-white relative overflow-hidden group min-h-[300px] flex flex-col justify-center">
+                                <div className="absolute top-0 right-0 p-6 opacity-5 font-mono tracking-tighter text-8xl select-none pointer-events-none font-black uppercase">
+                                  WA.CONN
+                                </div>
+                                <div className="relative z-10 space-y-5">
+                                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-[10px] font-black uppercase tracking-wider">
+                                    <span className="w-2 h-2 rounded-full bg-emerald-500  inline-block" />
+                                    Iniciação Automática Ativa
+                                  </span>
+                                  <div className="space-y-2">
+                                    <h1 className="text-3xl md:text-4xl font-black uppercase italic tracking-tight text-white flex items-center gap-3">
+                                      <svg viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8 text-emerald-400 shrink-0">
+                                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z" />
+                                      </svg>
+                                      <span>Porta de Comunicação WhatsApp</span>
+                                    </h1>
+                                    <p className="text-xs text-zinc-350 leading-relaxed font-sans max-w-2xl">
+                                      Sempre que o Cury Constelação CRM é iniciado, este canal prepara a esteira de conexões para disparos automatizados e fomento. Utilize o acionamento direto abaixo.
+                                    </p>
+                                  </div>
+                                  <div className="flex flex-wrap gap-4 pt-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        triggerSensoryFeedback("click", accSettings);
+                                        setDashboardVisibility("disparos");
+                                      }}
+                                      className={`px-4 py-3 font-black text-[10px] uppercase tracking-widest transition-all rounded-xl border-2 flex items-center gap-2 whitespace-nowrap ${dashboardVisibility === "disparos" ? "bg-emerald-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] translate-y-[-1px]" : "bg-zinc-900 text-zinc-500 border-transparent hover:text-white"}`}
+                                    >
+                                      <MessageSquare className="w-4 h-4" />
+                                      <span>Tabela de Disparos</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        triggerSensoryFeedback("click", accSettings);
+                                        setDashboardVisibility("scripts-roteiros");
+                                      }}
+                                      className={`px-4 py-3 font-black text-[10px] uppercase tracking-widest transition-all rounded-xl border-2 flex items-center gap-2 whitespace-nowrap ${dashboardVisibility === "scripts-roteiros" ? "bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] translate-y-[-1px]" : "bg-zinc-900 text-zinc-500 border-transparent hover:text-white"}`}
+                                    >
+                                      <FileText className="w-4 h-4" />
+                                      <span>Biblioteca de Scripts</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        triggerSensoryFeedback("click", accSettings);
+                                        setDashboardVisibility("envios-realizados");
+                                      }}
+                                      className={`px-4 py-3 font-black text-[10px] uppercase tracking-widest transition-all rounded-xl border-2 flex items-center gap-2 whitespace-nowrap ${dashboardVisibility === "envios-realizados" ? "bg-zinc-100 text-zinc-900 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] translate-y-[-1px]" : "bg-zinc-900 text-zinc-500 border-transparent hover:text-white"}`}
+                                    >
+                                      <History className="w-4 h-4" />
+                                      <span>Histórico</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        triggerSensoryFeedback("success", accSettings);
+                                        window.location.href = "whatsapp://send";
+                                      }}
+                                      className="bg-emerald-500 hover:bg-emerald-600 active:translate-y-0.5 text-zinc-950 font-black font-sans text-xs tracking-wider uppercase px-6 py-4 rounded-xl border-4 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(255,255,255,1)] transition-colors flex items-center gap-2 cursor-pointer ml-auto"
+                                    >
+                                      <span>ABRIR WHATSAPP MANUALMENTE</span>
+                                      <ExternalLink className="w-4 h-4 shrink-0" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <div className="w-full">
+                                <MultiLevelMarketingTab
+                                  leads={leads}
+                                  globalFilteredLeads={unifiedFilteredLeads}
+                                  globalSearchTerm={searchTerm}
+                                  templates={templates}
+                                  logs={emailLogs}
+                                  onAddTemplate={handleAddTemplate}
+                                  onEditTemplate={handleEditTemplate}
+                                  onDeleteTemplate={handleDeleteTemplate}
+                                  onSendEmailSimulated={handleSendEmailSimulated}
+                                  properties={properties}
+                                  theme={theme}
+                                  accSettings={accSettings}
+                                  awardXP={(xp, cause) => awardXP(xp)}
+                                  addNotification={addNotification}
+                                  onTriggerConversao={() => setIsConversaoModalOpen(true)}
+                                  tableHeaderComponent={(ids, actions) => renderTableSearchBar({ selectedLeadIds: ids, blockActions: actions })}
+                                  forcedSubTab={dashboardVisibility === "disparos" ? "massa" : dashboardVisibility === "scripts-roteiros" ? "templates" : "logs"}
+                                  setEmailLogs={setEmailLogs}
+                                />
+                              </div>
+                            </div>
+                          ) : leadsViewMode === "simulador" ? (
+                            <div className="w-full">
+                              <FinanceSimulatorTab
+                                leads={leads}
+                                theme={theme}
+                                accSettings={accSettings}
+                                addNotification={addNotification}
+                                awardXP={(xp, cause) => awardXP(xp)}
+                              />
+                            </div>
+                          ) : leadsViewMode === "todos" ? (
+                            <div className="flex flex-col gap-12 w-full">
+                              {/* 1. Acervo de Imóveis do Estoque */}
+                              <div className="space-y-4">
+                                <h2 className="text-xl font-black font-mono text-zinc-900 uppercase flex items-center gap-2">
+                                  <span>🏢 Acervo de Imóveis do Estoque</span>
+                                </h2>
+                                <div className="p-4 bg-zinc-900/40 rounded-2xl border-2 border-zinc-950">
+                                  <RealEstateInventory
+                                    leads={leads}
+                                    globalFilteredLeads={unifiedFilteredLeads}
+                                    globalSearchTerm={searchTerm}
+                                    properties={properties}
+                                    setProperties={setProperties}
+                                    onAddProperty={handleAddProperty}
+                                    onAddBulkProperties={handleAddBulkProperties}
+                                    onAddBulkLeads={handleAddBulkLeads}
+                                    onDeleteProperty={handleDeleteProperty}
+                                    onDeleteMultipleProperties={handleDeleteMultiplePropertiesHandler}
+                                    onUpdatePropertyStatus={handleUpdatePropertyStatus}
+                                    onUpdateProperty={handleUpdateProperty}
+                                    onUpdateLeadField={handleUpdateLeadField}
+                                    theme={theme}
+                                    accSettings={accSettings}
+                                    addNotification={addNotification}
+                                    awardXP={(xp, cause) => awardXP(xp)}
+                                  />
+                                </div>
+                              </div>
+
+                              {/* 2. Página Inicial (Tabela principal) */}
+                              <div className="space-y-4">
+                                <h2 className="text-xl font-black font-mono text-zinc-900 uppercase flex items-center gap-2">
+                                  <span>🏠 Página Inicial</span>
+                                </h2>
+                                <LeadList
+                                  leads={currentLeadsArray}
+                                  tableHeaderComponent={(ids, actions) =>
+                                    renderTableSearchBar({
+                                      selectedLeadIds: ids,
+                                      blockActions: {
+                                        openCampaignModal: actions.openCampaignModal,
+                                        openBulkScheduleModal: actions.openBulkScheduleModal,
+                                        onDelete: handleDeleteMultipleLeadsHandler,
+                                      },
+                                    })
+                                  }
+                                  onOpenLeadDetails={(lead) => {
+                                    setSelectedLeadForDetails(lead);
+                                    setIsDetailsModalOpen(true);
+                                  }}
+                                  renderInlineLeadDetails={(lead) => (
+                                    <LeadDetailsModal
+                                      isOpen={true}
+                                      lead={lead}
+                                      emailLogs={emailLogs}
+                                      actionLogs={actionLogs}
+                                      properties={properties}
+                                      onClose={() => {}}
+                                      onUpdateLeadNotes={handleUpdateNotes}
+                                      onUpdateLeadStatus={handleMoveLead}
+                                      onUpdateLeadFamilyIncome={handleUpdateFamilyIncome}
+                                      onUpdateLeadFull={handleUpdateLeadFull}
+                                      awardXP={(xp) => awardXP(xp)}
+                                      onOpenAIAssistant={handleOpenAIAssistant}
+                                      onOpenRuleEngine={handleOpenRuleEngine}
+                                      appointments={appointments}
+                                      setAppointments={setAppointments}
+                                      onOpenEditModal={(l) => {
+                                        setSelectedLeadForEdit(l);
+                                        setIsLeadModalOpen(true);
+                                      }}
+                                      onDeleteLead={handleDeleteLead}
+                                      onNavigateToFollowUp={() => {}}
+                                      isInline={true}
+                                    />
+                                  )}
+                                  onOpenEditModal={(lead) => {
+                                    setSelectedLeadForEdit(lead);
+                                    setIsLeadModalOpen(true);
+                                  }}
+                                  onDeleteLead={handleDeleteLead}
+                                  onOpenCreateModal={() => {
+                                    setSelectedLeadForEdit(null);
+                                    setDefaultStatusForCreate("novo");
+                                    setIsLeadModalOpen(true);
+                                  }}
+                                  onMoveLead={handleMoveLead}
+                                  onNavigateToFollowUp={(lead) => {
+                                    setActiveTab("dashboard");
+                                  }}
+                                  onAddBulkLeads={handleAddBulkLeads}
+                                  onDeleteMultipleLeads={handleDeleteMultipleLeadsHandler}
+                                  onUpdateLeadField={handleUpdateLeadField}
+                                  awardXP={awardXP}
+                                  addNotification={addNotification}
+                                  appointments={appointments}
+                                  setAppointments={setAppointments}
+                                  searchTerm={searchTerm}
+                                  setSearchTerm={setSearchTerm}
+                                  statusFilter={statusFilter}
+                                  setStatusFilter={setStatusFilter}
+                                  originFilter={originFilter}
+                                  setOriginFilter={setOriginFilter}
+                                  initialLetterFilter={initialLetterFilter}
+                                  setInitialLetterFilter={setInitialLetterFilter}
+                                  regionFilter={regionFilter}
+                                  profileFilter={profileFilter}
+                                  stageFilter={stageFilter}
+                                  objectionFilter={objectionsFilter}
+                                  programaDesejadoFilter={programaDesejadoFilter}
+                                  restricaoBacenFilter={restricaoBacenFilter}
+                                  genderFilter={genderFilter}
+                                  familyIncomeFilter={familyIncomeFilter}
+                                  incomeTypeFilter={incomeTypeFilter}
+                                  deliveryExpectedFilter={deliveryExpectedFilter}
+                                  theme={theme}
+                                  isTodosView={leadsViewMode === "todos"}
+                                  isActiveLeadsView={leadsViewMode === "ativos"}
+                                  onOpenAIAssistant={handleOpenAIAssistant}
+                                  onOpenRuleEngine={handleOpenRuleEngine}
+                                />
+                              </div>
+
+                              {/* 3. Follow-Ups e Compromissos Gerais */}
+                              <div className="space-y-4">
+                                <h2 className="text-xl font-black font-mono text-zinc-900 uppercase flex items-center gap-2">
+                                  <span>📅 Follow-Ups e Compromissos Gerais</span>
+                                </h2>
+                                <div className="p-4 bg-zinc-900/40 rounded-2xl border-2 border-zinc-950">
+                                  <FollowUpsTable
+                                    appointments={appointments}
+                                    setAppointments={setAppointments}
+                                    leads={leads}
+                                    onOpenLeadDetails={(lead) => {
+                                      setSelectedLeadForDetails(lead);
+                                      setIsDetailsModalOpen(true);
+                                    }}
+                                    awardXP={(xp) => awardXP(xp)}
+                                    addNotification={addNotification}
+                                  />
+                                </div>
+                              </div>
+
+                              {/* 4. Visibilidade do Funil */}
+                              <div className="space-y-4">
+                                <h2 className="text-xl font-black font-mono text-zinc-900 uppercase flex items-center gap-2">
+                                  <span>🚀 Visibilidade do Funil</span>
+                                </h2>
+                                <div className="flex-1 overflow-visible">
+                                  <KanbanBoard
+                                    layoutZoom={layoutZoom}
+                                    leads={currentLeadsArray}
+                                    properties={properties}
+                                    onMoveLead={handleMoveLead}
+                                    onAddToDispatchQueue={handleAddMultipleToDisparos}
+                                    importBatches={operationalServiceOrders}
+                                    operationalFlows={operationalFlows}
+                                    activeSystemFlowId={activeSystemFlowId}
+                                    onOSClick={(os) => {
+                                      setSelectedOSForDetails(os);
+                                      setIsOSDetailsModalOpen(true);
+                                    }}
+                                    onOpenLeadDetails={(lead) => {
+                                      setSelectedLeadForDetails(lead);
+                                      setIsDetailsModalOpen(true);
+                                    }}
+                                    onOpenEditModal={(lead) => {
+                                      setSelectedLeadForEdit(lead);
+                                      setIsLeadModalOpen(true);
+                                    }}
+                                    onOpenCreateModal={(status) => {
+                                      setSelectedLeadForEdit(null);
+                                      setDefaultStatusForCreate(status || "novo");
+                                      setIsLeadModalOpen(true);
+                                    }}
+                                    showOrganizer={kanbanShowOrganizer}
+                                    setShowOrganizer={setKanbanShowOrganizer}
+                                    hyperfocusActive={kanbanHyperfocus}
+                                    setHyperfocusActive={setKanbanHyperfocus}
+                                    triggerCreateStatus={kanbanTriggerCreateStatus}
+                                    setTriggerCreateStatus={setKanbanTriggerCreateStatus}
+                                    triggerCreatePage={kanbanTriggerCreatePage}
+                                    setTriggerCreatePage={setKanbanTriggerCreatePage}
+                                    triggerEditPage={kanbanTriggerEditPage}
+                                    setTriggerEditPage={setKanbanTriggerEditPage}
+                                    triggerDeletePage={kanbanTriggerDeletePage}
+                                    setTriggerDeletePage={setKanbanTriggerDeletePage}
+                                    triggerHyperfocus={kanbanTriggerHyperfocus}
+                                    setTriggerHyperfocus={setKanbanTriggerHyperfocus}
+                                    onOpenAIAssistant={handleOpenAIAssistant}
+                                    onOpenRuleEngine={handleOpenRuleEngine}
+                                    renderOnlyColumns={true}
+                                  />
+                                </div>
+                              </div>
+
+                              {/* 5. Painel Geral */}
+                              <div className="space-y-4">
+                                <h2 className="text-xl font-black font-mono text-zinc-900 uppercase flex items-center gap-2">
+                                  <span>📈 Painel Geral</span>
+                                </h2>
+                                <Reports 
+                                  leads={leads}
+                                  appointments={appointments}
+                                  emailLogs={emailLogs}
+                                />
+                              </div>
+
+                              {/* 6. Mapa Conectivo */}
+                              <div className="space-y-4 mt-8">
+                                <h2 className="text-xl font-black font-mono text-zinc-900 uppercase flex items-center gap-2">
+                                  <span>🗺️ Mapa Conectivo de Leads</span>
+                                </h2>
+                                <div className="p-6 bg-zinc-900 border-4 border-zinc-950 rounded-3xl shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] text-white">
+                                  <div className="mb-4">
+                                    <span className="text-[10px] uppercase font-mono font-black text-indigo-400 block">Visualização Gráfica Integrada</span>
+                                    <p className="text-xs text-zinc-400 font-medium mt-0.5">Visão consolidada das conexões estruturadas, fluxo operacional e clusters de relacionamento.</p>
+                                  </div>
+                                  <div className="h-[450px] overflow-hidden rounded-2xl border-2 border-zinc-850 bg-zinc-950/20 relative">
+                                    <KanbanBoard
+                                      layoutZoom={layoutZoom}
+                                      leads={currentLeadsArray}
+                                      properties={properties}
+                                      onMoveLead={handleMoveLead}
+                                      onAddToDispatchQueue={handleAddMultipleToDisparos}
+                                      importBatches={operationalServiceOrders}
+                                      operationalFlows={operationalFlows}
+                                      activeSystemFlowId={activeSystemFlowId}
+                                      onOSClick={(os) => {
+                                      setSelectedOSForDetails(os);
+                                      setIsOSDetailsModalOpen(true);
+                                    }}
+                                    onOpenLeadDetails={(lead) => {
+                                      setSelectedLeadForDetails(lead);
+                                      setIsDetailsModalOpen(true);
+                                    }}
+                                    onOpenEditModal={(lead) => {
+                                      setSelectedLeadForEdit(lead);
+                                      setIsLeadModalOpen(true);
+                                    }}
+                                    onOpenCreateModal={(status) => {
+                                      setSelectedLeadForEdit(null);
+                                      setDefaultStatusForCreate(status || "novo");
+                                      setIsLeadModalOpen(true);
+                                    }}
+                                    showOrganizer={false}
+                                    setShowOrganizer={() => {}}
+                                    hyperfocusActive={3}
+                                    setHyperfocusActive={() => {}}
+                                    triggerCreateStatus={false}
+                                    setTriggerCreateStatus={() => {}}
+                                    renderOnlyMap={true}
+                                  />
+                                </div>
+                                </div>
+                              </div>
+                            </div>
                           ) : (
                             <LeadList
-                              leads={currentLeadsArray}
-                              tableHeaderComponent={(ids, actions) =>
-                                renderTableSearchBar({
-                                  selectedLeadIds: ids,
-                                  blockActions: {
-                                    openCampaignModal: actions.openCampaignModal,
-                                    openBulkScheduleModal: actions.openBulkScheduleModal,
-                                    onDelete: handleDeleteMultipleLeadsHandler,
-                                  },
-                                })
-                              }
-                              onOpenLeadDetails={(lead) => {
-                                setSelectedLeadForDetails(lead);
-                                setIsDetailsModalOpen(true);
-                              }}
-                              onOpenEditModal={(lead) => {
-                                setSelectedLeadForEdit(lead);
-                                setIsLeadModalOpen(true);
-                              }}
-                              onDeleteLead={handleDeleteLead}
-                              onOpenCreateModal={() => {
-                                setSelectedLeadForEdit(null);
-                                setDefaultStatusForCreate("novo");
-                                setIsLeadModalOpen(true);
-                              }}
-                              onMoveLead={handleMoveLead}
-                              onNavigateToFollowUp={(lead) => {
-                                setActiveTab("dashboard");
-                              }}
-                              onAddBulkLeads={handleAddBulkLeads}
-                              onDeleteMultipleLeads={handleDeleteMultipleLeadsHandler}
-                              onUpdateLeadField={handleUpdateLeadField}
-                              awardXP={awardXP}
-                              addNotification={addNotification}
-                              appointments={appointments}
-                              setAppointments={setAppointments}
-                              searchTerm={searchTerm}
-                              setSearchTerm={setSearchTerm}
-                              theme={theme}
-                              isTodosView={leadsViewMode === "todos"}
-                              isActiveLeadsView={leadsViewMode === "ativos"}
-                              onOpenAIAssistant={handleOpenAIAssistant}
-                              onOpenRuleEngine={handleOpenRuleEngine}
-                            />
+                               leads={currentLeadsArray}
+                               tableHeaderComponent={(ids, actions) =>
+                                 renderTableSearchBar({
+                                   selectedLeadIds: ids,
+                                   blockActions: {
+                                     openCampaignModal: actions.openCampaignModal,
+                                     openBulkScheduleModal: actions.openBulkScheduleModal,
+                                     onDelete: handleDeleteMultipleLeadsHandler,
+                                   },
+                                 })
+                               }
+                               onOpenLeadDetails={(lead) => {
+                                 setSelectedLeadForDetails(lead);
+                                 setIsDetailsModalOpen(true);
+                               }}
+                               renderInlineLeadDetails={(lead) => (
+                                 <LeadDetailsModal
+                                   isOpen={true}
+                                   lead={lead}
+                                   emailLogs={emailLogs}
+                                   actionLogs={actionLogs}
+                                   properties={properties}
+                                   onClose={() => {}}
+                                   onUpdateLeadNotes={handleUpdateNotes}
+                                   onUpdateLeadStatus={handleMoveLead}
+                                   onUpdateLeadFamilyIncome={handleUpdateFamilyIncome}
+                                   onUpdateLeadFull={handleUpdateLeadFull}
+                                   awardXP={(xp) => awardXP(xp)}
+                                   onOpenAIAssistant={handleOpenAIAssistant}
+                                   onOpenRuleEngine={handleOpenRuleEngine}
+                                   appointments={appointments}
+                                   setAppointments={setAppointments}
+                                   onOpenEditModal={(l) => {
+                                     setSelectedLeadForEdit(l);
+                                     setIsLeadModalOpen(true);
+                                   }}
+                                   onDeleteLead={handleDeleteLead}
+                                   onNavigateToFollowUp={() => {}}
+                                   isInline={true}
+                                 />
+                               )}
+                               onOpenEditModal={(lead) => {
+                                 setSelectedLeadForEdit(lead);
+                                 setIsLeadModalOpen(true);
+                               }}
+                               onDeleteLead={handleDeleteLead}
+                               onOpenCreateModal={() => {
+                                 setSelectedLeadForEdit(null);
+                                 setDefaultStatusForCreate("novo");
+                                 setIsLeadModalOpen(true);
+                               }}
+                               onMoveLead={handleMoveLead}
+                               onNavigateToFollowUp={(lead) => {
+                                 setActiveTab("dashboard");
+                               }}
+                               onAddBulkLeads={handleAddBulkLeads}
+                               onDeleteMultipleLeads={handleDeleteMultipleLeadsHandler}
+                               onUpdateLeadField={handleUpdateLeadField}
+                               awardXP={awardXP}
+                               addNotification={addNotification}
+                               appointments={appointments}
+                               setAppointments={setAppointments}
+                               searchTerm={searchTerm}
+                               setSearchTerm={setSearchTerm}
+                               statusFilter={statusFilter}
+                               setStatusFilter={setStatusFilter}
+                               originFilter={originFilter}
+                               setOriginFilter={setOriginFilter}
+                               initialLetterFilter={initialLetterFilter}
+                               setInitialLetterFilter={setInitialLetterFilter}
+                               regionFilter={regionFilter}
+                               profileFilter={profileFilter}
+                               stageFilter={stageFilter}
+                               objectionFilter={objectionsFilter}
+                               programaDesejadoFilter={programaDesejadoFilter}
+                               restricaoBacenFilter={restricaoBacenFilter}
+                               genderFilter={genderFilter}
+                               familyIncomeFilter={familyIncomeFilter}
+                               incomeTypeFilter={incomeTypeFilter}
+                               deliveryExpectedFilter={deliveryExpectedFilter}
+                               theme={theme}
+                               isTodosView={leadsViewMode === "todos"}
+                               isActiveLeadsView={leadsViewMode === "ativos"}
+                               onOpenAIAssistant={handleOpenAIAssistant}
+                               onOpenRuleEngine={handleOpenRuleEngine}
+                             />
                           )}
 
                           {/* Fixed Connective Map below the main components for specific views */}
-                          {["todos", "recentes", "ativos", "kanban", "disparos", "roteiros"].includes(leadsViewMode) && (
+                          {["recentes", "ativos", "kanban", "disparos", "roteiros"].includes(leadsViewMode) && (
                             <div className="mt-8 p-6 bg-zinc-905 border-4 border-zinc-950 rounded-3xl shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] text-white">
                               <div className="mb-4">
                                 <span className="text-[10px] uppercase font-mono font-black text-indigo-400 block">Visualização Gráfica Integrada</span>
@@ -6156,10 +7111,17 @@ leads={currentLeadsArray}
                               <div className="h-[450px] overflow-hidden rounded-2xl border-2 border-zinc-850 bg-zinc-950/20 relative">
                                 <KanbanBoard
                                   layoutZoom={layoutZoom}
-leads={currentLeadsArray}
+                                  leads={currentLeadsArray}
                                   properties={properties}
                                   onMoveLead={handleMoveLead}
                                   onAddToDispatchQueue={handleAddMultipleToDisparos}
+                                  importBatches={operationalServiceOrders}
+                                  operationalFlows={operationalFlows}
+                                  activeSystemFlowId={activeSystemFlowId}
+                                  onOSClick={(os) => {
+                                    setSelectedOSForDetails(os);
+                                    setIsOSDetailsModalOpen(true);
+                                  }}
                                   onOpenLeadDetails={(lead) => {
                                     setSelectedLeadForDetails(lead);
                                     setIsDetailsModalOpen(true);
@@ -6207,110 +7169,11 @@ leads={currentLeadsArray}
                 </div>
               )}
 
-              {activeTab === "workspace" && (
-                <WorkspaceTab />
-              )}
-
-              {/* 6. STANDALONE FINANCE SIMULATOR */}
-              {activeTab === "simulador" && (
-                <div className="w-full">
-                  <FinanceSimulatorTab
-                    leads={leads}
-                    theme={theme}
-                    accSettings={accSettings}
-                    addNotification={addNotification}
-                    awardXP={(xp, cause) => awardXP(xp)}
-                  />
-                </div>
-              )}
-
-              {/* 6.1. SITE DE CAPTAÇÃO PÚBLICO (DISABLED BECAUSE IT IS REPLACED WITH PORTAL CICLOCRED) */}
-              {activeTab === "public-portal-disabled" && (
-                <div className="w-full">
-                  <PublicPortal
-                    properties={properties}
-                    onAddCapturedLead={handleAddNewLeadCapturedPublicly}
-                    accSettings={accSettings}
-                  />
-                </div>
-              )}
-
-
-              {/* 7.1. GEMINI NEURAL SERVER MANAGEMENT MODULE */}
-              {activeTab === "gemini-server" && (
-                <div className="w-full">
-                  <GeminiServerTab
-                    accSettings={accSettings}
-                    awardXP={awardXP}
-                    addNotification={addNotification}
-                    leads={leads}
-                    setLeads={setLeads}
-                    templates={templates}
-                    appointments={appointments}
-                    setAppointments={setAppointments}
-                    emailLogs={emailLogs}
-                    setEmailLogs={setEmailLogs}
-                  />
-                </div>
-              )}
-
-              {/* 8. CHILDREN FINANCIAL LITERACY & GAME ROOM */}
-              {activeTab === "kids" && (
-                <div className="w-full">
-                  <KidsTab awardXP={awardXP} accSettings={accSettings} />
-                </div>
-              )}
-
-              {/* 9. CENTRAL USER PANEL (GAMIFICATION + SETTINGS + LEADERBOARD + ADMIN CONTROLS) */}
-              {activeTab === "user-central" && (
-                <div className="w-full">
-                  <UserCentralTab
-                    accSettings={accSettings}
-                    setAccSettings={setAccSettings}
-                    userXP={userXP}
-                    setUserXP={setUserXP}
-                    userLevel={userLevel}
-                    setUserLevel={setUserLevel}
-                    userName={userName}
-                    setUserName={setUserName}
-                    userEmail={userEmail}
-                    setUserEmail={setUserEmail}
-                    creciNumber={creciNumber}
-                    setCreciNumber={setCreciNumber}
-                    userRole={userRole}
-                    setUserRole={setUserRole}
-                    agencyName={agencyName}
-                    setAgencyName={setAgencyName}
-                    subscriptionPlan={subscriptionPlan}
-                    setSubscriptionPlan={setSubscriptionPlan}
-                    theme={theme}
-                    setTheme={setTheme}
-                    galaxyPreset={galaxyPreset}
-                    setGalaxyPreset={setGalaxyPreset}
-                    leads={leads}
-                    properties={properties}
-                    goals={gamificationGoals}
-                    setGoals={setGamificationGoals}
-                    projects={gamificationProjects}
-                    setProjects={setGamificationProjects}
-                    onResetGamification={handleResetGamification}
-                    onWipeLeads={handleWipeLeads}
-                    onWipeEstoque={handleWipeProperties}
-                    onRequestConfirm={requestConfirmation}
-                    isAutonomyActive={isAutonomyActive}
-                    setIsAutonomyActive={setIsAutonomyActive}
-                    autonomyIntervalSec={autonomyIntervalSec}
-                    setAutonomyIntervalSec={setAutonomyIntervalSec}
-                    consolidatedCrmInfo={consolidatedCrmInfo}
-                    setConsolidatedCrmInfo={setConsolidatedCrmInfo}
-                    awardXP={awardXP}
-                  />
-                </div>
-              )}
-
-              {/* 10. SETTINGS & ADMINISTRATION TAB */}
+              {/* 5. STANDALONE TABS REMOVED AS THEY ARE NOW INTEGRATED IN LEADS PAGE */}
+              
+              {/* 10. SETTINGS TAB */}
               {activeTab === "settings" && (
-                <div className="w-full flex-1 flex flex-col min-h-0 space-y-6  pb-10">
+                <div className="w-full flex-1 flex flex-col min-h-0 space-y-6 pb-10">
                   {/* Top Page Title Header (Broadcast Style) */}
                   <div className="bg-zinc-900 border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] flex flex-col md:flex-row md:items-center md:justify-between gap-4 select-none relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-6 opacity-5 font-mono tracking-tighter text-8xl select-none pointer-events-none font-black uppercase group-hover:scale-105 transition-colors">
@@ -6318,330 +7181,132 @@ leads={currentLeadsArray}
                     </div>
                     <div className="flex-1 z-10">
                       <h2 className="text-3xl font-black tracking-tighter text-white uppercase italic flex items-center gap-3">
-                        <Settings className="w-8 h-8 text-indigo-400 -slow" />
-                        <span>Gestão & Administração</span>
+                        <Settings className="w-8 h-8 text-indigo-400" />
+                        <span>Gestão & Configurações</span>
                       </h2>
                       <p className="text-xs text-zinc-400 font-bold font-mono mt-1 flex items-center gap-2">
                         <span className="w-2 h-2 bg-emerald-500 rounded-full " />
-                        Acesse seu perfil, ajuste metas de gamificação e
-                        gerencie backups do CRM.
+                        Acesse as configurações do sistema e gerencie as preferências do CRM.
                       </p>
                     </div>
                   </div>
 
-                  {/* Header Decoration and Tabs */}
-                  <div
-                    className={`flex flex-col sm:flex-row border-4 border-zinc-950 p-1.5 rounded-2xl gap-2 select-none shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] ${theme === "claro" ? "bg-zinc-100" : "bg-zinc-900"}`}
-                  >
-                    {(["config", "database"] as const).map((t) => (
-                      <button
-                        key={t}
-                        onClick={() => {
-                          triggerSensoryFeedback("click", accSettings);
-                          setSettingsModalTab(
-                            t === "config" ? "profile" : "database",
-                          );
-                        }}
-                        className={`flex-1 px-5 py-3 font-black text-xs uppercase tracking-widest transition-colors rounded-xl border-2 text-center ${
-                          (settingsModalTab === "profile" && t === "config") ||
-                          (settingsModalTab === "database" && t === "database")
-                            ? "bg-indigo-600 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-                            : "border-transparent hover:bg-zinc-800 " +
-                              (theme === "claro"
-                                ? "text-zinc-600"
-                                : "text-zinc-400")
-                        }`}
-                      >
-                        {t === "config"
-                          ? "👤 Perfil & Gamificação"
-                          : "💾 Banco de Dados & Log"}
-                      </button>
-                    ))}
-                  </div>
-
                   {/* Scrollable Content Container */}
                   <div className="flex-1 min-h-0">
-                    {settingsModalTab === "profile" ? (
-                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                        {/* 3 Column Layout inspired by UserCentralModal */}
-
-                        {/* Col 1: Profile UI */}
-                        <div
-                          className={`lg:col-span-4 border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] space-y-6 ${theme === "claro" ? "bg-white" : "bg-zinc-900"}`}
-                        >
-                          <div
-                            className={`border-b-2 pb-4 ${theme === "claro" ? "border-zinc-100" : "border-zinc-800"}`}
-                          >
-                            <h3
-                              className={`text-sm font-black uppercase italic tracking-tighter flex items-center gap-2 ${theme === "claro" ? "text-zinc-950" : "text-white"}`}
-                            >
-                              <User className="w-4 h-4 text-indigo-600" />
-                              Identidade do Corretor
-                            </h3>
-                          </div>
-
-                          <div className="flex flex-col items-center gap-4 text-center">
-                            <div className="relative w-32 h-32 rounded-3xl overflow-hidden border-4 border-zinc-950 bg-indigo-500 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] group">
-                              {localStorage.getItem("ciclocred_user_photo") ? (
-                                <img
-                                  src={
-                                    localStorage.getItem(
-                                      "ciclocred_user_photo",
-                                    )!
-                                  }
-                                  alt="User"
-                                  className="w-full h-full object-cover transition-transform group-hover:scale-110"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center font-black text-4xl text-white select-none">
-                                  {userName.substring(0, 2).toUpperCase()}
-                                </div>
-                              )}
-                            </div>
-                            <div className="space-y-4 w-full">
-                              <div className="space-y-1.5 text-left">
-                                <label className="block text-[10px] font-mono font-black uppercase text-zinc-500">
-                                  Nome Profissional
-                                </label>
-                                <input
-                                  type="text"
-                                  value={userName}
-                                  onChange={(e) => setUserName(e.target.value)}
-                                  className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-3 text-xs font-bold uppercase"
-                                />
-                              </div>
-                              <div className="space-y-1.5 text-left">
-                                <label className="block text-[10px] font-mono font-black uppercase text-zinc-500">
-                                  Registro CRECI / CRM
-                                </label>
-                                <input
-                                  type="text"
-                                  value={creciNumber}
-                                  onChange={(e) =>
-                                    setCreciNumber(e.target.value)
-                                  }
-                                  className="w-full bg-zinc-50 border-2 border-zinc-950 rounded-xl p-3 text-xs font-mono font-bold"
-                                />
-                              </div>
-                            </div>
-                          </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                      {/* Advanced CRM Settings */}
+                      <div className="lg:col-span-12 bg-zinc-950 border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] space-y-6">
+                        <div className="border-b-2 border-zinc-800 pb-4">
+                          <h3 className="text-sm font-black uppercase italic tracking-tighter text-indigo-400 flex items-center gap-2">
+                            <Shield className="w-4 h-4" />
+                            Segurança & Sistema
+                          </h3>
                         </div>
-
-                        {/* Col 2: Gamification & System UI */}
-                        <div className="lg:col-span-5 space-y-8">
-                          {/* XP & PROGRESS */}
-                          <div className="bg-zinc-950 text-white border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] relative overflow-hidden group">
-                            <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform">
-                              <Trophy className="w-32 h-32 text-amber-500" />
-                            </div>
-                            <div className="relative z-10 space-y-4">
-                              <div className="flex justify-between items-end">
-                                <div>
-                                  <span className="text-[10px] font-mono font-bold text-indigo-400 uppercase tracking-widest">
-                                    PATENTE GALAXY
-                                  </span>
-                                  <h4 className="text-2xl font-black italic tracking-tighter uppercase">
-                                    NÍVEL {userLevel}
-                                  </h4>
-                                </div>
-                                <div className="text-right">
-                                  <span className="text-[10px] font-mono font-bold text-zinc-500 uppercase tracking-widest">
-                                    XP ACUMULADO
-                                  </span>
-                                  <p className="text-lg font-black text-white">
-                                    {userXP} XP
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="w-full h-3 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700 p-0.5">
-                                <div
-                                  className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-400 rounded-full transition-colors"
-                                  style={{ width: `${(userXP % 500) / 5}%` }}
-                                />
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* SYSTEM PREFERENCES (Style like UserCentralModal Col 3) */}
-                          <div
-                            className={`border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] space-y-5 ${theme === "claro" ? "bg-white" : "bg-zinc-900"}`}
-                          >
-                            <div
-                              className={`border-b-2 pb-3 ${theme === "claro" ? "border-zinc-100" : "border-zinc-800"}`}
-                            >
-                              <h3
-                                className={`text-sm font-black uppercase italic tracking-tighter flex items-center gap-2 ${theme === "claro" ? "text-zinc-950" : "text-white"}`}
-                              >
-                                <Sliders className="w-4 h-4 text-amber-600" />
-                                Preferências & Acessibilidade
-                              </h3>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 flex items-center justify-between">
-                                <span className="text-[10px] font-black uppercase text-zinc-700">
-                                  Som & Alertas
-                                </span>
-                                <button
-                                  onClick={() => {
-                                    const next = {
-                                      ...accSettings,
-                                      soundsEnabled: !accSettings.soundsEnabled,
-                                    };
-                                    setAccSettings(next);
-                                    triggerSensoryFeedback("chime", next);
-                                  }}
-                                  className={`w-10 h-6 rounded-full p-1 transition-colors ${accSettings.soundsEnabled ? "bg-indigo-600" : "bg-zinc-300"}`}
-                                >
-                                  <div
-                                    className={`w-4 h-4 rounded-full bg-white shadow-md transform transition-transform ${accSettings.soundsEnabled ? "translate-x-4" : "translate-x-0"}`}
-                                  />
-                                </button>
-                              </div>
-                              <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 flex items-center justify-between">
-                                <span className="text-[10px] font-black uppercase text-zinc-700">
-                                  Feedback Tátil
-                                </span>
-                                <button
-                                  onClick={() => {
-                                    const next = {
-                                      ...accSettings,
-                                      hapticsEnabled:
-                                        !accSettings.hapticsEnabled,
-                                    };
-                                    setAccSettings(next);
-                                    triggerSensoryFeedback("click", next);
-                                  }}
-                                  className={`w-10 h-6 rounded-full p-1 transition-colors ${accSettings.hapticsEnabled ? "bg-indigo-600" : "bg-zinc-300"}`}
-                                >
-                                  <div
-                                    className={`w-4 h-4 rounded-full bg-white shadow-md transform transition-transform ${accSettings.hapticsEnabled ? "translate-x-4" : "translate-x-0"}`}
-                                  />
-                                </button>
-                              </div>
-                            </div>
-                            <div className="space-y-3">
-                              <label className="block text-[10px] font-mono font-black uppercase text-zinc-500">
-                                Tamanho Visual da Interface
-                              </label>
-                              <div className="grid grid-cols-3 gap-2">
-                                {(
-                                  ["normal", "large", "extra-large"] as const
-                                ).map((sz) => (
-                                  <button
-                                    key={sz}
-                                    onClick={() => {
-                                      setAccSettings({
-                                        ...accSettings,
-                                        fontSizeClass: sz,
-                                      });
-                                      triggerSensoryFeedback(
-                                        "click",
-                                        accSettings,
-                                      );
-                                    }}
-                                    className={`py-2 rounded-xl border-2 font-black text-[9px] uppercase tracking-tighter ${
-                                      accSettings.fontSizeClass === sz
-                                        ? "bg-zinc-950 text-white border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-                                        : "bg-zinc-50 border-zinc-200 text-zinc-500"
-                                    }`}
-                                  >
-                                    {sz === "normal"
-                                      ? "Padrão"
-                                      : sz === "large"
-                                        ? "Grande"
-                                        : "Super"}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Col 3: Advanced CRM Settings (Legacy Settings Component) */}
-                        <div className="lg:col-span-3 bg-zinc-950 border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] space-y-6">
-                          <div className="border-b-2 border-zinc-800 pb-4">
-                            <h3 className="text-sm font-black uppercase italic tracking-tighter text-indigo-400 flex items-center gap-2">
-                              <Shield className="w-4 h-4" />
-                              Segurança & Sistema
-                            </h3>
-                          </div>
-                          <SettingsView
-                            theme={theme}
-                            setTheme={setTheme}
-                            galaxyPreset={galaxyPreset}
-                            setGalaxyPreset={setGalaxyPreset}
-                            accSettings={accSettings}
-                            setAccSettings={setAccSettings}
-                            userName={userName}
-                            setUserName={setUserName}
-                            userEmail={userEmail}
-                            setUserEmail={setUserEmail}
-                            creciNumber={creciNumber}
-                            setCreciNumber={setCreciNumber}
-                            userRole={userRole}
-                            setUserRole={setUserRole}
-                            agencyName={agencyName}
-                            setAgencyName={setAgencyName}
-                            subscriptionPlan={subscriptionPlan}
-                            setSubscriptionPlan={setSubscriptionPlan}
-                            userLevel={userLevel}
-                            userXP={userXP}
-                            properties={properties}
-                            leads={leads}
-                            isAutonomyActive={isAutonomyActive}
-                            setIsAutonomyActive={setIsAutonomyActive}
-                            autonomyIntervalSec={autonomyIntervalSec}
-                            setAutonomyIntervalSec={setAutonomyIntervalSec}
-                            leadsCount={leads.length}
-                            propertiesCount={properties.length}
-                            inventoryCount={properties.length}
-                            onWipeLeads={handleWipeLeads}
-                            onWipeEstoque={handleWipeProperties}
-                            onRequestConfirm={requestConfirmation}
-                            forceLocalStorageMode={forceLocalStorageMode}
-                            onToggleForceLocalMode={handleToggleForceLocalMode}
-                            consolidatedCrmInfo={consolidatedCrmInfo}
-                            setConsolidatedCrmInfo={setConsolidatedCrmInfo}
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="bg-white border-4 border-zinc-950 rounded-3xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
-                        <BackupManager
-                          leads={leads}
-                          setLeads={setLeads}
+                        <SettingsView
+                          theme={theme}
+                          setTheme={setTheme}
+                          galaxyPreset={galaxyPreset}
+                          setGalaxyPreset={setGalaxyPreset}
+                          accSettings={accSettings}
+                          setAccSettings={setAccSettings}
+                          userName={userName}
+                          setUserName={setUserName}
+                          userEmail={userEmail}
+                          setUserEmail={setUserEmail}
+                          creciNumber={creciNumber}
+                          setCreciNumber={setCreciNumber}
+                          userRole={userRole}
+                          setUserRole={setUserRole}
+                          agencyName={agencyName}
+                          setAgencyName={setAgencyName}
+                          subscriptionPlan={subscriptionPlan}
+                          setSubscriptionPlan={setSubscriptionPlan}
+                          userLevel={userLevel}
+                          userXP={userXP}
                           properties={properties}
-                          setProperties={setProperties}
+                          leads={leads}
+                          isAutonomyActive={isAutonomyActive}
+                          setIsAutonomyActive={setIsAutonomyActive}
+                          autonomyIntervalSec={autonomyIntervalSec}
+                          setAutonomyIntervalSec={setAutonomyIntervalSec}
+                          leadsCount={leads.length}
+                          propertiesCount={properties.length}
+                          inventoryCount={properties.length}
+                          onWipeLeads={handleWipeLeads}
+                          onWipeEstoque={handleWipeProperties}
+                          onRequestConfirm={requestConfirmation}
+                          forceLocalStorageMode={forceLocalStorageMode}
+                          onToggleForceLocalMode={handleToggleForceLocalMode}
+                          consolidatedCrmInfo={consolidatedCrmInfo}
+                          setConsolidatedCrmInfo={setConsolidatedCrmInfo}
+                          awardXP={awardXP}
+                          addNotification={addNotification}
+                          setLeads={setLeads}
+                          templates={templates}
                           appointments={appointments}
                           setAppointments={setAppointments}
-                          inventory={inventory}
-                          setInventory={setInventory}
-                          templates={templates}
-                          setTemplates={setTemplates}
-                          goals={gamificationGoals}
-                          setGoals={setGamificationGoals}
-                          projects={gamificationProjects}
-                          setProjects={setGamificationProjects}
-                          userXP={userXP}
-                          setUserXP={setUserXP}
-                          userLevel={userLevel}
-                          setUserLevel={setUserLevel}
-                          accSettings={accSettings}
-                          onAddNotification={addNotification}
-                          onRequestConfirm={requestConfirmation}
-                          awardXP={awardXP}
-                          theme={theme}
+                          emailLogs={emailLogs}
+                          setEmailLogs={setEmailLogs}
                         />
                       </div>
-                    )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 11. DATABASE & LOG TAB */}
+              {activeTab === "database" && (
+                <div className="w-full flex-1 flex flex-col min-h-0 space-y-6 pb-10">
+                  <div className="bg-zinc-900 border-4 border-zinc-950 p-6 rounded-3xl shadow-[5px_5px_0px_0px_rgba(24,24,27,1)] flex flex-col md:flex-row md:items-center md:justify-between gap-4 select-none relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-6 opacity-5 font-mono tracking-tighter text-8xl select-none pointer-events-none font-black uppercase group-hover:scale-105 transition-colors">
+                      DADOS
+                    </div>
+                    <div className="flex-1 z-10">
+                      <h2 className="text-3xl font-black tracking-tighter text-white uppercase italic flex items-center gap-3">
+                        <Database className="w-8 h-8 text-indigo-400" />
+                        <span>Banco de Dados & Log</span>
+                      </h2>
+                      <p className="text-xs text-zinc-400 font-bold font-mono mt-1 flex items-center gap-2">
+                        <span className="w-2 h-2 bg-emerald-500 rounded-full " />
+                        Gerencie backups, exportações e históricos operacionais do CRM.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-white border-4 border-zinc-950 rounded-3xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+                    <BackupManager
+                      leads={leads}
+                      setLeads={setLeads}
+                      properties={properties}
+                      setProperties={setProperties}
+                      appointments={appointments}
+                      setAppointments={setAppointments}
+                      inventory={inventory}
+                      setInventory={setInventory}
+                      templates={templates}
+                      setTemplates={setTemplates}
+                      goals={gamificationGoals}
+                      setGoals={setGamificationGoals}
+                      projects={gamificationProjects}
+                      setProjects={setGamificationProjects}
+                      userXP={userXP}
+                      setUserXP={setUserXP}
+                      userLevel={userLevel}
+                      setUserLevel={setUserLevel}
+                      accSettings={accSettings}
+                      onAddNotification={addNotification}
+                      onRequestConfirm={requestConfirmation}
+                      awardXP={awardXP}
+                      theme={theme}
+                    />
                   </div>
                 </div>
               )}
 
               {/* Google Workspace Connectors Module */}
               {activeTab === "google-workspace" && (
-                <div className="w-full">
-                  <GoogleWorkspace
+                <div className="w-full h-full flex flex-col">
+                  <WorkspaceTab
                     leads={leads}
                     setLeads={setLeads}
                     appointments={appointments}
@@ -6723,17 +7388,29 @@ leads={currentLeadsArray}
       )}
 
       {/* A. Lead Edit/Create Modal overlay */}
+      <PersonalizationModal
+        isOpen={isPersonalizationModalOpen}
+        onClose={() => setIsPersonalizationModalOpen(false)}
+        backgrounds={appBackgrounds}
+        setBackgrounds={setAppBackgrounds}
+        activeTab={activeTab}
+        accSettings={accSettings}
+      />
+
       <LeadModal
         isOpen={isLeadModalOpen}
         lead={selectedLeadForEdit}
         defaultStatus={defaultStatusForCreate}
         operationalFlows={operationalFlows}
         setOperationalFlows={setOperationalFlows}
+        properties={properties}
         onClose={() => {
           setIsLeadModalOpen(false);
           setSelectedLeadForEdit(null);
         }}
         onSave={handleSaveLead}
+        operationalServiceOrders={operationalServiceOrders}
+        setOperationalServiceOrders={setOperationalServiceOrders}
       />
 
       {/* B. Leads Dossier Details Card Modal overlay */}
@@ -6741,6 +7418,7 @@ leads={currentLeadsArray}
         isOpen={isDetailsModalOpen}
         lead={selectedLeadForDetails}
         emailLogs={emailLogs}
+        actionLogs={actionLogs}
         properties={properties}
         onClose={() => {
           setIsDetailsModalOpen(false);
@@ -6755,12 +7433,130 @@ leads={currentLeadsArray}
         onOpenRuleEngine={handleOpenRuleEngine}
         appointments={appointments}
         setAppointments={setAppointments}
+        operationalServiceOrders={operationalServiceOrders}
+        setOperationalServiceOrders={setOperationalServiceOrders}
 
         onOpenEditModal={(lead) => {
           setSelectedLeadForEdit(lead);
           setIsLeadModalOpen(true);
         }}
         onDeleteLead={handleDeleteLead}
+      />
+
+      <OSModal 
+        isOpen={isOSDetailsModalOpen}
+        onClose={() => setIsOSDetailsModalOpen(false)}
+        os={selectedOSForDetails}
+        leads={leads}
+        onSave={(osData) => {
+          if (selectedOSForDetails) {
+            // Update existing
+            const newOrders = operationalServiceOrders.map(os => 
+              os.id === selectedOSForDetails.id ? { ...os, ...osData } : os
+            );
+            setOperationalServiceOrders(newOrders);
+            addNotification("OS Atualizada", `A OS foi salva com sucesso.`, "success");
+          } else {
+            // Create new
+            const newOS: OperationalOS = {
+              id: `os_${Date.now()}`,
+              title: osData.title || 'Nova OS',
+              subtitle: osData.subtitle || '',
+              date: osData.date || new Date().toISOString(),
+              endDate: osData.endDate || '',
+              actions: osData.actions || [],
+              fluxoId: operationalFlows[0]?.id || "",
+              leadIds: [],
+              type: 'personalizado',
+              status: 'pendente',
+              priority: 'media',
+              metrics: {
+                health: 100,
+                totalLeads: 0,
+                activeLeads: 0,
+                conversionCount: 0
+              }
+            };
+            setOperationalServiceOrders(prev => [newOS, ...prev]);
+            addNotification("OS Criada", `A OS "${newOS.title}" foi criada.`, "success");
+          }
+        }}
+        onDelete={(id) => {
+          requestConfirmation(
+            "Excluir OS",
+            "Deseja realmente apagar esta Ordem de Serviço permanentemente?",
+            () => {
+              setOperationalServiceOrders(prev => prev.filter(os => os.id !== id));
+              setIsOSDetailsModalOpen(false);
+              addNotification("OS Excluída", "Ordem de serviço removida.", "warning");
+            },
+            "danger"
+          );
+        }}
+        onUpdateLeadStage={(leadId, direction) => {
+          const lead = leads.find(l => l.id === leadId);
+          if (lead) {
+            const stageOrder = [
+              'abordagem', 'triagem', 'qualificacao', 'analise_perfil', 'compatibilizacao',
+              'apresentacao', 'proposta', 'visita', 'objecao', 'escolha_de_unidade',
+              'simulacao_final', 'fechamento', 'pos_venda', 'follow_up_1', 'follow_up_2',
+              'follow_up_3'
+            ];
+            const currentStageIndex = stageOrder.indexOf(lead.stage as any);
+            let newStage = lead.stage;
+            if (direction === 'next' && currentStageIndex < stageOrder.length - 1) {
+              newStage = stageOrder[currentStageIndex + 1];
+            } else if (direction === 'prev' && currentStageIndex > 0) {
+              newStage = stageOrder[currentStageIndex - 1];
+            }
+            if (newStage !== lead.stage) {
+              handleMoveLead(leadId, newStage, lead.status);
+              addNotification("Etapa Atualizada", `Lead movido para ${newStage}.`, "success");
+            }
+          }
+        }}
+        onUpdateLeadChecklist={(leadId, checklist) => {
+          enrichAndSyncLead(leadId, { checklist }, "CRM");
+        }}
+        onUpdateLead={(leadId, fields) => {
+          enrichAndSyncLead(leadId, fields, "CRM");
+        }}
+        appointments={appointments}
+        onAddAppointment={(newAppt) => {
+          setAppointments(prev => [...prev, newAppt]);
+        }}
+        onDeleteAppointment={(apptId) => {
+          setAppointments(prev => prev.filter(a => a.id !== apptId));
+        }}
+        onRemoveLeadFromOS={(leadId) => {
+          if (selectedOSForDetails) {
+            const newOrders = operationalServiceOrders.map(os => {
+              if (os.id === selectedOSForDetails.id) {
+                const newLeads = os.leadIds.filter(id => id !== leadId);
+                return {
+                  ...os,
+                  leadIds: newLeads,
+                  metrics: {
+                    ...os.metrics,
+                    totalLeads: newLeads.length,
+                    activeLeads: newLeads.length
+                  }
+                };
+              }
+              return os;
+            });
+            setOperationalServiceOrders(newOrders);
+            // Update OS state for modal
+            setSelectedOSForDetails(newOrders.find(os => os.id === selectedOSForDetails.id) || null);
+            
+            // Remove OS mapping from lead
+            const lead = leads.find(l => l.id === leadId);
+            if (lead) {
+              enrichAndSyncLead(leadId, { fluxoId: "" }, "CRM");
+            }
+            addNotification("Lead Removido", "Lead desvinculado da OS.", "info");
+          }
+        }}
       />
 
       {/* C. CEO Copilot Floating Insights Board */}
@@ -6771,7 +7567,7 @@ leads={currentLeadsArray}
               <span className="text-xl">💼</span>
               <div>
                 <h3 className="text-[10px] font-black uppercase tracking-wider text-purple-400">
-                  Diretoria Executiva cicloCRED
+                  Diretoria Executiva Cury Constelação
                 </h3>
                 <h2 className="text-[8px] font-bold text-zinc-400 uppercase tracking-widest">
                   Painel de Decisões do CEO
@@ -6963,6 +7759,17 @@ leads={currentLeadsArray}
                   <div className="flex flex-col gap-2">
                     {importOrigin === "upload" && (
                       <>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black uppercase text-zinc-500">Título da Importação (OS)</label>
+                          <input
+                            type="text"
+                            placeholder="Ex: Lead Instagram Junho"
+                            value={importBatchTitle}
+                            onChange={(e) => setImportBatchTitle(e.target.value)}
+                            className="w-full p-2.5 border-2 border-zinc-950 rounded-xl text-xs"
+                          />
+                        </div>
+
                         <label className="w-full py-2.5 bg-zinc-200 hover:bg-zinc-300 border-2 border-zinc-950 rounded-xl font-black text-xs uppercase text-zinc-900 transition shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] text-center cursor-pointer">
                           Selecionar Arquivo CSV/JSON
                           <input
@@ -7094,6 +7901,27 @@ leads={currentLeadsArray}
                                   }
 
                                   handleAddBulkLeads(bulkLeadsToImport);
+                                  
+                                  const batchId = "import_" + Math.random().toString(36).substring(2, 9);
+                                  const newBatch: OperationalOS = {
+                                    id: batchId,
+                                    title: importBatchTitle || `Importação ${new Date().toLocaleDateString()}`,
+                                    date: new Date().toISOString(),
+                                    fluxoId: importPipeline,
+                                    leadIds: bulkLeadsToImport.map(l => l.id),
+                                    type: 'import',
+                                    status: 'concluido',
+                                    priority: 'media',
+                                    metrics: {
+                                      health: 100,
+                                      totalLeads: bulkLeadsToImport.length,
+                                      activeLeads: bulkLeadsToImport.length,
+                                      conversionCount: 0
+                                    }
+                                  };
+                                  setOperationalServiceOrders(prev => [newBatch, ...prev]);
+                                  setImportBatchTitle("");
+
                                   addNotification(
                                     "📥 IMPORTAÇÃO CONCLUÍDA",
                                     `${count} leads carregados.`,
@@ -7116,6 +7944,17 @@ leads={currentLeadsArray}
                     )}
                     {importOrigin === "copy" && (
                       <>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black uppercase text-zinc-500">Título da Importação (OS)</label>
+                          <input
+                            type="text"
+                            placeholder="Ex: Lead Facebook Maio"
+                            value={importBatchTitle}
+                            onChange={(e) => setImportBatchTitle(e.target.value)}
+                            className="w-full p-2.5 border-2 border-zinc-950 rounded-xl text-xs"
+                          />
+                        </div>
+
                         <textarea
                           id="importPastedData"
                           placeholder="Cole o JSON ou CSV aqui..."
@@ -7262,6 +8101,27 @@ leads={currentLeadsArray}
                                 }
 
                                 handleAddBulkLeads(bulkPastedLeadsToImport);
+
+                                const batchId = "import_" + Math.random().toString(36).substring(2, 9);
+                                const newBatch: OperationalOS = {
+                                  id: batchId,
+                                  title: importBatchTitle || `Importação ${new Date().toLocaleDateString()}`,
+                                  date: new Date().toISOString(),
+                                  fluxoId: importPipeline,
+                                  leadIds: bulkPastedLeadsToImport.map(l => l.id),
+                                  type: 'import',
+                                  status: 'concluido',
+                                  priority: 'media',
+                                  metrics: {
+                                    health: 100,
+                                    totalLeads: bulkPastedLeadsToImport.length,
+                                    activeLeads: bulkPastedLeadsToImport.length,
+                                    conversionCount: 0
+                                  }
+                                };
+                                setOperationalServiceOrders(prev => [newBatch, ...prev]);
+                                setImportBatchTitle("");
+
                                 addNotification(
                                   "📥 IMPORTAÇÃO CONCLUÍDA",
                                   `${count} leads carregados.`,
@@ -7416,7 +8276,7 @@ leads={currentLeadsArray}
                     const encodedUri = encodeURI(csvContent);
                     const link = document.createElement("a");
                     link.setAttribute("href", encodedUri);
-                    link.setAttribute("download", "Exportacao_cicloCRED.csv");
+                    link.setAttribute("download", "Exportacao_Cury_Constelacao.csv");
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
@@ -8304,6 +9164,40 @@ leads={currentLeadsArray}
         isOpen={isAIAssistantOpen}
         onClose={() => setIsAIAssistantOpen(false)}
         lead={selectedLeadForAI}
+      />
+
+      <QuickNotes
+        isOpen={isQuickNotesOpen}
+        onClose={() => setIsQuickNotesOpen(false)}
+        notes={quickNotes}
+        onAddNote={handleAddQuickNote}
+        onDeleteNote={handleDeleteQuickNote}
+        onUpdateNote={handleUpdateQuickNote}
+        leads={leads}
+        appointments={appointments}
+        onOpenLeadModal={(initialLead) => {
+          setSelectedLeadForEdit(initialLead);
+          setIsLeadModalOpen(true);
+        }}
+        onOpenAppointmentModal={(lead, data) => {
+          setScheduleFollowUpInitialLead(lead);
+          setScheduleFollowUpInitialData(data);
+          setIsScheduleFollowUpModalOpen(true);
+        }}
+      />
+
+      <ScheduleFollowUpModal
+        isOpen={isScheduleFollowUpModalOpen}
+        onClose={() => setIsScheduleFollowUpModalOpen(false)}
+        leads={leads}
+        initialLead={scheduleFollowUpInitialLead}
+        initialData={scheduleFollowUpInitialData}
+        onAddAppointment={(newAppt) => {
+          setAppointments(prev => [...prev, newAppt]);
+          addNotification("Agenda Atualizada", `Compromisso "${newAppt.title}" agendado.`, "success");
+        }}
+        awardXP={awardXP}
+        addNotification={addNotification}
       />
     </div>
   );

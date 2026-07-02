@@ -3,7 +3,25 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Lead, EmailTemplate, EmailLog } from '../types';
+import { Lead, EmailTemplate, EmailLog, RealEstateProperty, RealEstateMemory } from '../types';
+
+export const INITIAL_MEMORY: RealEstateMemory = {
+  developers: [
+    { id: 'dev-1', name: 'Cury Construtora', rating: 4.8 },
+    { id: 'dev-2', name: 'Plano & Plano', rating: 4.7 },
+    { id: 'dev-3', name: 'Tenda', rating: 4.5 },
+    { id: 'dev-4', name: 'MRV', rating: 4.6 },
+  ],
+  neighborhoods: [
+    { id: 'nb-1', name: 'Penha', region: 'Zona Leste', avgPriceSqm: 6500, priceTrend: 'subindo', avgDaysToSell: 45, predominantProfile: 'Famílias Jovens' },
+    { id: 'nb-2', name: 'Tucuruvi', region: 'Zona Norte', avgPriceSqm: 7200, priceTrend: 'estavel', avgDaysToSell: 60, predominantProfile: 'Primeiro Imóvel' },
+    { id: 'nb-3', name: 'Guarulhos Centro', region: 'Metropolitana', avgPriceSqm: 5800, priceTrend: 'subindo', avgDaysToSell: 30, predominantProfile: 'Investidores' },
+  ],
+  marketInsights: {
+    lastUpdate: new Date().toISOString(),
+    generalTrend: 'Mercado em alta para lançamentos MCMV na Grande SP.'
+  }
+};
 
 export const INITIAL_LEADS: Lead[] = [
   {
@@ -157,6 +175,9 @@ export const INITIAL_PROPERTIES: any[] = [
     location: 'São Paulo - SP',
     neighborhood: 'Penha (Zona Leste)',
     status: 'disponivel',
+    deliveryPhase: 'Lançamento',
+    features: ['varanda', 'suíte', 'lazer completo'],
+    developerId: 'dev-1',
     description: 'Excelente apartamento Cury Construtora na planta com sacada gourmet, opções de lazer completo diferenciado equipado pelo programa Caixa Minha Casa Minha Vida.',
     imageUrl: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&q=80&w=600',
     images: [
@@ -179,6 +200,9 @@ export const INITIAL_PROPERTIES: any[] = [
     location: 'São Paulo - SP',
     neighborhood: 'Alto de Pinheiros (Arredores)',
     status: 'disponivel',
+    deliveryPhase: 'Médio',
+    features: ['varanda', 'suíte'],
+    developerId: 'dev-1',
     description: 'Moderno apartamento Cury Construtora, excelente localização, acabamentos impecáveis de qualidade e plano de parcelamento facilitado em obras.',
     imageUrl: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&q=80&w=600',
     images: [
@@ -221,7 +245,7 @@ export const INITIAL_PROPERTIES: any[] = [
     location: 'São Paulo - SP',
     neighborhood: 'Bela Vista / Marginais',
     status: 'reservado',
-    description: 'Mais um grande sucesso de vendas da Cury Construtora em parceria de captação cicloCRED. Apartamentos na planta com fluxo ideal facilitado e taxa de juros balcão reduzida pela Caixa.',
+    description: 'Mais um grande sucesso de vendas da Cury Construtora em parceria de captação Cury Constelação. Apartamentos na planta com fluxo ideal facilitado e taxa de juros balcão reduzida pela Caixa.',
     imageUrl: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=600',
     images: [
       'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=600',
@@ -242,7 +266,7 @@ export const INITIAL_PROPERTIES: any[] = [
     location: 'Região Metropolitana de SP - São Paulo',
     neighborhood: 'Parque do Carmo',
     status: 'disponivel',
-    description: 'Empreendimento de alta qualidade Cury Construtora em parceria de captação cicloCRED. Totalmente enquadrado no Programa Minha Casa Minha Vida HIS 1 com subsídios imperdíveis da Caixa Econômica.',
+    description: 'Empreendimento de alta qualidade Cury Construtora em parceria de captação Cury Constelação. Totalmente enquadrado no Programa Minha Casa Minha Vida HIS 1 com subsídios imperdíveis da Caixa Econômica.',
     imageUrl: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&q=80&w=600',
     images: [
       'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&q=80&w=600',
@@ -263,7 +287,7 @@ export const INITIAL_PROPERTIES: any[] = [
     location: 'Região Metropolitana de SP - Guarulhos',
     neighborhood: 'Centro de Guarulhos',
     status: 'disponivel',
-    description: 'Lançamento exclusivo Cury Construtora integrado com a central de parcelamento cicloCRED. Excelente localização na região metropolitana com fomento habitacional e FGTS Redutor.',
+    description: 'Lançamento exclusivo Cury Construtora integrado com a central de parcelamento Cury Constelação. Excelente localização na região metropolitana com fomento habitacional e FGTS Redutor.',
     imageUrl: 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&q=80&w=600',
     images: [
       'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&q=80&w=600'

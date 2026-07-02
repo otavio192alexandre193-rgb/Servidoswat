@@ -15,7 +15,9 @@ export const pdfProperties: RealEstateProperty[] = [
     location: 'Guarulhos - SP',
     neighborhood: 'Centro de Guarulhos',
     status: 'disponivel',
-    description: 'Enquadramento: HIS2 | Entrega em: 30/04/2029. Torre 02, Final 17, 01º ao 16º Andar. Empreendimento moderno com lazer completo na melhor localização de Guarulhos.'
+    description: 'Enquadramento: HIS2 | Entrega em: 30/04/2029. Torre 02, Final 17, 01º ao 16º Andar.',
+    enterpriseName: 'Next Guarulhos',
+    region: 'Zona Leste'
   },
   {
     id: 'pdf-prop-2',
@@ -31,7 +33,9 @@ export const pdfProperties: RealEstateProperty[] = [
     location: 'Guarulhos - SP',
     neighborhood: 'Centro de Guarulhos',
     status: 'disponivel',
-    description: 'Enquadramento: HIS2 | Entrega em: 30/04/2029. Torre 01, Finais 07, 08 e 11 (exceto 111), 01º ao 20º Andar. Excelente aproveitamento de espaço, ideal para famílias.'
+    description: 'Enquadramento: HIS2 | Entrega em: 30/04/2029. Torre 01, Finais 07, 08 e 11, 01º ao 20º Andar.',
+    enterpriseName: 'Next Guarulhos',
+    region: 'Zona Leste'
   },
   {
     id: 'pdf-prop-3',
@@ -47,7 +51,9 @@ export const pdfProperties: RealEstateProperty[] = [
     location: 'Guarulhos - SP',
     neighborhood: 'Centro de Guarulhos',
     status: 'disponivel',
-    description: 'Enquadramento: HIS2 | Entrega em: 30/04/2029. Torre 01, Finais 07, 08 e 11, 21° ao 24° Andar. Unidade com vaga de moto vinculada na escritura.'
+    description: 'Enquadramento: HIS2 | Entrega em: 30/04/2029. Torre 01, Finais 07, 08 e 11, 21° ao 24° Andar.',
+    enterpriseName: 'Next Guarulhos',
+    region: 'Zona Leste'
   },
   {
     id: 'pdf-prop-4',
@@ -63,7 +69,9 @@ export const pdfProperties: RealEstateProperty[] = [
     location: 'Guarulhos - SP',
     neighborhood: 'Centro de Guarulhos',
     status: 'disponivel',
-    description: 'Enquadramento: HIS2 | Entrega em: 30/04/2029. Torre 02, Finais 5, 6, 7, 09, 10 e 11, 04° a 24° Andar. Planta inteligente com ótima varanda espaçosa e vaga de carro coberta.'
+    description: 'Enquadramento: HIS2 | Entrega em: 30/04/2029. Torre 02, Finais 5, 6, 7, 09, 10 e 11, 04° a 24° Andar.',
+    enterpriseName: 'Next Guarulhos',
+    region: 'Zona Leste'
   },
   {
     id: 'pdf-prop-5',
@@ -79,7 +87,9 @@ export const pdfProperties: RealEstateProperty[] = [
     location: 'Guarulhos - SP',
     neighborhood: 'Vila Augusta',
     status: 'disponivel',
-    description: 'Enquadramento: HIS2 | Entrega em: 31/08/2028. T01, F 5, 6, 7, 9, 10 e 11, Térreo ao 03° Andar. Varanda com ponto grill integrado, infraestrutura moderna.'
+    description: 'Enquadramento: HIS2 | Entrega em: 31/08/2028. T01, F 5, 6, 7, 9, 10 e 11, Térreo ao 03° Andar.',
+    enterpriseName: 'Mérito Guarulhos',
+    region: 'Zona Leste'
   },
   {
     id: 'pdf-prop-6',
@@ -95,7 +105,9 @@ export const pdfProperties: RealEstateProperty[] = [
     location: 'São Paulo - SP',
     neighborhood: 'Belenzinho',
     status: 'disponivel',
-    description: 'Enquadramento: HIS2 | Entrega em: 31/01/2028. T01, F 1,2,3,4,5,8,9, 10, 11, 12, 13, 1º ao 11º Andar. Integração total com metrô e lazer panorâmico no terraço do prédio.'
+    description: 'Enquadramento: HIS2 | Entrega em: 31/01/2028. T01, F 1,2,3,4,5,8,9, 10, 11, 12, 13, 1º ao 11º Andar.',
+    enterpriseName: '360º Park View',
+    region: 'Zona Leste'
   },
   {
     id: 'pdf-prop-7',
@@ -111,7 +123,9 @@ export const pdfProperties: RealEstateProperty[] = [
     location: 'São Paulo - SP',
     neighborhood: 'Vila Mutinga',
     status: 'disponivel',
-    description: 'Enquadramento: HIS2 | Entrega em: 30/11/2027. T01, F 1, 4, 5, 6, 7, 8, 11, 12, 13 e 14, 1° ao 17° Andar. Empreendimento com preço de compra incrível, ótimo para primeiro imóvel.'
+    description: 'Enquadramento: HIS2 | Entrega em: 30/11/2027. T01, F 1, 4, 5, 6, 7, 8, 11, 12, 13 e 14, 1° ao 17° Andar.',
+    enterpriseName: 'Alto São Domingos Mutinga',
+    region: 'Zona Oeste'
   },
   {
     id: 'pdf-prop-8',
@@ -127,7 +141,9 @@ export const pdfProperties: RealEstateProperty[] = [
     location: 'São Paulo - SP',
     neighborhood: 'Mooca',
     status: 'disponivel',
-    description: 'Enquadramento: HIS1 | Entrega em: 31/03/2027. Torre 01, Final 1, 01º ao 20º Andar. Charme tradicional da Mooca combinado com acabamento Cury de excelência.'
+    description: 'Enquadramento: HIS1 | Entrega em: 31/03/2027. Torre 01, Final 1, 01º ao 20º Andar.',
+    enterpriseName: 'Cidade Mooca Duomo',
+    region: 'Zona Leste'
   },
   {
     id: 'pdf-prop-9',
@@ -143,7 +159,9 @@ export const pdfProperties: RealEstateProperty[] = [
     location: 'São Paulo - SP',
     neighborhood: 'Mooca',
     status: 'disponivel',
-    description: 'Enquadramento: R2V | Entrega em: 30/06/2027. Torre 01, F 5, 6, 12 e 13, 01° ao 10° Andar. Excelente suite privativa, varanda acolhedora de ponta e vaga demarcada.'
+    description: 'Enquadramento: R2V | Entrega em: 30/06/2027. Torre 01, F 5, 6, 12 e 13, 01° ao 10° Andar.',
+    enterpriseName: 'Cidade Mooca Navona',
+    region: 'Zona Leste'
   },
   {
     id: 'pdf-prop-10',
@@ -159,7 +177,9 @@ export const pdfProperties: RealEstateProperty[] = [
     location: 'São Paulo - SP',
     neighborhood: 'Mooca',
     status: 'disponivel',
-    description: 'Enquadramento: HIS2 | Entrega em: 31/12/2024. Torre 1, 01° ao 19° Andar, Finais 05, 06, 11 e 12. Prontinho para morar ou investir, altíssimo índice de valorização imobiliária.'
+    description: 'Enquadramento: HIS2 | Entrega em: 31/12/2024. Torre 1, 01° ao 19° Andar, Finais 05, 06, 11 e 12.',
+    enterpriseName: 'Cidade Mooca Vila Capri',
+    region: 'Zona Leste'
   },
   {
     id: 'pdf-prop-11',
@@ -175,7 +195,9 @@ export const pdfProperties: RealEstateProperty[] = [
     location: 'São Paulo - SP',
     neighborhood: 'Canindé',
     status: 'disponivel',
-    description: 'Enquadramento: HIS1 | Entrega em: 23/11/2023. T02, 6º ao 12º Andar, Final 13 ao 22. Condomínio consolidado, pronto para assinar com a Caixa Econômica.'
+    description: 'Enquadramento: HIS1 | Entrega em: 23/11/2023. T02, 6º ao 12º Andar, Final 13 ao 22.',
+    enterpriseName: 'Residencial Dez Canindé',
+    region: 'Zona Centro'
   },
   {
     id: 'pdf-prop-12',
@@ -191,7 +213,9 @@ export const pdfProperties: RealEstateProperty[] = [
     location: 'São Paulo - SP',
     neighborhood: 'Tatuapé',
     status: 'disponivel',
-    description: 'Enquadramento: HMP | Entrega em: 31/10/2023. Do 4º ao 8º Andar, F 1, 4, 5, 6, 7, 10, 11 e 12. Localização nobre da zona leste de São Paulo com infraestrutura consolidada.'
+    description: 'Enquadramento: HMP | Entrega em: 31/10/2023. Do 4º ao 8º Andar, F 1, 4, 5, 6, 7, 10, 11 e 12.',
+    enterpriseName: 'Residencial Dez Tatuapé',
+    region: 'Zona Leste'
   },
   {
     id: 'pdf-prop-13',
@@ -207,7 +231,9 @@ export const pdfProperties: RealEstateProperty[] = [
     location: 'São Paulo - SP',
     neighborhood: 'São Mateus',
     status: 'disponivel',
-    description: 'Enquadramento: HIS2 | Entrega em: 30/09/2025. Do Térreo ao 9º Andar, Finais 05 e 06. Conectividade extrema com o monotrilho e polo comercial regional.'
+    description: 'Enquadramento: HIS2 | Entrega em: 30/09/2025. Do Térreo ao 9º Andar, Finais 05 e 06.',
+    enterpriseName: 'Connect São Mateus',
+    region: 'Zona Leste'
   },
   {
     id: 'pdf-prop-14',
@@ -223,7 +249,9 @@ export const pdfProperties: RealEstateProperty[] = [
     location: 'São Paulo - SP',
     neighborhood: 'Bairro do Limão',
     status: 'disponivel',
-    description: 'Enquadramento: R2V | Entrega em: 30/06/2026. Torre 02, 13º Andar, Final 6. Região da marginal Tietê, mobilidade perfeita para quem trabalha no centro.'
+    description: 'Enquadramento: R2V | Entrega em: 30/06/2026. Torre 02, 13º Andar, Final 6.',
+    enterpriseName: 'Dez Limão',
+    region: 'Zona Norte'
   },
   {
     id: 'pdf-prop-15',
@@ -239,7 +267,9 @@ export const pdfProperties: RealEstateProperty[] = [
     location: 'São Paulo - SP',
     neighborhood: 'Pirituba',
     status: 'disponivel',
-    description: 'Enquadramento: HIS2 | Entrega em: 30/09/2024. 5º Andar, Torre A, Final 14. Varanda enorme com visual para a Serra da Cantareira.'
+    description: 'Enquadramento: HIS2 | Entrega em: 30/09/2024. 5º Andar, Torre A, Final 14.',
+    enterpriseName: 'Green Lyne Pirituba',
+    region: 'Zona Norte'
   },
   {
     id: 'pdf-prop-16',
@@ -255,7 +285,9 @@ export const pdfProperties: RealEstateProperty[] = [
     location: 'São Paulo - SP',
     neighborhood: 'Campo Limpo',
     status: 'disponivel',
-    description: 'Enquadramento: HMP | Entrega em: 30/04/2028. Torre 01, Finais 13, 16. Área verde preservada dentro do condomínio, ótima piscina e áreas recreativas.'
+    description: 'Enquadramento: HMP | Entrega em: 30/04/2028. Torre 01, Finais 13, 16.',
+    enterpriseName: 'Like Campo Limpo',
+    region: 'Zona Sul'
   },
   {
     id: 'pdf-prop-17',
@@ -271,7 +303,9 @@ export const pdfProperties: RealEstateProperty[] = [
     location: 'São Paulo - SP',
     neighborhood: 'Campo Limpo',
     status: 'disponivel',
-    description: 'Enquadramento: R2V | Entrega em: 31/10/2027. Torre 01, F 11 e 12, 01º ao 23º Andar. Grande diferencial com 3 dormitórios, raridade e alta demanda.'
+    description: 'Enquadramento: R2V | Entrega em: 31/10/2027. Torre 01, F 11 e 12, 01º ao 23º Andar.',
+    enterpriseName: 'Lyne Campo Limpo',
+    region: 'Zona Sul'
   },
   {
     id: 'pdf-prop-18',
@@ -287,7 +321,9 @@ export const pdfProperties: RealEstateProperty[] = [
     location: 'São Paulo - SP',
     neighborhood: 'Belenzinho',
     status: 'disponivel',
-    description: 'Enquadramento: HIS1 | Entrega em: 30/09/2027. Torre 04, Final 01, 01º ao 11º Andar. Próximo ao metrô Belém e parques da região.'
+    description: 'Enquadramento: HIS1 | Entrega em: 30/09/2027. Torre 04, Final 01, 01º ao 11º Andar.',
+    enterpriseName: 'Mérito Belenzinho',
+    region: 'Zona Leste'
   },
   {
     id: 'pdf-prop-19',
@@ -303,7 +339,9 @@ export const pdfProperties: RealEstateProperty[] = [
     location: 'São Paulo - SP',
     neighborhood: 'Mooca',
     status: 'disponivel',
-    description: 'Enquadramento: HMP | Entrega em: 30/06/2028. Torre B, Térreo, Finais 02 e 03. Garden privativo gigante, ideal para famílias com pets.'
+    description: 'Enquadramento: HMP | Entrega em: 30/06/2028. Torre B, Térreo, Finais 02 e 03.',
+    enterpriseName: 'Modern Mooca',
+    region: 'Zona Leste'
   },
   {
     id: 'pdf-prop-20',
@@ -319,7 +357,9 @@ export const pdfProperties: RealEstateProperty[] = [
     location: 'São Paulo - SP',
     neighborhood: 'Sacomã',
     status: 'disponivel',
-    description: 'Enquadramento: HIS2 | Entrega em: 29/02/2028. Torre B e D, Final 10, Térreo. Mobilidade para o ABC e rodovia Anchieta.'
+    description: 'Enquadramento: HIS2 | Entrega em: 29/02/2028. Torre B e D, Final 10, Térreo.',
+    enterpriseName: 'My Sacomã',
+    region: 'Zona Sul'
   },
   {
     id: 'pdf-prop-21',
@@ -335,7 +375,9 @@ export const pdfProperties: RealEstateProperty[] = [
     location: 'São Paulo - SP',
     neighborhood: 'Anália Franco',
     status: 'disponivel',
-    description: 'Enquadramento: R2V | Entrega em: 29/02/2028. Torre A, F 02, 03, 09 e 10, 01º ao 16º. Localização nobre ao lado do Shopping Anália Franco, alto padrão Cury.'
+    description: 'Enquadramento: R2V | Entrega em: 29/02/2028. Torre A, F 02, 03, 09 e 10, 01º ao 16º.',
+    enterpriseName: 'Supreme Anália Franco',
+    region: 'Zona Leste'
   },
   {
     id: 'pdf-prop-22',
@@ -351,7 +393,9 @@ export const pdfProperties: RealEstateProperty[] = [
     location: 'São Paulo - SP',
     neighborhood: 'Vila Romana',
     status: 'disponivel',
-    description: 'Enquadramento: R2V | Entrega em: 31/01/2029. Torre A, Finais 3 e 4, 3º ao 26º Andar. Visual estonteante da zona oeste com infraestrutura de lazer incomparável.'
+    description: 'Enquadramento: R2V | Entrega em: 31/01/2029. Torre A, Finais 3 e 4, 3º ao 26º Andar.',
+    enterpriseName: 'Supreme Vila Romana',
+    region: 'Zona Oeste'
   },
   {
     id: 'pdf-prop-23',
@@ -367,7 +411,9 @@ export const pdfProperties: RealEstateProperty[] = [
     location: 'São Paulo - SP',
     neighborhood: 'Tatuapé',
     status: 'disponivel',
-    description: 'Enquadramento: R2V | Entrega em: 02/01/2026. T03, 3º ao 12º Andar, Final 03 ao 20. Compacto perfeito de altíssima rentabilidade imobiliária.'
+    description: 'Enquadramento: R2V | Entrega em: 02/01/2026. T03, 3º ao 12º Andar, Final 03 ao 20.',
+    enterpriseName: 'Urban Tatuapé',
+    region: 'Zona Leste'
   },
   {
     id: 'pdf-prop-24',
@@ -383,6 +429,8 @@ export const pdfProperties: RealEstateProperty[] = [
     location: 'São Paulo - SP',
     neighborhood: 'Interlagos',
     status: 'disponivel',
-    description: 'Enquadramento: R2V | Entrega em: 28/02/2027. T3, 5º ao 12º Andar, Final 01 ao 11. Bairro planejado na zona sul ao lado de shoppings e grandes avenidas.'
+    description: 'Enquadramento: R2V | Entrega em: 28/02/2027. T3, 5º ao 12º Andar, Final 01 ao 11.',
+    enterpriseName: 'Yunes Park',
+    region: 'Zona Sul'
   }
 ];

@@ -261,9 +261,9 @@ export default function KidsTab({ awardXP, accSettings = INITIAL_ACCESSIBILITY_S
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 15 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25 }}
+      transition={{ duration: 0.15 }}
       className="space-y-8 select-none"
     >
       {/* 1. COMMISSION REINVESTMENT HEADER */}

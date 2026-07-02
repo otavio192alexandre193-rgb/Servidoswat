@@ -315,9 +315,9 @@ export default function AutomationFlowsTab({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 15 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25 }}
+      transition={{ duration: 0.15 }}
       className="space-y-8 select-text"
     >
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 text-left">
@@ -354,6 +354,7 @@ export default function AutomationFlowsTab({
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
                 className="bg-indigo-50/50 border-2 border-zinc-950 rounded-2xl p-4.5 space-y-4 font-mono overflow-hidden select-none"
               >
                 <div className="text-xs font-black text-indigo-950 uppercase tracking-wider">

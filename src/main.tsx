@@ -12,7 +12,7 @@ try {
   
   const memoryStore: Record<string, string> = {
     'ciclocred_auth_active': 'false',
-    'ciclocred_user_name': 'Operador cicloCRED',
+    'ciclocred_user_name': 'Operador Cury Constelação',
     'ciclocred_user_email': 'operador@sistema.com.br',
     'ciclocred_theme': 'escuro',
     'ciclocred_galaxy_preset': 'lineack'
@@ -60,7 +60,7 @@ import App from './App.tsx';
 import './index.css';
 import { ConfigProvider } from "./context/ConfigContext";
 
-console.log('[main.tsx] Starting cicloCRED CRM mounting lifecycle...');
+console.log('[main.tsx] Starting Cury Constelação CRM mounting lifecycle...');
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

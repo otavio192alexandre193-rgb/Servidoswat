@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
 
-import { Lead, LeadStatus } from "../types";
+import { Lead, LeadStatus, OperationalOS, OperationalFlow } from "../types";
 import CognitiveMap from "./CognitiveMap";
 import { handleWhatsAppAction } from "../utils/whatsapp";
 import {
@@ -74,10 +74,14 @@ interface KanbanBoardProps {
   onOpenAIAssistant?: (lead: Lead) => void;
   onOpenRuleEngine?: (lead: Lead) => void;
   onNavigateToFollowUp?: (lead: Lead) => void;
+  onOSClick?: (os: OperationalOS) => void;
   renderOnlyColumns?: boolean;
   renderOnlyMap?: boolean;
   properties?: any[];
   onAddToDispatchQueue?: (leadIds: string[]) => void;
+  importBatches?: OperationalOS[];
+  operationalFlows?: OperationalFlow[];
+  activeSystemFlowId?: string;
 }
 
 const getDaysSinceContact = (lastContactAt?: string): number | null => {
@@ -153,7 +157,7 @@ const COLOR_SCHEMES: Record<
   },
 };
 
-export default function KanbanBoard({
+export default React.memo(function KanbanBoard({
   layoutZoom = 100,
   leads,
   tableHeaderComponent,
@@ -181,16 +185,25 @@ export default function KanbanBoard({
   onOpenAIAssistant,
   onOpenRuleEngine,
   onNavigateToFollowUp,
+  onOSClick,
   renderOnlyColumns = false,
   renderOnlyMap = false,
   properties: externalProperties,
-  onAddToDispatchQueue
+  onAddToDispatchQueue,
+  importBatches = [],
+  operationalFlows = [],
+  activeSystemFlowId
 }: KanbanBoardProps) {
   const [activeDragCol, setActiveDragCol] = useState<string | null>(null);
 
+  const memoizedStatusColumns = useMemo(() => getKanbanColumns("status", activeSystemFlowId), [activeSystemFlowId]);
+  const memoizedEtapasColumns = useMemo(() => getKanbanColumns("etapas", activeSystemFlowId), [activeSystemFlowId]);
+  const memoizedPerfilColumns = useMemo(() => getKanbanColumns("perfil", activeSystemFlowId), [activeSystemFlowId]);
+  const memoizedObjecoesColumns = useMemo(() => getKanbanColumns("objecoes", activeSystemFlowId), [activeSystemFlowId]);
+
   // State for columns
   const [columns, setColumns] = useState<KanbanColumn[]>(() =>
-    getKanbanColumns(),
+    getKanbanColumns(undefined, activeSystemFlowId),
   );
 
   // Dynamic Map height state for bottom border resize dragging
@@ -290,7 +303,58 @@ export default function KanbanBoard({
   const [isPanningCanvas, setIsPanningCanvas] = useState(false);
 
   // Advanced Interactive H3 states for CRM Intelligence
+  const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
   const [selectedH3LeadId, setSelectedH3LeadId] = useState<string | null>(null);
+
+  const handleToggleLeadSelection = (leadId: string) => {
+    setSelectedLeadIds(prev => 
+      prev.includes(leadId) ? prev.filter(id => id !== leadId) : [...prev, leadId]
+    );
+  };
+
+  const handleToggleColumnSelection = (colId: string, pageId: string) => {
+    const colLeads = leads.filter(l => getLeadStatusForPage(l, pageId) === colId);
+    const colLeadIds = colLeads.map(l => l.id);
+    const allSelected = colLeadIds.length > 0 && colLeadIds.every(id => selectedLeadIds.includes(id));
+
+    if (allSelected) {
+      setSelectedLeadIds(prev => prev.filter(id => !colLeadIds.includes(id)));
+    } else {
+      setSelectedLeadIds(prev => {
+        const unique = new Set([...prev, ...colLeadIds]);
+        return Array.from(unique);
+      });
+    }
+  };
+
+  const handleBulkMoveStatusKanban = (status: LeadStatus) => {
+    if (selectedLeadIds.length === 0) return;
+    selectedLeadIds.forEach(id => {
+      onMoveLead(id, status, "status");
+    });
+    setSelectedLeadIds([]);
+  };
+
+  const handleBulkMoveStageKanban = (stage: string) => {
+    if (selectedLeadIds.length === 0) return;
+    selectedLeadIds.forEach(id => {
+      onMoveLead(id, stage, "etapas");
+      if (onUpdateLeadField) {
+        onUpdateLeadField(id, { stage: stage });
+      }
+    });
+    setSelectedLeadIds([]);
+  };
+
+  const handleBulkDeleteKanban = () => {
+    if (selectedLeadIds.length === 0) return;
+    if (window.confirm(`Tem certeza que deseja apagar ${selectedLeadIds.length} leads selecionados no Kanban?`)) {
+      selectedLeadIds.forEach(id => {
+        if (onDeleteLead) onDeleteLead(id);
+      });
+      setSelectedLeadIds([]);
+    }
+  };
   const [mapaFilter, setMapaFilter] = useState<{
     initial?: string;
     today?: boolean;
@@ -426,268 +490,116 @@ export default function KanbanBoard({
     }
   };
 
-  // Process NLP intents via pattern extraction & appointments copilot
+  // Process NLP intents via backend processing and apply ecosystem actions
   const handleNlpExecute = async () => {
     if (!nlpCommandText.trim()) return;
     setNlpProcessing(true);
     setNlpFeedback(null);
 
-    const promptLow = nlpCommandText.toLowerCase();
-
     try {
-      if (
-        promptLow.includes("agendar") ||
-        promptLow.includes("marcar") ||
-        promptLow.includes("visita") ||
-        promptLow.includes("reuniao") ||
-        promptLow.includes("agenda")
-      ) {
-        const res = await fetch("/api/ai/appointments-copilot", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "nlp-alarm", text: nlpCommandText }),
-        });
-        const data = await res.json();
-        let parsed: any = null;
-        try {
-          parsed = JSON.parse(data.text);
-        } catch {
-          const match = data.text.match(/\{[\s\S]*\}/);
-          if (match) {
-            parsed = JSON.parse(match[0]);
-          }
-        }
+      const res = await fetch("/api/ai/nlp-command", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          command: nlpCommandText,
+          leadsContext: leads.map((l) => ({
+            id: l.id,
+            name: l.name,
+            status: l.status,
+            value: l.value,
+            familyGrossIncome: l.familyGrossIncome,
+            familyIncome: l.familyIncome,
+            qualificacao: l.qualificacao
+          })),
+          propertiesContext: properties ? properties.map((p) => ({
+            id: p.id,
+            title: p.title,
+            price: p.price,
+            neighborhood: p.neighborhood
+          })) : []
+        }),
+      });
 
-        if (parsed && parsed.date && parsed.time) {
-          let foundLead = leads.find((l) =>
-            nlpCommandText.toLowerCase().includes(l.name.toLowerCase()),
-          );
-          if (!foundLead && selectedH3LeadId) {
-            foundLead = leads.find((l) => l.id === selectedH3LeadId);
-          }
+      if (!res.ok) throw new Error("Erro na comunicação com a IA");
+      const data = await res.json();
+      
+      let actionsApplied = 0;
 
-          if (foundLead) {
-            if (onUpdateLeadField) {
-              onUpdateLeadField(foundLead.id, {
-                notes: `${foundLead.notes || ""}\n\n[COMPROMISSO AGENDADO NLP]: ${parsed.title} para ${parsed.date} às ${parsed.time}. Obs: ${parsed.description || ""}`,
-              });
+      if (data.actions && Array.isArray(data.actions)) {
+        for (const action of data.actions) {
+          if (action.type === "UPDATE_LEAD" && onUpdateLeadField) {
+            onUpdateLeadField(action.leadId, action.updates);
+            
+            // Special case for status move (Kanban visual update)
+            if (action.updates.status && onMoveLead) {
+              const pageId = ["novo", "ativo", "arquivado"].includes(action.updates.status) ? "status" : "etapas";
+              onMoveLead(action.leadId, action.updates.status, pageId);
             }
-            setNlpFeedback({
-              type: "success",
-              msg: `Compromisso "${parsed.title}" agendado no calendário para o lead "${foundLead.name}" em ${parsed.date} às ${parsed.time}!`,
-            });
-          } else {
-            setNlpFeedback({
-              type: "success",
-              msg: `Compromisso "${parsed.title}" estruturado para ${parsed.date} às ${parsed.time}! Forneça ou selecione um Lead no grafo para coligar.`,
-            });
-          }
-        } else {
-          throw new Error("Não foi possível extrair a data/hora da instrução.");
-        }
-      } else if (
-        promptLow.includes("mover") ||
-        promptLow.includes("mudar") ||
-        promptLow.includes("enviar") ||
-        promptLow.includes("colocar")
-      ) {
-        let targetColId: any = null;
-        let targetPageId = "etapas";
-
-        if (promptLow.includes("abordagem")) targetColId = "abordagem";
-        else if (promptLow.includes("triagem") || promptLow.includes("analise"))
-          targetColId = "triagem";
-        else if (promptLow.includes("proposta")) targetColId = "proposta";
-        else if (
-          promptLow.includes("fechado") ||
-          promptLow.includes("ganho") ||
-          promptLow.includes("fechou")
-        )
-          targetColId = "fechado";
-        else if (
-          promptLow.includes("arquivado") ||
-          promptLow.includes("perda") ||
-          promptLow.includes("perdeu")
-        )
-          targetColId = "arquivado";
-        else if (promptLow.includes("novo") || promptLow.includes("novos")) {
-          targetColId = "novo";
-          targetPageId = "status";
-        } else if (promptLow.includes("ativo")) {
-          targetColId = "ativo";
-          targetPageId = "status";
-        }
-
-        const foundLead = leads.find((l) =>
-          nlpCommandText.toLowerCase().includes(l.name.toLowerCase()),
-        );
-
-        if (foundLead && targetColId) {
-          onMoveLead(foundLead.id, targetColId, targetPageId);
-          setNlpFeedback({
-            type: "success",
-            msg: `Lead "${foundLead.name}" movido com sucesso para a etapa "${targetColId}" via NLP!`,
-          });
-        } else if (!foundLead) {
-          setNlpFeedback({
-            type: "error",
-            msg: "Lead não reconhecido na frase. Exemplo de comando: 'Mudar João Silva para proposta'",
-          });
-        } else {
-          setNlpFeedback({
-            type: "error",
-            msg: `Etapa ou coluna não reconhecida. Certifique-se de usar nomes como Abordagem, Triagem, Proposta, Novo ou Ativo.`,
-          });
-        }
-      } else if (
-        promptLow.includes("abrir") ||
-        promptLow.includes("detalhes") ||
-        promptLow.includes("focar") ||
-        promptLow.includes("editar") ||
-        promptLow.includes("qualificação")
-      ) {
-        const foundLead = leads.find((l) =>
-          nlpCommandText.toLowerCase().includes(l.name.toLowerCase()),
-        );
-        if (foundLead) {
-          if (onOpenLeadDetails) {
-            onOpenLeadDetails(foundLead);
-            setNlpFeedback({
-              type: "success",
-              msg: `Ficha de detalhes aberta para o lead "${foundLead.name}".`,
-            });
-          } else {
-            setNlpFeedback({
-              type: "error",
-              msg: "Ação de abrir detalhes não está disponível.",
-            });
-          }
-        } else {
-          setNlpFeedback({
-            type: "error",
-            msg: "Lead não reconhecido na frase. Exemplo: 'abrir detalhes João'",
-          });
-        }
-      } else if (promptLow.includes("mapa") || promptLow.includes("aplique")) {
-        let updated = false;
-        let msgs = [];
-
-        // Add Columns
-        const newCols: { colId: string; pageId: string }[] = [];
-        const possibleCols = [
-          "abordagem",
-          "triagem",
-          "proposta",
-          "fechado",
-          "arquivado",
-          "novo",
-          "ativo",
-          "ativos",
-        ];
-        possibleCols.forEach((c) => {
-          if (promptLow.includes(c)) {
-            let col = c === "ativos" ? "ativo" : c;
-            let pageId = ["novo", "ativo", "arquivado"].includes(col)
-              ? "status"
-              : "etapas";
-            if (
-              !mapaColumns.some((m) => m.colId === col && m.pageId === pageId)
-            ) {
-              newCols.push({ colId: col, pageId });
+            actionsApplied++;
+          } else if (action.type === "ADD_TO_DISPATCH_QUEUE" && onAddToDispatchQueue) {
+            onAddToDispatchQueue(action.leadIds || []);
+            actionsApplied++;
+          } else if (action.type === "FOCUS_LEAD") {
+            const focusLead = leads.find(l => (action.leadIds || []).includes(l.id));
+            if (focusLead) {
+              if (onOpenLeadDetails) onOpenLeadDetails(focusLead);
+              setSelectedH3LeadId(focusLead.id);
+              actionsApplied++;
             }
           }
-        });
-        if (newCols.length > 0) {
-          setMapaColumns((prev) => [...prev, ...newCols]);
-          msgs.push(
-            `Colunas adicionadas: ${newCols.map((c) => c.colId).join(", ")}`,
-          );
-          updated = true;
         }
-
-        // Apply filters
-        let initial = "";
-        let today = false;
-        const matchInitial = promptLow.match(/inicial\s+([a-z])/);
-        if (matchInitial) initial = matchInitial[1];
-        if (promptLow.includes("hoje")) today = true;
-
-        if (initial || today) {
-          setMapaFilter({ initial, today });
-          msgs.push(
-            `Filtros aplicados (Inicial: ${initial || "nenhuma"}, Hoje: ${today ? "sim" : "não"})`,
-          );
-          updated = true;
-        }
-
-        if (promptLow.includes("limpar") || promptLow.includes("resetar")) {
-          setMapaFilter(null);
-          msgs.push("Filtros do mapa removidos");
-          updated = true;
-        }
-
-        if (updated) {
-          setNlpFeedback({ type: "success", msg: msgs.join(" | ") });
-        } else {
-          setNlpFeedback({
-            type: "info",
-            msg: "Comando de mapa não encontrou colunas ou filtros específicos para aplicar.",
-          });
-        }
-      } else if (
-        promptLow.includes("sugerir") ||
-        promptLow.includes("estoque") ||
-        promptLow.includes("cury") ||
-        promptLow.includes("imóvel") ||
-        promptLow.includes("imovel")
-      ) {
-        const foundLead =
-          leads.find(
-            (l) =>
-              l.name &&
-              nlpCommandText.toLowerCase().includes(l.name.toLowerCase()),
-          ) ||
-          (selectedH3LeadId
-            ? leads.find((l) => l.id === selectedH3LeadId)
-            : null);
-        if (foundLead) {
-          setSelectedH3LeadId(foundLead.id);
-          setNlpFeedback({
-            type: "info",
-            msg: `Estoque de imóveis acionado para o lead "${foundLead.name}". Veja as sugestões de coligação abaixo!`,
-          });
-        } else {
-          setNlpFeedback({
-            type: "info",
-            msg: "Exibindo estoque de lançamentos imobiliários. Selecione um Lead para vincular e coligar o projeto.",
-          });
-        }
-      } else {
-        const res = await fetch("/api/ai/appointments-copilot", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "generate-outline",
-            title: "Instrução Geral CRM",
-            leadName: selectedH3LeadId
-              ? leads.find((l) => l.id === selectedH3LeadId)?.name
-              : "",
-            description: nlpCommandText,
-          }),
-        });
-        const data = await res.json();
-        setNlpFeedback({
-          type: "success",
-          msg: `Diretriz da IA:\n\n${data.text}`,
-        });
       }
+
+      setNlpFeedback({
+        type: "success",
+        msg: `${data.message}\n\nAções integradas aplicadas no CRM: ${actionsApplied}`
+      });
       setNlpCommandText("");
     } catch (err: any) {
       console.error(err);
-      setNlpFeedback({
-        type: "error",
-        msg: `Err: ${err.message || "Falha ao processar comando."}`,
-      });
+      
+      // Fallback local commands for map manipulations
+      const promptLow = nlpCommandText.toLowerCase();
+      let handledLocally = false;
+      if (promptLow.includes("mapa") || promptLow.includes("aplique")) {
+         let updated = false;
+         let msgs = [];
+         const newCols: { colId: string; pageId: string }[] = [];
+         const possibleCols = ["abordagem", "triagem", "proposta", "fechado", "arquivado", "novo", "ativo"];
+         possibleCols.forEach((c) => {
+           if (promptLow.includes(c)) {
+             let col = c;
+             let pageId = ["novo", "ativo", "arquivado"].includes(col) ? "status" : "etapas";
+             if (!mapaColumns.some((m) => m.colId === col && m.pageId === pageId)) {
+               newCols.push({ colId: col, pageId });
+             }
+           }
+         });
+         if (newCols.length > 0) {
+           setMapaColumns((prev) => [...prev, ...newCols]);
+           msgs.push(`Colunas ativadas: ${newCols.map((c) => c.colId).join(", ")}`);
+           updated = true;
+         }
+         
+         if (promptLow.includes("limpar") || promptLow.includes("resetar")) {
+           setMapaFilter(null);
+           msgs.push("Filtros removidos");
+           updated = true;
+         }
+         
+         if (updated) {
+           setNlpFeedback({ type: "success", msg: msgs.join(" | ") });
+           handledLocally = true;
+           setNlpCommandText("");
+         }
+      }
+
+      if (!handledLocally) {
+        setNlpFeedback({
+          type: "error",
+          msg: `Err: ${err.message || "Falha ao processar comando avançado."}`,
+        });
+      }
     } finally {
       setNlpProcessing(false);
     }
@@ -844,17 +756,20 @@ export default function KanbanBoard({
   }, [kanbanViewMode]);
 
   useEffect(() => {
-    setColumns(getKanbanColumns(activeFunnelsPage));
-  }, [activeFunnelsPage]);
+    setColumns(getKanbanColumns(activeFunnelsPage, activeSystemFlowId));
+  }, [activeFunnelsPage, activeSystemFlowId]);
 
   useEffect(() => {
     const handleUpdate = () => {
-      setColumns(getKanbanColumns(activeFunnelsPage));
+      setColumns(getKanbanColumns(activeFunnelsPage, activeSystemFlowId));
     };
     window.addEventListener("kanban-columns-updated", handleUpdate);
-    return () =>
+    window.addEventListener("storage", handleUpdate);
+    return () => {
       window.removeEventListener("kanban-columns-updated", handleUpdate);
-  }, [activeFunnelsPage]);
+      window.removeEventListener("storage", handleUpdate);
+    };
+  }, [activeFunnelsPage, activeSystemFlowId]);
   const handleCycleVisibility = () => {
     const sequence = ["status", "etapas", "perfil", "qualificacao", "objecoes"];
     const currentIndex = sequence.indexOf(activeFunnelsPage);
@@ -1735,8 +1650,8 @@ export default function KanbanBoard({
             zoomMode === "compact"
               ? "w-52"
               : zoomMode === "expanded"
-                ? "w-full xl:w-[280px]"
-                : "w-full xl:w-64"
+                ? "w-[300px]"
+                : "w-[260px]"
           } ${
             isOverThisCol
               ? "ring-2 ring-indigo-500 bg-indigo-950/20 translate-y-[-2px] shadow-[0_0_20px_rgba(99,102,241,0.2)]"
@@ -1757,9 +1672,6 @@ export default function KanbanBoard({
               e.dataTransfer.effectAllowed = "move";
               setIsDraggingColumn(true);
               setDraggingColId(col.id);
-              if (setHyperfocusActive) {
-                setHyperfocusActive(3);
-              }
             }}
             onDragEnd={() => {
               setIsDraggingColumn(false);
@@ -1807,6 +1719,16 @@ export default function KanbanBoard({
               ) : (
                 <div className="flex items-center gap-2 group/header w-full justify-between">
                   <div className="flex items-center gap-1.5 truncate">
+                    <input
+                      type="checkbox"
+                      checked={colLeads.length > 0 && colLeads.every(l => selectedLeadIds.includes(l.id))}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        handleToggleColumnSelection(col.id, pageId);
+                      }}
+                      className="w-3.5 h-3.5 rounded border-zinc-750 bg-zinc-950 text-indigo-550 focus:ring-indigo-500 cursor-pointer accent-indigo-600 shrink-0"
+                      title="Selecionar/Deselecionar todos os leads desta coluna"
+                    />
                     <div className="flex flex-col truncate">
                       {visiblePagesCount > 1 && (
                         <span className="text-[8px] font-black tracking-widest text-indigo-400 uppercase leading-none mb-1 select-none block truncate max-w-[130px]">
@@ -1859,9 +1781,6 @@ export default function KanbanBoard({
                             if (prev.length >= 10) return prev;
                             return [...prev, { colId: col.id, pageId }];
                           });
-                          if (setHyperfocusActive) {
-                            setHyperfocusActive(3);
-                          }
                         }
                       }}
                       className={`p-1 rounded text-xs transition flex items-center justify-center ${
@@ -1956,7 +1875,9 @@ export default function KanbanBoard({
                     onDragEnd={(e) => {
                       e.currentTarget.classList.remove("opacity-40");
                     }}
-                    className={`group bg-zinc-900 border-[2px] border-zinc-805/90 hover:border-indigo-500 rounded-xl transition-colors relative overflow-hidden ${
+                    className={`group bg-zinc-900 border-[2px] ${
+                      selectedLeadIds.includes(lead.id) ? "border-indigo-550 ring-2 ring-indigo-500/30 bg-indigo-950/10" : "border-zinc-805/90"
+                    } hover:border-indigo-500 rounded-xl transition-colors relative overflow-hidden ${
                       zoomMode === "compact" || zoomMode === "overview"
                         ? "p-2 shadow-[2px_2px_0px_0px_rgba(15,15,15,1)]"
                         : zoomMode === "expanded"
@@ -1966,13 +1887,25 @@ export default function KanbanBoard({
                   >
                     <div className="flex flex-col gap-2 font-sans">
                       {/* Header NOME */}
-                      <div className="border-b border-zinc-805/85 pb-1 flex justify-between items-center px-1">
-                        <button
-                          onClick={() => onOpenLeadDetails(lead)}
-                          className="text-zinc-100 hover:text-indigo-400 font-sans font-black text-left transition-colors truncate uppercase tracking-tight text-[9px] w-full"
-                        >
-                          {lead.name}
-                        </button>
+                      <div className="border-b border-zinc-805/85 pb-1 flex justify-between items-center gap-2 px-1">
+                        <div className="flex items-center gap-1.5 min-w-0 w-full">
+                          <input
+                            type="checkbox"
+                            checked={selectedLeadIds.includes(lead.id)}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              handleToggleLeadSelection(lead.id);
+                            }}
+                            className="w-3.5 h-3.5 rounded border-zinc-700 bg-zinc-950 text-indigo-500 cursor-pointer accent-indigo-650 shrink-0"
+                            title="Selecionar lead para ações em lote"
+                          />
+                          <button
+                            onClick={() => onOpenLeadDetails(lead)}
+                            className="text-zinc-100 hover:text-indigo-400 font-sans font-black text-left transition-colors truncate uppercase tracking-tight text-[9px] w-full"
+                          >
+                            {lead.name}
+                          </button>
+                        </div>
                         {isOverdue && (
                             <span className="flex items-center gap-0.5 text-[7px] bg-red-100 text-red-950 rounded px-1 font-mono font-black select-none shrink-0" title={`Último contato foi há ${daysSinceContact} dias!`}>
                                 <AlertTriangle className="w-2 h-2 text-red-650 shrink-0" />
@@ -1985,18 +1918,33 @@ export default function KanbanBoard({
                       <div className="text-zinc-400 text-[8px] pb-1 px-1 flex flex-col gap-1">
                         <div className="flex justify-between items-center font-mono">
                           <span className="text-zinc-300 font-bold truncate">{lead.phone || "-"}</span>
-                          <div className="flex items-center text-emerald-400 font-black" title="Renda Fam.">
-                            <span className="mr-0.5">R$</span>
-                            <input
-                              type="number"
-                              defaultValue={lead.familyIncome || 0}
-                              onBlur={(e) => {
-                                if (onUpdateLeadField && Number(e.target.value) !== lead.familyIncome) {
-                                  onUpdateLeadField(lead.id, { familyIncome: Number(e.target.value) });
-                                }
-                              }}
-                              className="bg-transparent focus:outline-none w-12 text-right"
-                            />
+                          <div className="flex gap-2">
+                            <div className="flex items-center text-emerald-400 font-black text-[7px]" title="Renda Líquida">
+                              <span className="mr-0.5">L</span>
+                              <input
+                                type="number"
+                                defaultValue={lead.familyIncome || 0}
+                                onBlur={(e) => {
+                                  if (onUpdateLeadField && Number(e.target.value) !== lead.familyIncome) {
+                                    onUpdateLeadField(lead.id, { familyIncome: Number(e.target.value) });
+                                  }
+                                }}
+                                className="bg-transparent focus:outline-none w-10 text-right"
+                              />
+                            </div>
+                            <div className="flex items-center text-indigo-400 font-black text-[7px]" title="Renda Bruta">
+                              <span className="mr-0.5">B</span>
+                              <input
+                                type="number"
+                                defaultValue={lead.familyGrossIncome || 0}
+                                onBlur={(e) => {
+                                  if (onUpdateLeadField && Number(e.target.value) !== lead.familyGrossIncome) {
+                                    onUpdateLeadField(lead.id, { familyGrossIncome: Number(e.target.value) });
+                                  }
+                                }}
+                                className="bg-transparent focus:outline-none w-10 text-right"
+                              />
+                            </div>
                           </div>
                         </div>
 
@@ -2009,7 +1957,7 @@ export default function KanbanBoard({
                             className="text-[6px] font-black uppercase font-mono border border-zinc-800 rounded bg-zinc-950 text-zinc-300 tracking-tighter cursor-pointer focus:outline-none w-full shadow-sm py-0.5"
                           >
                             <option value="">ETAPA</option>
-                            {getKanbanColumns("etapas").map((c) => (<option key={c.id} value={c.id}>{c.label}</option>))}
+                            {memoizedEtapasColumns.map((c) => (<option key={c.id} value={c.id}>{c.label}</option>))}
                           </select>
                           <select
                             title="Perfil"
@@ -2018,7 +1966,7 @@ export default function KanbanBoard({
                             className="text-[6px] font-black uppercase font-mono border border-zinc-800 rounded bg-zinc-950 text-zinc-300 tracking-tighter cursor-pointer focus:outline-none w-full shadow-sm py-0.5"
                           >
                             <option value="">PERFIL</option>
-                            {getKanbanColumns("perfil").map((c) => (<option key={c.id} value={c.id}>{c.label}</option>))}
+                            {memoizedPerfilColumns.map((c) => (<option key={c.id} value={c.id}>{c.label}</option>))}
                           </select>
                           <select
                             title="Objeção"
@@ -2027,7 +1975,7 @@ export default function KanbanBoard({
                             className="text-[6px] font-black uppercase font-mono border border-zinc-800 rounded bg-zinc-950 text-zinc-300 tracking-tighter cursor-pointer focus:outline-none w-full shadow-sm py-0.5"
                           >
                             <option value="">OBJEÇÃO</option>
-                            {getKanbanColumns("objecoes").map((c) => (<option key={c.id} value={c.id}>{c.label}</option>))}
+                            {memoizedObjecoesColumns.map((c) => (<option key={c.id} value={c.id}>{c.label}</option>))}
                           </select>
                         </div>
                       </div>
@@ -2053,8 +2001,9 @@ export default function KanbanBoard({
   };
 
   return (
-    <div className="space-y-6 relative">
-      {/* Table search bar block injected from App.tsx */}
+    <div
+      className={`flex flex-col h-full relative space-y-4`}
+    >
       {tableHeaderComponent && !renderOnlyMap && (
         <div className="w-full">
           {typeof tableHeaderComponent === "function"
@@ -2065,12 +2014,12 @@ export default function KanbanBoard({
 
       {/* 🗺️ AMBIENTE MAPA: AMBIENTE DE CONEXÃO DE NÓS (Renders stably above the Kanban columns) */}
       {!renderOnlyColumns && (
-        <div className="mb-6 bg-zinc-950 border-0 border-transparent rounded-[30px] p-4 xl:p-6 w-full relative transition-colors shadow-[0_4px_30px_rgba(0,0,0,0.4)] pb-8">
-          <div className="flex flex-col xl:flex-row gap-6 w-full items-start">
+        <div className={`${renderOnlyMap ? "w-full h-full" : "mb-6 bg-zinc-950 rounded-[30px] p-4 xl:p-6 shadow-[0_4px_30px_rgba(0,0,0,0.4)] pb-8"} relative transition-colors w-full`}>
+          <div className={`flex flex-col xl:flex-row gap-6 w-full items-start ${renderOnlyMap ? "h-full" : ""}`}>
             {/* WIDGET 1: CÉREBRO DE COMANDO NLP & COLIGAÇÃO DE ESTOQUE */}
             <div
-              style={{ height: `${mapHeight}px` }}
-              className="w-full xl:w-[350px] shrink-0 bg-zinc-950/80 border-2 border-purple-500/10 rounded-2xl p-4 shadow-md flex flex-col gap-4 self-stretch justify-start overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 text-white"
+              style={{ height: renderOnlyMap ? "100%" : `${mapHeight}px` }}
+              className={`w-full xl:w-[350px] shrink-0 bg-zinc-950/80 border-2 border-purple-500/10 rounded-2xl p-4 shadow-md flex flex-col gap-4 self-stretch justify-start overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 text-white`}
             >
               {/* NLP Prompt Section */}
               <div className="space-y-2">
@@ -2539,7 +2488,7 @@ export default function KanbanBoard({
             {/* WIDGET 2: GRAPH NODES CANVAS AREA */}
             <div
               ref={canvasContainerRef}
-              style={{ height: `${mapHeight}px` }}
+              style={{ height: renderOnlyMap ? "100%" : `${mapHeight}px` }}
               className="flex-1 min-w-0 relative overflow-hidden rounded-[24px] border border-zinc-800/60 bg-[#0c0c0e] w-full"
               onDrop={handleDropOnH3Canvas}
               onDragOver={(e) => e.preventDefault()}
@@ -2549,11 +2498,16 @@ export default function KanbanBoard({
                 properties={externalProperties} 
                 onUpdateLeadField={onUpdateLeadField} 
                 onNodeClick={onOpenLeadDetails}
+                onOSClick={onOSClick}
                 onAddToDispatchQueue={onAddToDispatchQueue}
+                importBatches={importBatches}
+                operationalFlows={operationalFlows}
+                activeSystemFlowId={activeSystemFlowId}
               />
               {/* Option for bottom border expansion by dragging down */}
-              <div
-                onMouseDown={(e) => {
+              {!renderOnlyMap && (
+                <div
+                  onMouseDown={(e) => {
                   e.preventDefault();
                   const startY = e.clientY;
                   const startHeight = mapHeight;
@@ -2580,13 +2534,14 @@ export default function KanbanBoard({
                 title="Arraste para baixo para expandir a altura do mapa"
               >
                 <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-zinc-500 group-hover:bg-white animate-pulse" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-zinc-500 group-hover:bg-white " />
                   <span className="text-[9px] font-mono font-black tracking-wider text-zinc-500 group-hover:text-white uppercase">
                     Puxe para expandir ambiente ↕️
                   </span>
-                  <div className="w-1.5 h-1.5 rounded-full bg-zinc-500 group-hover:bg-white animate-pulse" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-zinc-500 group-hover:bg-white " />
                 </div>
               </div>
+              )}
             </div>
           </div>
         </div>
@@ -2799,7 +2754,7 @@ export default function KanbanBoard({
           {/* Grid containing Columns and Sidebar Drawer */}
           <div className="relative flex flex-col xl:flex-row gap-5 items-start">
             {/* Kanban Columns Grid Scroll Container */}
-            <div className="flex-1 w-full overflow-hidden relative group">
+            <div className="flex-1 w-full relative group">
               <div className="absolute right-4 bottom-4 flex gap-2 z-20 md:hidden group-hover:flex">
                 <button
                   onClick={() => {
@@ -2926,10 +2881,70 @@ export default function KanbanBoard({
                 )
               ) : (
                 <div className="flex flex-col gap-4 w-full">
+                  {selectedLeadIds.length > 0 && (
+                    <div className="bg-indigo-950/80 border-2 border-indigo-500/80 p-3 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 font-mono text-[11px] mb-1 shadow-[0_0_15px_rgba(99,102,241,0.25)]">
+                      <div className="flex items-center gap-2">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                        </span>
+                        <span className="font-bold text-zinc-100 uppercase">
+                          {selectedLeadIds.length} leads selecionados no Funil
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Move Status */}
+                        <select
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              handleBulkMoveStatusKanban(e.target.value as LeadStatus);
+                              e.target.value = '';
+                            }
+                          }}
+                          className="bg-zinc-900 text-zinc-100 border border-zinc-700 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase cursor-pointer focus:outline-none hover:border-indigo-500 transition-colors"
+                        >
+                          <option value="">-- Mover Status --</option>
+                          {memoizedStatusColumns.map(col => (
+                            <option key={col.id} value={col.id}>{col.label}</option>
+                          ))}
+                        </select>
+
+                        {/* Move Stage */}
+                        <select
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              handleBulkMoveStageKanban(e.target.value);
+                              e.target.value = '';
+                            }
+                          }}
+                          className="bg-zinc-900 text-zinc-100 border border-zinc-700 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase cursor-pointer focus:outline-none hover:border-indigo-500 transition-colors"
+                        >
+                          <option value="">-- Mover Etapa --</option>
+                          {memoizedEtapasColumns.map(col => (
+                            <option key={col.id} value={col.id}>{col.label}</option>
+                          ))}
+                        </select>
+
+                        <button
+                          onClick={handleBulkDeleteKanban}
+                          className="px-2.5 py-1 bg-red-900/85 hover:bg-red-800 text-red-100 border border-red-700 rounded-md transition-colors font-bold cursor-pointer text-[10px] uppercase"
+                        >
+                          Excluir
+                        </button>
+
+                        <button
+                          onClick={() => setSelectedLeadIds([])}
+                          className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 rounded-md transition-colors cursor-pointer text-[10px]"
+                        >
+                          Limpar ×
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   <div
                     id="kanban-columns-grid"
                     style={{ zoom: `${layoutZoom}%` }}
-                    className={`grid grid-cols-1 md:grid-cols-2 xl:flex xl:flex-row gap-6 items-start overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-zinc-800 select-none transition-colors ${
+                    className={`flex flex-row gap-4 items-start overflow-x-auto pb-4 custom-scrollbar select-none transition-colors ${
                       zoomMode === "overview"
                         ? "scale-[0.80] xl:scale-[0.74] origin-top-left w-[135%] h-[125%]"
                         : ""
@@ -3267,4 +3282,4 @@ export default function KanbanBoard({
       )}
     </div>
   );
-}
+});

@@ -5,7 +5,7 @@ interface AnimatedCounterProps {
   duration?: number; // duration in ms
 }
 
-export default function AnimatedCounter({ value, duration = 800 }: AnimatedCounterProps) {
+export default function AnimatedCounter({ value, duration = 400 }: AnimatedCounterProps) {
   const [displayValue, setDisplayValue] = useState(value);
   const previousValueRef = useRef(value);
 

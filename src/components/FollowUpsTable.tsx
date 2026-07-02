@@ -395,7 +395,7 @@ Gerado em: ${new Date().toLocaleString('pt-BR')}
 
         <div className="p-4 bg-white border-2 border-zinc-950 rounded-2xl text-center shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
           <span className="text-[9px] uppercase font-mono font-black text-amber-500 block tracking-widest flex items-center justify-center gap-1">
-            <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse"></span>
+            <span className="w-1.5 h-1.5 bg-amber-400 rounded-full "></span>
             <span>Agendados</span>
           </span>
           <p className="text-2xl font-black font-mono mt-1 text-amber-600">{pendingCount}</p>
@@ -530,7 +530,7 @@ Gerado em: ${new Date().toLocaleString('pt-BR')}
               className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 disabled:bg-zinc-700 font-mono text-[10px] font-black uppercase tracking-wider rounded border border-white flex items-center gap-1 cursor-pointer transition"
               title="Obter roteiro de vendas para os leads selecionados usando o Gemini"
             >
-              <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+              <Sparkles className="w-3.5 h-3.5 text-amber-300 " />
               <span>{isGeminiLoading ? 'Gemini Analisando...' : 'Assistência Gemini (Notas)'}</span>
             </button>
 
@@ -590,7 +590,7 @@ Gerado em: ${new Date().toLocaleString('pt-BR')}
         <div className="p-4 bg-zinc-900 border-4 border-zinc-950 rounded-2xl text-white shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] space-y-3 relative overflow-hidden">
           <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
             <div className="flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-amber-400 animate-spin" />
+              <Sparkles className="w-4 h-4 text-amber-400 " />
               <span className="font-mono text-xs font-black uppercase text-amber-400">Gabarito e Copywriting: Assistência Inteligente cicloCRED</span>
             </div>
             <button
@@ -705,7 +705,7 @@ Gerado em: ${new Date().toLocaleString('pt-BR')}
                         <span className={`inline-block font-mono text-[8.5px] font-black uppercase px-2.5 py-0.5 rounded-full border border-zinc-950 ${
                           apt.status === 'realizado' ? 'bg-emerald-100 text-emerald-800' :
                           apt.status === 'cancelado' ? 'bg-red-100 text-red-800' :
-                          'bg-amber-100 text-amber-800 animate-pulse'
+                          'bg-amber-100 text-amber-800 '
                         }`}>
                           {apt.status}
                         </span>
@@ -910,16 +910,16 @@ Gerado em: ${new Date().toLocaleString('pt-BR')}
           </div>
 
           {/* Selected Date Details Sidebar (4 Cols) */}
-          <div className="lg:col-span-4 bg-white border-4 border-zinc-950 rounded-3xl p-5 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] space-y-4">
+          <div className="lg:col-span-4 bg-white border-4 border-zinc-950 rounded-3xl p-5 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] space-y-4 h-full flex flex-col">
             
-            <div className="pb-3 border-b-2 border-zinc-200">
+            <div className="pb-3 border-b-2 border-zinc-200 shrink-0">
               <span className="text-[9px] uppercase font-mono font-black text-indigo-500 tracking-wider block">Agenda do Dia</span>
               <h4 className="font-mono font-black text-xs uppercase text-zinc-900">
                 📅 {selectedDay ? `${String(selectedDay).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}/${year}` : 'Selecione um Dia'}
               </h4>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-3 max-h-[500px] overflow-y-auto custom-scrollbar pr-2 flex-1">
               {selectedDayAppointments.length === 0 ? (
                 <div className="text-center py-10 bg-zinc-50 rounded-2xl border-2 border-dashed border-zinc-300 p-4">
                   <Clock className="w-8 h-8 text-zinc-300 mx-auto mb-2" />
@@ -979,7 +979,7 @@ Gerado em: ${new Date().toLocaleString('pt-BR')}
                       <span className={`text-[8.5px] font-mono font-black uppercase px-1.5 py-0.5 rounded-full border border-zinc-950 ${
                         apt.status === 'realizado' ? 'bg-emerald-100 text-emerald-800' :
                         apt.status === 'cancelado' ? 'bg-red-100 text-red-800' :
-                        'bg-amber-100 text-amber-800 animate-pulse'
+                        'bg-amber-100 text-amber-800 '
                       }`}>
                         {apt.status}
                       </span>

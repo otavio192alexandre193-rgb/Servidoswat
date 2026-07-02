@@ -13,9 +13,10 @@ interface AIAssistantChatProps {
   isOpen: boolean;
   onClose: () => void;
   lead: Lead | null;
+  isInline?: boolean;
 }
 
-export default function AIAssistantChat({ isOpen, onClose, lead }: AIAssistantChatProps) {
+export default function AIAssistantChat({ isOpen, onClose, lead, isInline }: AIAssistantChatProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
@@ -50,7 +51,22 @@ export default function AIAssistantChat({ isOpen, onClose, lead }: AIAssistantCh
     setIsTyping(true);
 
     try {
-      // Build dynamic system instructions incorporating lead profile & files
+      // Build dynamic system instructions incorporating lead profile, files, and active workflow
+      const activeFlowId = localStorage.getItem("ciclocred_active_system_flow_id") || "flow-1";
+      const savedFlows = localStorage.getItem("ciclocred_crm_operational_flows");
+      let activeFlowStr = "Fluxo Geral Padrão (Etapas tradicionais)";
+      if (activeFlowId && savedFlows) {
+        try {
+          const flows = JSON.parse(savedFlows);
+          if (Array.isArray(flows)) {
+            const activeFlow = flows.find((f: any) => f.id === activeFlowId);
+            if (activeFlow) {
+              activeFlowStr = `Fluxo de Trabalho Ativo: "${activeFlow.name}" (${activeFlow.description || 'sem descrição'}). Etapas do Funil que regem o CRM: ${activeFlow.stages?.map((s: any) => s.name).join(' -> ')}`;
+            }
+          }
+        } catch (_) {}
+      }
+
       let systemPrompt = "";
       if (lead) {
         systemPrompt = `Você é o Co-piloto e Consultor de Crédito & Vendas Inteligente oficial do cicloCRED CRM.
@@ -65,6 +81,9 @@ Sua missão é prestar assessoria estratégica em vendas imobiliárias e anális
 - Programa Desejado: ${lead.programaDesejado || 'Minha Casa Minha Vida (MCMV) / SBPE Geral'}
 - Histórico do Negócio / Notas do Corretor: ${lead.notes || 'Sem anotações adicionais'}
 
+[CONTEXTO DE TRABALHO CRÍTICO]
+${activeFlowStr}
+
 Diretrizes de Resposta:
 1. Responda de forma assertiva, estratégica e extremamente prática para o corretor.
 2. Formate as mensagens usando Markdown elegante (negrito, marcadores rápidos).
@@ -74,6 +93,10 @@ Diretrizes de Resposta:
       } else {
         systemPrompt = `Você é o Co-piloto Estratégico oficial do cicloCRED CRM integrado de forma direta com o Gemini.
 Sua missão é dar suporte e guiar corretores de imóveis e analistas de financiamento residencial sobre estratégias gerais de vendas, enquadramento de tabelas Caixa, simulações de financiamento, follow-ups eficientes e propostas.
+
+[CONTEXTO DE TRABALHO CRÍTICO]
+${activeFlowStr}
+
 Seja conciso, direto, utilize formatação Markdown enriquecida com negritos e listas para leitura rápida e empodere a equipe com insights de alto nível imobiliário.`;
       }
 
@@ -111,96 +134,105 @@ Seja conciso, direto, utilize formatação Markdown enriquecida com negritos e l
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen && !isInline) return null;
 
-  return (
-    <div className="fixed inset-0 z-[60] flex justify-end bg-black/60  transition-opacity">
-      <div className="w-full max-w-sm bg-zinc-900 border-l-4 border-zinc-950 shadow-lg h-full flex flex-col font-mono   ">
-        
-        {/* Header */}
-        <div className="p-4 border-b-2 border-zinc-950 flex items-center justify-between bg-purple-900/30">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-600 border-2 border-zinc-950 flex items-center justify-center text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-              <Sparkles className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-white font-black uppercase tracking-wider text-xs">Assistente Imobiliário AI</h2>
-              {lead ? (
-                <p className="text-purple-300 text-[9px] font-bold">Dossiê e Análise de: {lead.name}</p>
-              ) : (
-                <p className="text-purple-300 text-[9px] font-bold">Canal Co-piloto (Conexão Direta Gemini)</p>
-              )}
-            </div>
+  const content = (
+    <div className={`${isInline ? 'w-full h-[500px]' : 'w-full max-w-sm h-full border-l-4'} bg-zinc-900 border-zinc-950 shadow-lg flex flex-col font-mono`}>
+      {/* Header */}
+      <div className="p-4 border-b-2 border-zinc-950 flex items-center justify-between bg-purple-900/30">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-purple-600 border-2 border-zinc-950 flex items-center justify-center text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+            <Sparkles className="w-5 h-5" />
           </div>
+          <div>
+            <h2 className="text-white font-black uppercase tracking-wider text-xs">Assistente Imobiliário AI</h2>
+            {lead ? (
+              <p className="text-purple-300 text-[9px] font-bold">Dossiê e Análise de: {lead.name}</p>
+            ) : (
+              <p className="text-purple-300 text-[9px] font-bold">Canal Co-piloto (Conexão Direta Gemini)</p>
+            )}
+          </div>
+        </div>
+        {!isInline && (
           <button onClick={onClose} className="p-2 hover:bg-zinc-700 rounded-lg text-zinc-400 hover:text-white transition cursor-pointer">
             <X className="w-6 h-6" />
           </button>
-        </div>
+        )}
+      </div>
 
-        {/* Action Chips */}
-        {lead && (
-          <div className="p-2 bg-zinc-950 border-b border-zinc-800 flex overflow-x-auto gap-2 pb-2 scrollbar-none">
-            {quickActions.map((action, i) => (
-              <button
-                key={i}
-                disabled={isTyping}
-                onClick={() => handleSend(action.query)}
-                className="flex items-center gap-1.5 shrink-0 px-3 py-1.5 bg-zinc-800 hover:bg-purple-600/30 border border-zinc-700 hover:border-purple-500 rounded-full text-[9px] font-bold text-zinc-300 transition-colors disabled:opacity-50"
-              >
-                <action.icon className="w-3 h-3 text-purple-400" />
-                {action.label}
-              </button>
-            ))}
+      {/* Action Chips */}
+      {lead && (
+        <div className="p-2 bg-zinc-950 border-b border-zinc-800 flex overflow-x-auto gap-2 pb-2 scrollbar-none">
+          {quickActions.map((action, i) => (
+            <button
+              key={i}
+              disabled={isTyping}
+              onClick={() => handleSend(action.query)}
+              className="flex items-center gap-1.5 shrink-0 px-3 py-1.5 bg-zinc-800 hover:bg-purple-600/30 border border-zinc-700 hover:border-purple-500 rounded-full text-[9px] font-bold text-zinc-300 transition-colors disabled:opacity-50"
+            >
+              <action.icon className="w-3 h-3 text-purple-400" />
+              {action.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Chat Area */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+        {messages.map((msg) => (
+          <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[90%] rounded-xl p-3 text-xs leading-relaxed whitespace-pre-wrap shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${
+              msg.sender === 'user'
+                ? 'bg-purple-600 text-white border-2 border-zinc-950'
+                : 'bg-zinc-850 text-zinc-200 border-2 border-zinc-950'
+            }`}>
+              {msg.text}
+            </div>
+          </div>
+        ))}
+
+        {isTyping && (
+          <div className="flex justify-start">
+            <div className="bg-zinc-850 border-2 border-zinc-950 max-w-[80%] rounded-xl p-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center gap-2 text-purple-300 text-[10px] font-bold">
+              <Loader2 className="w-4 h-4  text-purple-500" />
+              O Gemini está analisando os dados...
+            </div>
           </div>
         )}
+        <div ref={messagesEndRef} />
+      </div>
 
-        {/* Chat Area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-          {messages.map((msg) => (
-            <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[90%] rounded-xl p-3 text-xs leading-relaxed whitespace-pre-wrap shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${
-                msg.sender === 'user'
-                  ? 'bg-purple-600 text-white border-2 border-zinc-950'
-                  : 'bg-zinc-850 text-zinc-200 border-2 border-zinc-950'
-              }`}>
-                {msg.text}
-              </div>
-            </div>
-          ))}
-
-          {isTyping && (
-            <div className="flex justify-start">
-              <div className="bg-zinc-850 border-2 border-zinc-950 max-w-[80%] rounded-xl p-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center gap-2 text-purple-300 text-[10px] font-bold">
-                <Loader2 className="w-4 h-4  text-purple-500" />
-                O Gemini está analisando os dados...
-              </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Input */}
-        <div className="p-3 bg-zinc-950 border-t-2 border-zinc-900">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={inputVal}
-              disabled={isTyping}
-              onChange={(e) => setInputVal(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSend(inputVal)}
-              placeholder={lead ? "Peça um conselho de renegociação sobre o lead..." : "Pergunte algo sobre o mercado de crédito Caixa..."}
-              className="flex-1 bg-zinc-900 border-2 border-zinc-700 focus:border-purple-500 rounded-xl px-3 py-2 text-xs text-white focus:outline-none disabled:opacity-50"
-            />
-            <button
-              onClick={() => handleSend(inputVal)}
-              disabled={isTyping}
-              className="p-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-transform active:translate-y-0.5 active:shadow-none shrink-0 disabled:opacity-50"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </div>
+      {/* Input */}
+      <div className="p-3 bg-zinc-950 border-t-2 border-zinc-900">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={inputVal}
+            disabled={isTyping}
+            onChange={(e) => setInputVal(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSend(inputVal)}
+            placeholder={lead ? "Peça um conselho de renegociação sobre o lead..." : "Pergunte algo sobre o mercado de crédito Caixa..."}
+            className="flex-1 bg-zinc-900 border-2 border-zinc-700 focus:border-purple-500 rounded-xl px-3 py-2 text-xs text-white focus:outline-none disabled:opacity-50"
+          />
+          <button
+            onClick={() => handleSend(inputVal)}
+            disabled={isTyping}
+            className="p-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl border-2 border-zinc-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-transform active:translate-y-0.5 active:shadow-none shrink-0 disabled:opacity-50"
+          >
+            <Send className="w-4 h-4" />
+          </button>
         </div>
       </div>
+    </div>
+  );
+
+  if (isInline) {
+    return content;
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex justify-end bg-black/60 transition-opacity">
+      {content}
     </div>
   );
 }

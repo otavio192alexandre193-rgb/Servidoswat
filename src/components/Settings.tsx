@@ -1,6 +1,15 @@
 
-import { useState, useEffect, useMemo } from 'react';
-import { Search, Settings as SettingsIcon, Shield, User, BrainCircuit, Zap, Network, Database, Save, RotateCcw, Box, AlertTriangle, Eye, EyeOff, Cpu } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  Search, Settings as SettingsIcon, Shield, User, BrainCircuit, Zap, Network, 
+  Database, Save, RotateCcw, Box, AlertTriangle, Eye, EyeOff, Cpu, Sparkles,
+  Filter, Home, Calculator, MessageCircle, FileText, Settings2, Calendar, 
+  Bell, Download, Upload, Users, History, Cloud, Link, CheckCircle2,
+  AlertCircle
+} from 'lucide-react';
+import GeminiServerTab from './GeminiServerTab';
+import AIAssistantChat from './AIAssistantChat';
+import ScriptsManagerTab from './ScriptsManagerTab';
 import { useConfig } from '../context/ConfigContext';
 import { settingsDefinitions } from '../data/settingsDefinition';
 import { SettingDefinition } from '../types/settings';
@@ -43,22 +52,38 @@ interface SettingsProps {
   setConsolidatedCrmInfo?: (value: string) => void;
   forceLocalStorageMode?: boolean;
   onToggleForceLocalMode?: (checked: boolean) => void;
+  awardXP?: (amount: number, reason: string) => void;
+  addNotification?: (title: string, message: string, type: any) => void;
+  setLeads?: React.Dispatch<React.SetStateAction<any[]>>;
+  templates?: any[];
+  appointments?: any[];
+  setAppointments?: React.Dispatch<React.SetStateAction<any[]>>;
+  emailLogs?: any[];
+  setEmailLogs?: React.Dispatch<React.SetStateAction<any[]>>;
 }
 
 const categories = [
-  { id: 'geral', label: 'Geral', icon: SettingsIcon },
-  { id: 'seguranca', label: 'Segurança', icon: Shield },
-  { id: 'identidade', label: 'Identidade', icon: User },
-  { id: 'google-ia', label: 'Google & IA', icon: BrainCircuit },
-  { id: 'performance', label: 'Performance', icon: Zap },
-  { id: 'rede', label: 'Rede', icon: Network },
-  { id: 'dados-logs', label: 'Dados & Logs', icon: Database },
-  { id: 'armazenamento', label: 'Armazenamento', icon: Box },
-  { id: 'regionalizacao', label: 'Regionalização', icon: SettingsIcon },
-  { id: 'acessibilidade', label: 'Acessibilidade', icon: SettingsIcon },
-  { id: 'dev', label: 'Modo Desenvolvedor', icon: Cpu },
-  { id: 'design', label: 'Layout & Design', icon: Box },
-  { id: 'ambientes', label: 'Ambientes', icon: Network },
+  { id: 'geral', label: 'Preferências Gerais', icon: SettingsIcon },
+  { id: 'funil', label: 'Gestão de Funil', icon: Filter },
+  { id: 'estoque', label: 'Config. de Estoque', icon: Home },
+  { id: 'simulador', label: 'Parâmetros Simulador', icon: Calculator },
+  { id: 'whatsapp', label: 'Integração WhatsApp', icon: MessageCircle },
+  { id: 'scripts', label: 'Biblioteca de Scripts', icon: FileText },
+  { id: 'automacoes', label: 'Automações & Regras', icon: Settings2 },
+  { id: 'agenda', label: 'Agenda & Compromissos', icon: Calendar },
+  { id: 'notificacoes', label: 'Alertas & Notificações', icon: Bell },
+  { id: 'google-ia', label: 'Google & IA Neural', icon: BrainCircuit },
+  { id: 'usuarios', label: 'Usuários & Permissões', icon: Users },
+  { id: 'dados-logs', label: 'Logs & Auditoria', icon: Database },
+  { id: 'armazenamento', label: 'Arquivos & Mídia', icon: Box },
+  { id: 'backup', label: 'Backup & Recuperação', icon: Cloud },
+  { id: 'apis', label: 'APIs & Webhooks', icon: Link },
+  { id: 'seguranca', label: 'Segurança & Firewall', icon: Shield },
+  { id: 'performance', label: 'Performance & Cache', icon: Zap },
+  { id: 'rede', label: 'Configurações de Rede', icon: Network },
+  { id: 'regionalizacao', label: 'Localização & Moeda', icon: SettingsIcon },
+  { id: 'design', label: 'Identidade Visual', icon: Box },
+  { id: 'dev', label: 'Console Desenvolvedor', icon: Cpu },
 ];
 
 const SettingControl = ({ setting, value, onChange }: { setting: SettingDefinition<any>, value: any, onChange: (val: any) => void }) => {
@@ -72,6 +97,7 @@ const SettingControl = ({ setting, value, onChange }: { setting: SettingDefiniti
   };
 
   const currentVal = value !== undefined ? value : setting.defaultValue;
+  const isValid = setting.type === 'number' ? currentVal >= 0 : currentVal !== '';
 
   return (
     <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 py-2">
@@ -81,6 +107,12 @@ const SettingControl = ({ setting, value, onChange }: { setting: SettingDefiniti
           <span className={`text-[9px] uppercase font-black px-1 py-0.5 rounded ${impactColors[setting.impact as keyof typeof impactColors]}`}>
             {setting.impact}
           </span>
+          {!isValid && (
+            <span className="flex items-center gap-0.5 text-[9px] text-red-600 bg-red-50 uppercase font-black px-1 py-0.5 rounded border border-red-100 animate-pulse">
+              <AlertCircle className="w-2 h-2" />
+              Inválido
+            </span>
+          )}
           {setting.needsRestart && (
             <span className="flex items-center gap-0.5 text-[9px] text-amber-600 bg-amber-50 uppercase font-black px-1 py-0.5 rounded border border-amber-100">
               <RotateCcw className="w-2 h-2" />
@@ -154,6 +186,18 @@ export default function Settings(props: SettingsProps) {
   const settings = configContext?.settings;
   const updateSetting = configContext?.updateSetting;
   const applyChanges = configContext?.applyChanges;
+  const isSaving = configContext?.isSaving;
+  const hasUnsavedChanges = configContext?.hasUnsavedChanges;
+
+  const handleExport = () => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(settings));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href",     dataStr);
+    downloadAnchorNode.setAttribute("download", "ciclocred_settings_backup.json");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+  };
 
   const filteredSettings = useMemo(() => {
     try {
@@ -212,12 +256,9 @@ export default function Settings(props: SettingsProps) {
 
         <div className="p-4 border-t-4 border-zinc-950 bg-zinc-950/50">
           <div className="flex items-center gap-3 p-3 rounded-2xl bg-zinc-950 border-2 border-zinc-800 shadow-inner">
-            <div className="w-8 h-8 rounded-full bg-indigo-600 border-2 border-zinc-950 flex items-center justify-center text-[10px] font-black text-white uppercase italic shadow-md">
-              {props.userName?.[0] || 'U'}
-            </div>
             <div className="flex-1 truncate">
-              <p className="text-[10px] font-black text-white uppercase truncate leading-none mb-1">{props.userName}</p>
-              <p className="text-[8px] font-black text-zinc-500 uppercase truncate tracking-widest">{props.userRole}</p>
+              <p className="text-[10px] font-black text-white uppercase truncate leading-none mb-1">Painel Administrativo</p>
+              <p className="text-[8px] font-black text-zinc-500 uppercase truncate tracking-widest">Acesso de Engenharia</p>
             </div>
           </div>
         </div>
@@ -235,56 +276,154 @@ export default function Settings(props: SettingsProps) {
                 {searchQuery ? `Resultados: "${searchQuery}"` : activeCategoryLabel}
               </h2>
               <div className="flex items-center gap-2 mt-0.5">
-                <span className="w-2 h-2 rounded-full bg-green-500  border border-zinc-950" />
-                <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest">Núcleo Central / v4.2</p>
+                {isSaving ? (
+                  <>
+                    <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse border border-zinc-950" />
+                    <p className="text-[9px] text-blue-500 font-black uppercase tracking-widest">Sincronizando Alterações...</p>
+                  </>
+                ) : hasUnsavedChanges ? (
+                  <>
+                    <div className="w-2 h-2 rounded-full bg-amber-500 border border-zinc-950" />
+                    <p className="text-[9px] text-amber-500 font-black uppercase tracking-widest">Alterações Pendentes</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-2 h-2 rounded-full bg-green-500  border border-zinc-950" />
+                    <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest">Sistema Sincronizado / v4.2</p>
+                  </>
+                )}
               </div>
             </div>
           </div>
-          <button
-            onClick={() => applyChanges?.()}
-            className="px-6 py-3 bg-zinc-950 text-white rounded-xl text-[10px] font-black uppercase hover:bg-indigo-600 transition-colors active:scale-95 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] border-2 border-zinc-950 flex items-center gap-2 active:translate-y-0.5 active:shadow-none"
-          >
-            <Save className="w-3.5 h-3.5" />
-            <span>Sincronizar Kernels</span>
-          </button>
+          <div className="flex items-center gap-3">
+            {hasUnsavedChanges && !isSaving && (
+              <span className="text-[8px] font-black text-amber-600 bg-amber-50 px-2 py-1 rounded border border-amber-200 animate-bounce">
+                Auto-save em 2s...
+              </span>
+            )}
+            <button
+              onClick={() => applyChanges?.()}
+              disabled={isSaving || !hasUnsavedChanges}
+              className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase transition-all active:scale-95 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] border-2 border-zinc-950 flex items-center gap-2 active:translate-y-0.5 active:shadow-none ${
+                isSaving || !hasUnsavedChanges 
+                  ? 'bg-zinc-200 text-zinc-400 border-zinc-300 cursor-not-allowed shadow-none translate-y-0.5' 
+                  : 'bg-zinc-950 text-white hover:bg-indigo-600'
+              }`}
+            >
+              {isSaving ? <RotateCcw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              <span>{isSaving ? 'Sincronizando...' : 'Sincronizar Kernels'}</span>
+            </button>
+          </div>
         </header>
 
         <div className={`flex-1 overflow-y-auto p-6 custom-scrollbar ${props.theme === 'claro' ? 'bg-zinc-100/50' : 'bg-zinc-950/20'}`}>
           <div className="max-w-4xl mx-auto space-y-6 pb-12">
-            {activeCategory === 'design' && (
-              <div className={`p-8 rounded-2xl border-4 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] space-y-6 ${props.theme === 'claro' ? 'bg-white' : 'bg-zinc-900'}`}>
-                <div>
-                  <h3 className={`text-lg font-black uppercase italic tracking-tighter mb-4 ${props.theme === 'claro' ? 'text-zinc-900' : 'text-zinc-100'}`}>Seletor de Identidade Visual</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {(['claro', 'escuro', 'galatico'] as const).map(t => (
-                      <button
-                        key={t}
-                        onClick={() => props.setTheme(t)}
-                        className={`p-4 rounded-xl border-4 flex flex-col items-center gap-2 transition-colors ${props.theme === t ? 'bg-indigo-600 border-zinc-950 text-white translate-y-[-2px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]' : (props.theme === 'claro' ? 'bg-zinc-50 border-zinc-100 text-zinc-400 hover:border-zinc-300' : 'bg-zinc-800 border-zinc-700 text-zinc-500 hover:border-zinc-500')}`}
-                      >
-                        <span className="text-2xl">{t === 'claro' ? '☀️' : t === 'escuro' ? '🌙' : '🌌'}</span>
-                        <span className="text-[10px] font-black uppercase">{t}</span>
-                      </button>
-                    ))}
+            {/* Admin Dashboard Hero */}
+            {!searchQuery && activeCategory === 'geral' && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="bg-white border-2 border-zinc-950 rounded-2xl p-5 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden group">
+                    <div className="absolute -right-2 -bottom-2 opacity-5 group-hover:scale-110 transition-transform">
+                      <Zap className="w-16 h-16 text-zinc-900" />
+                    </div>
+                    <span className="text-[8px] font-black uppercase text-zinc-400 tracking-widest block mb-1">Status do Núcleo</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]" />
+                      <span className="text-xs font-black uppercase italic">Operacional</span>
+                    </div>
+                    <p className="text-[9px] text-zinc-400 mt-2 font-mono">Uptime: 99.9%</p>
+                  </div>
+                  
+                  <div className="bg-white border-2 border-zinc-950 rounded-2xl p-5 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden group">
+                    <div className="absolute -right-2 -bottom-2 opacity-5 group-hover:scale-110 transition-transform">
+                      <Network className="w-16 h-16 text-zinc-900" />
+                    </div>
+                    <span className="text-[8px] font-black uppercase text-zinc-400 tracking-widest block mb-1">Latência Global</span>
+                    <div className="flex items-center gap-2">
+                      <Zap className="w-3 h-3 text-amber-500" />
+                      <span className="text-xs font-black uppercase italic">24ms (Avg)</span>
+                    </div>
+                    <p className="text-[9px] text-zinc-400 mt-2 font-mono">Ping: 0.002s</p>
+                  </div>
+
+                  <div className="bg-white border-2 border-zinc-950 rounded-2xl p-5 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden group">
+                    <div className="absolute -right-2 -bottom-2 opacity-5 group-hover:scale-110 transition-transform">
+                      <Database className="w-16 h-16 text-zinc-900" />
+                    </div>
+                    <span className="text-[8px] font-black uppercase text-zinc-400 tracking-widest block mb-1">Sincronismo</span>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-3 h-3 text-indigo-500" />
+                      <span className="text-xs font-black uppercase italic">Firebase Live</span>
+                    </div>
+                    <p className="text-[9px] text-zinc-400 mt-2 font-mono">157 Ops/min</p>
+                  </div>
+
+                  <div className="bg-white border-2 border-zinc-950 rounded-2xl p-5 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden group">
+                    <div className="absolute -right-2 -bottom-2 opacity-5 group-hover:scale-110 transition-transform">
+                      <Cpu className="w-16 h-16 text-zinc-900" />
+                    </div>
+                    <span className="text-[8px] font-black uppercase text-zinc-400 tracking-widest block mb-1">Motor IA</span>
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-3 h-3 text-indigo-500" />
+                      <span className="text-xs font-black uppercase italic">Gemini 1.5 PRO</span>
+                    </div>
+                    <p className="text-[9px] text-zinc-400 mt-2 font-mono">v4.2.0-STABLE</p>
                   </div>
                 </div>
 
-                {props.theme === 'galatico' && (
-                  <div className="pt-6 border-t border-zinc-200">
-                    <h3 className="text-[10px] font-black uppercase tracking-widest mb-3 text-zinc-400">Presets Galácticos</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {['andromeda', 'orion', 'supernova', 'nebula'].map(p => (
-                        <button
-                          key={p}
-                          onClick={() => props.setGalaxyPreset(p)}
-                          className={`px-3 py-2 rounded-lg border-2 text-[9px] font-bold uppercase transition-colors ${props.galaxyPreset === p ? 'bg-indigo-500 border-zinc-950 text-white' : 'bg-zinc-800 border-zinc-700 text-zinc-400'}`}
-                        >
-                          {p}
-                        </button>
-                      ))}
+                <div className="bg-zinc-950 rounded-3xl p-6 border-4 border-zinc-950 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] text-white">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-indigo-600 rounded-lg">
+                        <History className="w-4 h-4 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black uppercase italic tracking-widest">Atividade Recente do Kernel</h4>
+                        <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-tighter">Monitoramento de eventos em tempo real</p>
+                      </div>
+                    </div>
+                    <span className="text-[9px] font-black uppercase px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-emerald-400 animate-pulse">Live</span>
+                  </div>
+                  <div className="space-y-2 font-mono">
+                    <div className="flex items-center gap-3 py-1 border-b border-zinc-900/50">
+                      <span className="text-[8px] text-zinc-600">[14:32:01]</span>
+                      <span className="text-[9px] text-indigo-400">AUTH_KERNEL:</span>
+                      <span className="text-[9px] text-zinc-300 uppercase">Sessão administrativa validada via JWT (RSA-256)</span>
+                    </div>
+                    <div className="flex items-center gap-3 py-1 border-b border-zinc-900/50">
+                      <span className="text-[8px] text-zinc-600">[14:31:55]</span>
+                      <span className="text-[9px] text-emerald-400">FS_SYNC:</span>
+                      <span className="text-[9px] text-zinc-300 uppercase">Sincronismo de leads concluído (Snapshot 0x7F4)</span>
+                    </div>
+                    <div className="flex items-center gap-3 py-1">
+                      <span className="text-[8px] text-zinc-600">[14:31:40]</span>
+                      <span className="text-[9px] text-amber-400">AI_CORE:</span>
+                      <span className="text-[9px] text-zinc-300 uppercase">Predição de conversão para Lead #9238 gerada</span>
                     </div>
                   </div>
-                )}
+                </div>
+              </div>
+            )}
+
+            {activeCategory === 'backup' && !searchQuery && (
+              <div className="bg-white p-6 rounded-2xl border-4 border-zinc-950 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] space-y-4">
+                <div className="flex items-center gap-3 text-indigo-600">
+                  <History className="h-6 w-6" />
+                  <h4 className="font-black uppercase text-sm tracking-tight italic">Snapshot & Histórico do Sistema</h4>
+                </div>
+                <p className="text-[10px] text-zinc-500 font-bold uppercase leading-relaxed">
+                  Gerencie pontos de restauração e backups locais. O sistema realiza backups automáticos em intervalos definidos, mas você pode forçar a criação de um snapshot agora.
+                </p>
+                <div className="flex gap-3 pt-2">
+                  <button onClick={handleExport} className="flex-1 py-3 bg-zinc-950 text-white rounded-xl border-2 border-zinc-950 text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-zinc-800 transition-colors shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-none">
+                    <Download className="w-3.5 h-3.5" />
+                    Exportar Pacote Geral
+                  </button>
+                  <button className="flex-1 py-3 bg-white text-zinc-950 rounded-xl border-2 border-zinc-950 text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-zinc-50 transition-colors shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-none">
+                    <Upload className="w-3.5 h-3.5" />
+                    Importar do Arquivo
+                  </button>
+                </div>
               </div>
             )}
 
@@ -308,6 +447,105 @@ export default function Settings(props: SettingsProps) {
                 </div>
                 <h4 className="text-[11px] font-black text-zinc-400 uppercase tracking-[0.3em] italic">Nenhum parâmetro identificado</h4>
                 <p className="text-[9px] text-zinc-300 mt-2 font-bold uppercase">Verifique o filtro de busca ou alterne a categoria lateral.</p>
+              </div>
+            )}
+
+            {activeCategory === 'scripts' && !searchQuery && (
+              <div className="mt-8 border-t-4 border-zinc-950 pt-8 space-y-12">
+                <ScriptsManagerTab />
+              </div>
+            )}
+
+            {activeCategory === 'google-ia' && !searchQuery && (
+              <div className="mt-8 border-t-4 border-zinc-950 pt-8 space-y-12">
+                <section>
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3 text-indigo-600">
+                      <Sparkles className="h-6 w-6" />
+                      <h4 className="font-black uppercase text-lg tracking-widest italic text-zinc-900">IA Neural & Assistência Cognitiva</h4>
+                    </div>
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900 border-2 border-zinc-950 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="text-[9px] font-black text-white uppercase tracking-widest">Gemini Ativo</span>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div className="bg-white border-4 border-zinc-950 rounded-3xl p-6 shadow-[5px_5px_0px_0px_rgba(0,0,0,1)]">
+                      <h5 className="text-[11px] font-black uppercase text-zinc-900 mb-3 flex items-center gap-2">
+                        <BrainCircuit className="w-4 h-4 text-indigo-600" />
+                        Capacidade de Raciocínio
+                      </h5>
+                      <div className="space-y-4">
+                        <div>
+                          <div className="flex justify-between text-[9px] font-black uppercase text-zinc-500 mb-1">
+                            <span>Análise de Crédito</span>
+                            <span>98%</span>
+                          </div>
+                          <div className="h-2 bg-zinc-100 rounded-full border border-zinc-200 overflow-hidden">
+                            <div className="h-full bg-indigo-600" style={{ width: '98%' }} />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-[9px] font-black uppercase text-zinc-500 mb-1">
+                            <span>NLP & Copywriting</span>
+                            <span>94%</span>
+                          </div>
+                          <div className="h-2 bg-zinc-100 rounded-full border border-zinc-200 overflow-hidden">
+                            <div className="h-full bg-indigo-400" style={{ width: '94%' }} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-zinc-900 border-4 border-zinc-950 rounded-3xl p-6 shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] text-white">
+                      <h5 className="text-[11px] font-black uppercase text-indigo-400 mb-3 flex items-center gap-2">
+                        <Zap className="w-4 h-4" />
+                        Ações Autônomas (Scripts)
+                      </h5>
+                      <p className="text-[10px] text-zinc-400 font-medium leading-relaxed mb-4">
+                        O motor atua 100% autônomo consultando as palavras-chave cadastradas na Central de Configurações.
+                      </p>
+                      <button className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl border-2 border-zinc-950 text-[10px] font-black uppercase shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-none transition-all">
+                        Testar Gatilhos Agora
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="bg-zinc-950 rounded-[40px] p-2 border-4 border-zinc-950 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+                    <div className="bg-zinc-900 rounded-[36px] overflow-hidden">
+                      <AIAssistantChat
+                        isOpen={true}
+                        onClose={() => {}}
+                        lead={null}
+                        isInline={true}
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                <section>
+                  <div className="flex items-center gap-3 text-indigo-400 mb-6">
+                    <BrainCircuit className="h-6 w-6" />
+                    <h4 className="font-black uppercase text-lg tracking-widest italic text-zinc-900">Painel Neural de Operações</h4>
+                  </div>
+                  <div className="bg-zinc-950 rounded-[40px] p-2 border-4 border-zinc-950 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+                    <div className="bg-zinc-900 rounded-[36px] overflow-hidden">
+                      <GeminiServerTab
+                        accSettings={props.accSettings}
+                        awardXP={props.awardXP}
+                        addNotification={props.addNotification}
+                        leads={props.leads}
+                        setLeads={props.setLeads}
+                        templates={props.templates}
+                        appointments={props.appointments}
+                        setAppointments={props.setAppointments}
+                        emailLogs={props.emailLogs}
+                        setEmailLogs={props.setEmailLogs}
+                      />
+                    </div>
+                  </div>
+                </section>
               </div>
             )}
 
